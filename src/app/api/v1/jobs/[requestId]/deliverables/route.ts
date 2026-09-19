@@ -1,11 +1,11 @@
 /**
  * POST /api/v1/jobs/[requestId]/deliverables — seller key, winner only.
- * Body must include worker-produced artifact facts (no platform render).
+ * Body must include worker-produced `artifact.pdf_base64` (no platform render).
  * Runs existing verification against the plan promise, then RELEASE or WITHHOLD.
  */
 import { NextResponse } from "next/server";
 import { JobDeliverableInput } from "@/lib/contracts";
-import { jsonError, requireSellerKey } from "@/lib/api/http";
+import { inferenceErrorResponse, jsonError, requireSellerKey } from "@/lib/api/http";
 import { getDb } from "@/lib/db/client";
 import { getRequest, getRequestDetail, toApiRequest } from "@/lib/marketplace/requests";
 import { PushJobError, submitDeliverable } from "@/lib/marketplace/push";
@@ -38,6 +38,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ req
     return NextResponse.json(detail ? toApiRequest(detail) : { request_id: requestId });
   } catch (error) {
     if (error instanceof PushJobError) return jsonError(error.status, error.message, error.details);
+    const mapped = inferenceErrorResponse(error);
+    if (mapped) return mapped;
     throw error;
   }
 }

@@ -187,29 +187,20 @@ export const JobPlanInput = z.object({
 export type JobPlanInput = z.infer<typeof JobPlanInput>;
 
 /**
- * Observable PDF facts posted by an external worker. The platform judges these
- * fields as-is — it does not render or invent a simulated artifact.
+ * Worker-produced PDF. The platform inspects `pdf_base64` bytes — it does not
+ * render or invent an artifact on the push path.
  */
 export const JobDeliverableArtifact = z.object({
+  pdf_base64: z.string().min(20),
   artifact_ref: z.string().min(1).optional(),
   kind: z.literal("pdf").optional(),
-  simulated: z.boolean().optional(),
-  pages: z.number().int().positive(),
-  text: z.string(),
-  overflow_regions: z.number().int().nonnegative(),
-  fonts_embedded: z.boolean(),
-  links: z.array(z.string()),
-  valid: z.boolean(),
-  bytes: z.number().int().nonnegative(),
-  page_size: z.literal("A4").optional(),
-  margins_cm: z.number().positive().optional(),
   observed_latency_ms: z.number().nonnegative().optional(),
   declared_latency_ms: z.number().nonnegative().optional(),
   self_report: unit.optional(),
 });
 export type JobDeliverableArtifact = z.infer<typeof JobDeliverableArtifact>;
 
-/** Winner deliverable. `artifact` is required; workers supply the facts they produced. */
+/** Winner deliverable. `artifact.pdf_base64` is required. */
 export const JobDeliverableInput = z.object({
   artifact: JobDeliverableArtifact,
   self_confidence: unit.optional(),

@@ -226,8 +226,8 @@ export default function DevelopersDocsPage() {
           best-score (confidence, cost, latency, history — not cheapest), locks escrow, pushes{" "}
           <code className="text-ink">accepted</code> / <code className="text-ink">rejected</code>, and judges the
           winner&apos;s deliverable against the <em>plan</em>. There is no reprice or counter window. Workers live in
-          another repo — they call these APIs (webhook HMAC or inbox). The platform does not render a simulated PDF
-          on this path; the winner must post the artifact facts it produced.
+          another repo — they call these APIs (webhook HMAC or inbox). The platform does not render the winner&apos;s
+          PDF; the worker posts <code className="text-ink">artifact.pdf_base64</code> and checks inspect those bytes.
         </p>
         <ul className="flex flex-col gap-2 text-sm leading-relaxed text-[#46514d]">
           <li>
@@ -246,11 +246,7 @@ export default function DevelopersDocsPage() {
           <li>
             <code className="text-ink">POST /api/v1/jobs/[requestId]/deliverables</code> — winner only; others{" "}
             <code className="text-ink">403</code>. Body requires{" "}
-            <code className="text-ink">artifact</code> facts (
-            <code className="text-ink">pages</code>, <code className="text-ink">text</code>,{" "}
-            <code className="text-ink">overflow_regions</code>, <code className="text-ink">fonts_embedded</code>,{" "}
-            <code className="text-ink">links</code>, <code className="text-ink">valid</code>,{" "}
-            <code className="text-ink">bytes</code>). Missing artifact → <code className="text-ink">422</code>.
+            <code className="text-ink">artifact.pdf_base64</code>. Missing PDF → <code className="text-ink">422</code>.
           </li>
         </ul>
       </Panel>

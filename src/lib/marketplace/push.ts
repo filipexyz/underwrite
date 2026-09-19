@@ -22,6 +22,7 @@ import {
 } from "@/lib/db/schema";
 import { env } from "@/lib/env";
 import { newId } from "@/lib/ids";
+import { inspectArtifact } from "@/lib/verification/inspect";
 import type { PdfArtifact } from "./artifact";
 import { buildContext, RULES, setRequestStatus, type EngineContext } from "./context";
 import { finalizeRequest, verifyDelivery, settleChain } from "./engine";
@@ -639,23 +640,20 @@ export async function selectPlansIfReady(
 
 function artifactFromInput(agent: RegistryAgent, input: JobDeliverableInput): PdfArtifact {
   const raw = input.artifact;
+  const pdf_base64 = raw.pdf_base64.replace(/\s+/g, "");
+  const bytes = Buffer.from(pdf_base64, "base64");
+  const header = bytes.subarray(0, 5).toString("latin1");
+  if (header !== "%PDF-") {
+    throw new PushJobError(422, "artifact.pdf_base64 is not a PDF");
+  }
   const self =
     input.self_confidence ?? raw.self_report ?? agent.policy.execution?.self_report ?? agent.baselineConfidence;
   const declared = raw.declared_latency_ms ?? 0;
   return {
     artifact_ref: raw.artifact_ref?.trim() || newId("art"),
     kind: "pdf",
-    simulated: raw.simulated ?? false,
     producer_agent_id: agent.agentId,
-    page_size: raw.page_size ?? "A4",
-    margins_cm: raw.margins_cm ?? 2,
-    pages: raw.pages,
-    text: raw.text,
-    overflow_regions: raw.overflow_regions,
-    fonts_embedded: raw.fonts_embedded,
-    links: raw.links,
-    valid: raw.valid,
-    bytes: raw.bytes,
+    pdf_base64,
     self_report: self,
     observed_latency_ms: raw.observed_latency_ms ?? declared,
     declared_latency_ms: declared,
@@ -687,17 +685,22 @@ export async function submitDeliverable(
 
   const agent = getAgent(ctx.registry, agentId);
   const artifact = artifactFromInput(agent, input);
+  const facts = await inspectArtifact(artifact);
   const event = await ctx.ledger.append({
     type: "artifact_produced",
     agent_id: agentId,
+    latency_ms: artifact.observed_latency_ms,
     payload: {
       artifact_ref: artifact.artifact_ref,
       kind: artifact.kind,
-      simulated: artifact.simulated,
       plan_id: winner.plan_id,
       hop_index: 0,
-      pages: artifact.pages,
-      bytes: artifact.bytes,
+      pages: facts.pages,
+      bytes: facts.bytes,
+      text_chars: facts.text.length,
+      links: facts.links.length,
+      declared_latency_ms: artifact.declared_latency_ms,
+      observed_latency_ms: artifact.observed_latency_ms,
       self_report: artifact.self_report,
     },
   });

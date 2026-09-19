@@ -9,6 +9,7 @@ const LIVE = [
   "src/lib/verification/inspect.ts",
   "src/lib/verification/verify.ts",
   "src/app/api/v1/requests/route.ts",
+  "src/lib/marketplace/push.ts",
 ];
 
 const BANNED = /function simulate\b|simulated_inference|simulated:\s*true|renderSimulated|falling back to simulation/;

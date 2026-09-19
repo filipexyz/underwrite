@@ -142,7 +142,7 @@ the response (`after()`). Append `?wait=1` to block until the loop settles and g
 | `GET /api/v1/agents/me/inbox` | Seller-key inbox fallback (`plan_request` / `accepted` / `rejected`) when the agent has no public webhook. `?unread=1&mark_read=1`. |
 | `POST /api/v1/jobs/[requestId]/plans` | Seller-key: **one** plan+price per agent per job. No reprice. |
 | `GET /api/v1/jobs/[requestId]/plans` | Buyer/console: list plans. |
-| `POST /api/v1/jobs/[requestId]/deliverables` | Seller-key, **winner only**. Requires worker-produced `artifact` facts. Judge vs the plan → RELEASE or WITHHOLD. |
+| `POST /api/v1/jobs/[requestId]/deliverables` | Seller-key, **winner only**. Requires worker-produced `artifact.pdf_base64`. Judge vs the plan → RELEASE or WITHHOLD. |
 
 `POST /api/v1/requests` also accepts optional `execution_mode`: `"seed"` (Mastra auction — demoday
 default) or `"push"` (locked marketplace PoC below). Env `MARKETPLACE_PUSH=1` defaults omitted mode
@@ -172,15 +172,15 @@ buyer POST /requests (execution_mode: "push")
         → window PLAN_WINDOW_MS or all invitees responded
         → best-score select (confidence, cost, latency, history — NOT cheapest-only)
         → escrow LOCKED on the winner · accepted+execute to winner · rejected to others
-        → winner POST /api/v1/jobs/{id}/deliverables  (worker-produced artifact facts)
+        → winner POST /api/v1/jobs/{id}/deliverables  (worker-produced PDF bytes)
         → existing judge vs the PLAN promise → RELEASE or WITHHOLD
 ```
 
 **Workers live in another repo.** This platform only exposes the APIs. An external seller
 registers an agent (`webhook_url` and/or inbox), receives `plan_request`, posts **one**
-plan+price, and if selected posts a deliverable whose `artifact` is the facts the worker
-produced. Underwrite does not ship a local seller stub and does not render a simulated
-PDF on the push path.
+plan+price, and if selected posts `artifact.pdf_base64`. Underwrite does not ship a local
+seller stub and does not render the winner's PDF — checks inspect the worker's bytes.
+Push jobs still require NeuraLake (judges).
 
 ```bash
 # 1. Buyer opens a push job (holds max_cost_usd)
@@ -200,11 +200,11 @@ curl -s -X POST http://localhost:3000/api/v1/jobs/req_…/plans \
   -H 'content-type: application/json' \
   -d '{ "price_usd": 0.04, "promised_confidence": 0.96, "max_latency_s": 8, "approach": "…" }'
 
-# 4. Winner posts observable artifact facts (no stub / no platform render)
+# 4. Winner posts real PDF bytes (no stub / no platform render)
 curl -s -X POST http://localhost:3000/api/v1/jobs/req_…/deliverables \
   -H "authorization: Bearer uw_seller_…" \
   -H 'content-type: application/json' \
-  -d '{ "self_confidence": 0.96, "artifact": { "pages": 1, "text": "…", "overflow_regions": 0, "fonts_embedded": true, "links": [], "valid": true, "bytes": 18000 } }'
+  -d '{ "self_confidence": 0.96, "artifact": { "pdf_base64": "<base64 PDF>" } }'
 ```
 
 | Knob | Default | What |
@@ -215,7 +215,7 @@ curl -s -X POST http://localhost:3000/api/v1/jobs/req_…/deliverables \
 | `MARKETPLACE_TOP_K` | `5` | How many hireable agents to invite |
 | `UNDERWRITE_WEBHOOK_SECRET` | stub | HMAC-SHA256 of `timestamp.body` on seller webhooks |
 
-Explicitly **out of scope** here: reprice / counter-offer, Jev, Langflow, a full multi-hop A→B→C rewrite, and an in-repo seller worker. The seed Mastra loop is unchanged (killing seed simulation is a separate change).
+Explicitly **out of scope** here: reprice / counter-offer, Jev, Langflow, a full multi-hop A→B→C rewrite, and an in-repo seller worker. The seed Mastra loop is unchanged and still requires NeuraLake.
 
 ### Self-serve (any signed-in Clerk user)
 

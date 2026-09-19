@@ -13,7 +13,7 @@ import { POST as postRequest } from "@/app/api/v1/requests/route";
 import { getDb, type Db } from "@/lib/db/client";
 import { trustAxes } from "@/lib/db/schema";
 import { TASK_CATEGORY } from "@/lib/db/seed";
-import { DEMO_INPUT_HTML, parseSource } from "@/lib/marketplace/artifact";
+import { DEMO_INPUT_HTML, parseSource, renderDeliverable } from "@/lib/marketplace/artifact";
 import { createRequest, DEMO_REQUEST, getRequestDetail } from "@/lib/marketplace/requests";
 import { registerSellerAgent } from "@/lib/marketplace/sellers";
 import { SCORE_WEIGHT_SUM, SCORE_WEIGHTS, rankPlans, scorePlan } from "@/lib/marketplace/score";
@@ -44,25 +44,25 @@ function params(requestId: string) {
   return { params: Promise.resolve({ requestId }) };
 }
 
-/** Worker-shaped facts that pass html_to_pdf checks against the demo source. */
-function workerDeliverable(selfConfidence: number) {
+/** Real PDF bytes a worker would post. Platform inspects them; it does not render. */
+async function workerDeliverable(selfConfidence: number) {
   const source = parseSource(DEMO_INPUT_HTML, DEMO_REQUEST.task.requirement);
+  const artifact = await renderDeliverable(source, "push-worker", {
+    quality: "clean",
+    latency_s: 8,
+    latency_jitter: 0,
+    self_report: selfConfidence,
+    tokens: { in: 1, out: 1 },
+  });
   return {
     self_confidence: selfConfidence,
-    artifact: {
-      pages: source.expected_pages,
-      text: source.text,
-      overflow_regions: 0,
-      fonts_embedded: true,
-      links: source.links,
-      valid: true,
-      bytes: 18_000 + source.text.length * 4,
-    },
+    artifact: { pdf_base64: artifact.pdf_base64 },
   };
 }
 
 beforeAll(async () => {
   process.env.MARKETPLACE_TOP_K = "2";
+  process.env.MODEL_PROVIDER_API_KEY = process.env.MODEL_PROVIDER_API_KEY ?? "test-neuralake";
   ({ db } = await getDb());
 });
 
@@ -266,7 +266,7 @@ describe("push marketplace HTTP", () => {
     expect(loserBody.messages.some((m) => m.type === "rejected" && m.job_id === jobId)).toBe(true);
   });
 
-  it("rejects a deliverable that omits worker artifact facts", async () => {
+  it("rejects a deliverable that omits worker PDF bytes", async () => {
     const denied = await postDeliverable(
       sellerReq(strongSecret, `/api/v1/jobs/${jobId}/deliverables`, {
         method: "POST",
@@ -281,7 +281,7 @@ describe("push marketplace HTTP", () => {
     const denied = await postDeliverable(
       sellerReq(cheapSecret, `/api/v1/jobs/${jobId}/deliverables`, {
         method: "POST",
-        body: JSON.stringify(workerDeliverable(0.95)),
+        body: JSON.stringify(await workerDeliverable(0.95)),
       }),
       params(jobId),
     );
@@ -294,7 +294,7 @@ describe("push marketplace HTTP", () => {
     const delivered = await postDeliverable(
       sellerReq(strongSecret, `/api/v1/jobs/${jobId}/deliverables`, {
         method: "POST",
-        body: JSON.stringify(workerDeliverable(0.96)),
+        body: JSON.stringify(await workerDeliverable(0.96)),
       }),
       params(jobId),
     );
