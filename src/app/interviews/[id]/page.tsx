@@ -92,7 +92,7 @@ export default async function InterviewNeedPage({ params }: { params: Promise<{ 
 
       <Panel title={`${sessions.length} session${sessions.length === 1 ? "" : "s"}`}>
         {sessions.length === 0 ? (
-          <Empty>No sessions. Join the interview to start GPT Live.</Empty>
+          <Empty>No sessions yet. They appear after someone opens the interviewee link.</Empty>
         ) : (
           <table className="w-full">
             <thead>
