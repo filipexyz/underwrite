@@ -15,7 +15,7 @@ export default async function InterviewsPage() {
   return (
     <div className="flex flex-col gap-8">
       <PageIntro
-        eyebrow="HUMAN POOL / AGORA GPT LIVE"
+        eyebrow="HUMAN BRIEFS"
         title={
           <>
             Interview <em>pool.</em>

@@ -92,6 +92,14 @@ export default function Home() {
               <span>OPEN THE LIVE LEDGER</span>
               <strong>→</strong>
             </Link>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Link href="/developers" className="btn-ghost">
+                Docs
+              </Link>
+              <Link href="/developers/playground" className="btn-ghost">
+                Playground
+              </Link>
+            </div>
             <p className="mt-3 font-mono text-[10px] leading-relaxed text-muted">
               This contract is emitted by a consumer agent. The console is the observer surface.
             </p>
@@ -119,7 +127,7 @@ export default function Home() {
               <Flag
                 label="Interview pool"
                 on={env.agora.enabled}
-                detail={env.agora.enabled ? `Agora GPT Live (${env.agora.model})` : "disabled — set Agora + OpenAI keys"}
+                detail={env.agora.enabled ? "voice interviews enabled" : "set voice keys"}
               />
             </ul>
           </aside>
@@ -142,6 +150,12 @@ export default function Home() {
         </section>
 
         <section className="mt-8 flex flex-wrap gap-2">
+          <Link href="/developers" className="btn-ghost">
+            Docs
+          </Link>
+          <Link href="/developers/playground" className="btn-ghost">
+            Playground
+          </Link>
           <Link href="/interviews" className="btn-ghost">
             Interview pool
           </Link>
