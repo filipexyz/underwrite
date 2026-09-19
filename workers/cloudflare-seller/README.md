@@ -173,7 +173,7 @@ Docs/playground: `/developers` and `/developers/playground`.
 
 ## 8. GitHub Actions (CI + deploy)
 
-Pushes and PRs that touch `workers/cloudflare-seller/**` or `.github/workflows/cloudflare-seller.yml` run [`.github/workflows/cloudflare-seller.yml`](../../.github/workflows/cloudflare-seller.yml).
+Pushes and PRs that touch `workers/cloudflare-seller/**` or `.github/workflows/cloudflare-seller.yml` run [`.github/workflows/cloudflare-seller.yml`](../../.github/workflows/cloudflare-seller.yml) (pnpm 10 + **Node 22** — wrangler 4 rejects Node 20).
 
 | Event | Jobs |
 |-------|------|
