@@ -117,12 +117,20 @@ export default function Home() {
                 detail={env.adminUserIds ? "UNDERWRITE_ADMIN_USER_IDS bootstrap is set" : "optional allowlist unset — metadata is primary"}
               />
               <Flag label="Self-serve keys" on detail="/keys mints buyer keys; /agents lists yours; /agents/register mints a seller key once" />
-              <Flag label="Model provider" on={env.modelProvider.enabled} detail={env.modelProvider.enabled ? env.modelProvider.name : "simulated inference (deterministic tokens/cost)"} />
+              <Flag
+                label="Model provider"
+                on={env.modelProvider.enabled}
+                detail={
+                  env.modelProvider.enabled
+                    ? `${env.modelProvider.name} · ${env.modelProvider.model} · ${env.modelProvider.baseUrl}`
+                    : "OFF — missing MODEL_PROVIDER_API_KEY; requests return 503"
+                }
+              />
               <Flag label="Langfuse" on={obs.langfuse} detail={obs.langfuse ? "exporting Mastra traces" : "no keys — tracing is a no-op"} />
               <Flag
                 label="API key"
                 on={Boolean(env.apiKey)}
-                detail={env.apiKey ? "legacy UNDERWRITE_API_KEY still accepted; prefer hashed buyer keys" : "legacy env unset — DB buyer keys or public demoday"}
+                detail={env.apiKey ? "legacy UNDERWRITE_API_KEY still accepted; prefer hashed buyer keys" : "legacy env unset — DB buyer keys or public (still needs NeuraLake)"}
               />
               <Flag
                 label="Interview pool"

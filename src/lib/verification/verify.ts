@@ -45,7 +45,7 @@ export async function verifyArtifact(
     artifactEventId: string | null;
   },
 ): Promise<VerificationOutcome> {
-  const facts = inspectArtifact(args.artifact);
+  const facts = await inspectArtifact(args.artifact);
   const result = runChecks(args.spec, facts, args.source);
 
   const checkEventIds: string[] = [];

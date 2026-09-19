@@ -146,17 +146,19 @@ export async function getSession(db: Db, id: string): Promise<InterviewSessionRo
 
 async function extractWithLlm(transcript: TranscriptTurn[], requiredFields: string[]): Promise<InterviewAnswers | null> {
   if (!env.modelProvider.enabled || transcript.length === 0) return null;
-  const result = await runInference({
-    agent_id: "interview-extract",
-    model: "auto",
-    purpose: "interview_extract",
-    system: "Extract structured interview answers. Reply with JSON only: {\"answers\":{...},\"notes\":\"\"}.",
-    prompt: `Required fields: ${requiredFields.join(", ")}\n\nTranscript:\n${transcriptToPrompt(transcript)}`,
-    simulated: { in: 200, out: 120 },
-    fallbackText: "",
-    maxOutputTokens: 400,
-  });
-  if (result.simulated || !result.text) return null;
+  let result;
+  try {
+    result = await runInference({
+      agent_id: "interview-extract",
+      purpose: "interview_extract",
+      system: "Extract structured interview answers. Reply with JSON only: {\"answers\":{...},\"notes\":\"\"}.",
+      prompt: `Required fields: ${requiredFields.join(", ")}\n\nTranscript:\n${transcriptToPrompt(transcript)}`,
+      maxOutputTokens: 400,
+    });
+  } catch {
+    return null;
+  }
+  if (!result.text) return null;
   const { extractLastJsonObject } = await import("./extract");
   const parsed = extractLastJsonObject(result.text);
   const normalized = parsed === null ? null : normalizeAnswers(parsed, requiredFields);

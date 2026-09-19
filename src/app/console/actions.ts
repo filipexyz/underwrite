@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getDb } from "@/lib/db/client";
 import { seed } from "@/lib/db/seed";
+import { env } from "@/lib/env";
 import { createRequest, DEMO_REQUEST } from "@/lib/marketplace/requests";
 import { runMarketplace } from "@/mastra";
 
@@ -14,6 +15,9 @@ import { runMarketplace } from "@/mastra";
  * everything after it is agents, so `human_interventions` stays 0.
  */
 export async function fireDemoRequest(): Promise<void> {
+  if (!env.modelProvider.enabled) {
+    redirect("/console?error=model_provider");
+  }
   const { db } = await getDb();
   const row = await createRequest(db, DEMO_REQUEST, { actor: "human", source: "console" });
   after(async () => {

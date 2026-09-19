@@ -3,20 +3,21 @@ import { computeConfidence, processSignal } from "@/lib/verification/confidence"
 import { runChecks, textCoverage } from "@/lib/verification/checks";
 import { inspectArtifact } from "@/lib/verification/inspect";
 import { HTML_TO_PDF_RUBRIC } from "@/lib/verification/rubric";
-import { DEMO_INPUT_HTML, parseSource, renderSimulated } from "@/lib/marketplace/artifact";
+import { DEMO_INPUT_HTML, parseSource, renderDeliverable } from "@/lib/marketplace/artifact";
 
 const source = parseSource(DEMO_INPUT_HTML, "A4, 2cm margins");
 
 describe("confidence (hardcoded_v0)", () => {
-  it("scores the liar's overflow around 41%", () => {
-    const artifact = renderSimulated(source, "c1-cheap", {
+  it("scores the liar's overflow around 41% from real PDF bytes", async () => {
+    const artifact = await renderDeliverable(source, "c1-cheap", {
       quality: "layout_overflow",
       latency_s: 6,
       latency_jitter: 0.089,
       self_report: 0.98,
       tokens: { in: 1, out: 1 },
     });
-    const checks = runChecks(HTML_TO_PDF_RUBRIC, inspectArtifact(artifact), source);
+    const facts = await inspectArtifact(artifact);
+    const checks = runChecks(HTML_TO_PDF_RUBRIC, facts, source);
     expect(checks.conclusive).toBe(true);
     expect(checks.checks.filter((c) => !c.passed).map((c) => c.check_id)).toEqual(["text_matches_source", "no_layout_overflow", "fonts_embedded"]);
 
@@ -33,15 +34,16 @@ describe("confidence (hardcoded_v0)", () => {
     expect(breakdown.computed).toBeLessThan(breakdown.self_report as number);
   });
 
-  it("scores the honest renderer with agreeing judges around 96%", () => {
-    const artifact = renderSimulated(source, "c2-honest", {
+  it("scores the honest renderer with agreeing judges around 96%", async () => {
+    const artifact = await renderDeliverable(source, "c2-honest", {
       quality: "clean",
       latency_s: 8,
       latency_jitter: 0,
       self_report: 0.96,
       tokens: { in: 1, out: 1 },
     });
-    const checks = runChecks(HTML_TO_PDF_RUBRIC, inspectArtifact(artifact), source);
+    const facts = await inspectArtifact(artifact);
+    const checks = runChecks(HTML_TO_PDF_RUBRIC, facts, source);
     expect(checks.objective).toBe(1);
     const breakdown = computeConfidence({ objective: 1, agreement: 1, track_record: 0.8, process: 1, self_report: 0.96 });
     expect(breakdown.computed).toBeGreaterThanOrEqual(0.95);

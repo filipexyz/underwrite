@@ -48,7 +48,7 @@ describe("playground helpers", () => {
     expect(parsed.success).toBe(true);
   });
 
-  it("omits Authorization when no key is pasted (demoday)", () => {
+  it("omits Authorization when no key is pasted (open buyer routes)", () => {
     expect(bearerHeaders("")).toEqual({});
     expect(bearerHeaders("  ", true)).toEqual({ "content-type": "application/json" });
     expect(bearerHeaders(" uw_buyer_abc ", true)).toEqual({

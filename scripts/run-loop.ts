@@ -1,6 +1,7 @@
 /**
  * `pnpm loop` — fires the demo request and runs the Mastra workflow
- * in-process (no HTTP server), then prints the ledger. Works against Neon
+ * in-process (no HTTP server), then prints the ledger. Requires
+ * MODEL_PROVIDER_API_KEY — there is no simulated inference. Works against Neon
  * (`DATABASE_URL`) or the local PGlite directory.
  *
  *   pnpm loop                  # demo request
@@ -11,6 +12,7 @@ import { getDb } from "@/lib/db/client";
 import { seed } from "@/lib/db/seed";
 import { createRequest, DEMO_REQUEST, getRequestDetail } from "@/lib/marketplace/requests";
 import { summarizeEvent } from "@/lib/ledger/summarize";
+import { requireModelProvider } from "@/lib/observability/inference";
 import { runMarketplace } from "@/mastra";
 
 function money(n: number): string {
@@ -18,6 +20,7 @@ function money(n: number): string {
 }
 
 async function main() {
+  requireModelProvider();
   const { db, driver } = await getDb();
   if (process.argv.includes("--reseed")) await seed(db);
   console.log(`[loop] driver=${driver}`);

@@ -7,6 +7,7 @@ export default defineConfig({
     environment: "node",
     testTimeout: 120_000,
     hookTimeout: 120_000,
+    setupFiles: ["tests/setup.ts"],
     env: {
       // Every test process gets a fresh in-memory Postgres (PGlite).
       DATABASE_URL: "pglite://memory",

@@ -107,9 +107,11 @@ export default function DevelopersDocsPage() {
         <div className="mt-6 border-t border-line pt-5 text-sm leading-relaxed text-[#46514d]">
           <p className="eyebrow !mb-2">Demoday vs keyed</p>
           <p>
-            <strong className="text-ink">Demoday:</strong> if <code className="text-ink">UNDERWRITE_API_KEY</code> is
-            unset and you send no key, <code className="text-ink">/api/v1/requests*</code> stays public so the loop
-            still runs. Spends the system <code className="text-ink">buyer</code> wallet.
+            <strong className="text-ink">Open buyer routes:</strong> if <code className="text-ink">UNDERWRITE_API_KEY</code> is
+            unset and you send no key, <code className="text-ink">/api/v1/requests*</code> stays public for the
+            system <code className="text-ink">buyer</code> wallet. Inference still requires NeuraLake — missing{" "}
+            <code className="text-ink">MODEL_PROVIDER_API_KEY</code> is <code className="text-ink">503</code>, not a
+            simulated run.
           </p>
           <p className="mt-3">
             <strong className="text-ink">Keyed:</strong> a presented hashed buyer (or <code className="text-ink">admin_service</code>)
@@ -142,6 +144,30 @@ export default function DevelopersDocsPage() {
               /account
             </Link>
             ; that route is Clerk, not an agent API.
+          </li>
+        </ul>
+      </Panel>
+
+      <Panel title="NeuraLake inference" eyebrow="REQUIRED · NO SIMULATION">
+        <p className="text-sm leading-relaxed text-[#46514d] mb-3">
+          Every bid rationale, plan, judge note and render note calls the NeuraLake OpenAI-compatible API. The
+          platform does not invent tokens when the key is missing.
+        </p>
+        <ul className="flex flex-col gap-2 text-sm leading-relaxed text-[#46514d]">
+          <li>
+            <code className="text-ink">MODEL_PROVIDER_API_KEY</code> (aliases{" "}
+            <code className="text-ink">NEURALAKE_API_KEY</code>, <code className="text-ink">OPENAI_API_KEY</code>) —
+            server only. Never commit a key.
+          </li>
+          <li>
+            <code className="text-ink">MODEL_PROVIDER_BASE_URL=https://api.neuralake.cloud/v1</code>
+          </li>
+          <li>
+            <code className="text-ink">MODEL_PROVIDER_NAME=neuralake</code> · model <code className="text-ink">auto</code>
+          </li>
+          <li>
+            Unset key → <code className="text-ink">503</code>. Provider error → <code className="text-ink">502</code>{" "}
+            on <code className="text-ink">?wait=1</code>.
           </li>
         </ul>
       </Panel>
@@ -220,6 +246,14 @@ export default function DevelopersDocsPage() {
             <ErrorRow code="403" detail="Seller (or other non-buyer) key on /api/v1/requests*." />
             <ErrorRow code="404" detail="request not found / agent not found." />
             <ErrorRow code="422" detail="Zod failed: invalid request or invalid agent patch. details is flatten()." />
+            <ErrorRow
+              code="502"
+              detail="NeuraLake inference failed mid-loop on ?wait=1. details.agent_id / purpose name the call."
+            />
+            <ErrorRow
+              code="503"
+              detail="MODEL_PROVIDER_API_KEY missing. Marketplace will not simulate bids, plans, judges, or PDFs."
+            />
             <ErrorRow
               code="no_eligible_bid"
               detail="Request status, not an HTTP code. Hireable registry is empty — seed the catalog (pnpm db:seed) or enable agents."

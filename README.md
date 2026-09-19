@@ -68,7 +68,7 @@ screen the whole time: **`human_interventions: 0`** — computed from the ledger
 | Interview voice | **Agora Conversational AI** + **OpenAI GPT Live** (`agora-agents` ≥ 2.8.0). Optional; 503 when keys are missing | `src/lib/interviews/`, `src/app/interviews/`, `src/app/i/` |
 | System of record | **Neon** (Postgres) via **Drizzle ORM** + `@neondatabase/serverless` (HTTP driver); embedded **PGlite** fallback for local dev and tests | `src/lib/db/`, `drizzle/` |
 | Orchestration | **Mastra** workflow (`auction → contract → dountil(execute → verify → settle)`) wrapping stateless engine steps; state lives in Neon between hops | `src/mastra/`, `src/lib/marketplace/engine.ts` |
-| Model calls | Vercel AI SDK (`ai` + `@ai-sdk/openai-compatible`) → any OpenAI-compatible endpoint (NeuraLake); deterministic simulation when no key | `src/lib/observability/inference.ts` |
+| Model calls | Vercel AI SDK (`ai` + `@ai-sdk/openai-compatible`) → **NeuraLake** `https://api.neuralake.cloud/v1` with `model="auto"`. Missing key → HTTP 503 (no simulated inference) | `src/lib/observability/inference.ts` |
 | Observability | Append-only **ledger** with tokens / latency / dollars per event (always on) + Mastra tracing exporters (Langfuse, console) gated by env | `src/lib/ledger/`, `src/lib/observability/` |
 | Contracts | Zod schemas mirroring `docs/CONTRACTS.md` §1–§8 | `src/lib/contracts/index.ts` |
 
@@ -80,15 +80,16 @@ Requirements: Node 20+, [pnpm](https://pnpm.io) 10.
 
 ```bash
 pnpm install
-cp .env.example .env.local        # every variable is optional — see below
+cp .env.example .env.local        # set MODEL_PROVIDER_API_KEY — see below
 pnpm db:migrate                   # applies drizzle/*.sql to DATABASE_URL (or to ./.data/pglite)
 pnpm db:seed                      # the six-agent catalog: A, B, C1, C2, J1, J2 + wallets
 pnpm dev                          # http://localhost:3000
 ```
 
-With an **empty** `.env.local` the whole loop runs on embedded PGlite (auto-migrates and auto-seeds on
-first use), inference is simulated with each agent's declared token profile, `/console` is open, and
-tracing is a no-op. Fill in keys to switch each piece on independently.
+With an empty `.env.local` the app still boots on embedded PGlite (auto-migrates and auto-seeds on
+first use) and `/console` is open, but **the marketplace will not run**.
+`POST /api/v1/requests` returns **503** until `MODEL_PROVIDER_API_KEY` is set. There is no
+simulated-token path. Clerk and tracing stay optional.
 
 ### Fire one demo request
 
@@ -141,8 +142,8 @@ the response (`after()`). Append `?wait=1` to block until the loop settles and g
 
 Request routes accept **either** the legacy env `UNDERWRITE_API_KEY` **or** a non-revoked hashed **buyer**
 key (`Authorization: Bearer <key>` or `x-api-key`). If the env is unset and no key is presented, the
-routes stay public so the demoday loop still works. Seller routes always require a seller key. These
-`/api/v1` routes never go through Clerk.
+routes stay public (system `buyer` wallet). They still require NeuraLake. Seller routes always
+require a seller key. These `/api/v1` routes never go through Clerk.
 
 An empty hireable registry (forgot `pnpm db:seed`, or every agent is disabled) settles as
 `no_eligible_bid`. Seed the catalog once on Neon.
@@ -167,8 +168,8 @@ on first visit — idempotent, never reset. **Only users get that grant.** Regis
 start at **$0.00** and earn by being hired (seed A/B/C1/C2/J1/J2 keep their catalog balances). A
 buyer key owned by a user **checks** the user wallet against `max_cost_usd` (`402` if short) and
 **debits it** on escrow lock / credits it on refund, using the same `wallets` table the agents
-already use. Public / legacy / console demo requests still spend the system `buyer` wallet so the
-demoday loop is unchanged. **No real money.**
+already use. Public / legacy / console demo requests still spend the system `buyer` wallet. **No real money.**
+They still need NeuraLake keys.
 
 Buyer key against the marketplace:
 
@@ -309,12 +310,23 @@ The buyer of the demo is still an agent over HTTP. Clerk is for humans: debug co
 seller registration, the interview **creator** pool, and the narrow admin/audit surface. Interviewees
 are not signed in.
 
-### Model provider (NeuraLake or any OpenAI-compatible endpoint)
+### Model provider (NeuraLake — required)
 
-`MODEL_PROVIDER_BASE_URL` + `MODEL_PROVIDER_API_KEY` (aliases: `NEURALAKE_*`, `OPENAI_API_KEY`). Every
-call goes through `runInference()` so tokens, latency and dollars land in the ledger either way. Model
-text is rationale — bids, plans and verdicts are **never** control flow — so the loop is deterministic
-with or without a provider.
+The live path always calls NeuraLake. **Do not put an API key in the repo.** Env only.
+
+| Variable | Required | Notes |
+|----------|----------|--------|
+| `MODEL_PROVIDER_API_KEY` | **yes** | Bearer token. Aliases: `NEURALAKE_API_KEY`, `OPENAI_API_KEY` |
+| `MODEL_PROVIDER_BASE_URL` | defaulted | `https://api.neuralake.cloud/v1` (chat/completions) |
+| `MODEL_PROVIDER_NAME` | defaulted | `neuralake` |
+| `MODEL_PROVIDER_MODEL` | defaulted | `auto` |
+
+Every bid rationale, plan, judge note and render note goes through `runInference()`. Model text is
+rationale — bids, plans and verdicts are **never** control flow. Without a key the API fails loudly
+(`503`). A failed provider call on `?wait=1` is `502`. Unit tests mock the HTTP client at that
+boundary; production code has no “simulate tokens” branch.
+
+Seller execution workers live in **another repository**. This app does not ship local worker stubs.
 
 ### Observability
 
@@ -325,8 +337,17 @@ with or without a provider.
 
 ### Vercel
 
-Import the repo, set `DATABASE_URL` (required — the PGlite fallback is local-only), the Clerk keys and
-whatever else you want on, deploy.
+Import the repo and set at least:
+
+| Vercel env | Why |
+|------------|-----|
+| `DATABASE_URL` | Required — the PGlite fallback is local-only |
+| `MODEL_PROVIDER_API_KEY` | Required — marketplace / playground / console demo |
+| `MODEL_PROVIDER_BASE_URL` | `https://api.neuralake.cloud/v1` |
+| `MODEL_PROVIDER_NAME` | `neuralake` |
+| Clerk keys | Optional; protect `/console`, `/keys`, `/account`, `/agents`, `/admin`, `/interviews` |
+
+Set the same NeuraLake vars on **Production and Preview**. Never paste a key into git or a PR.
 
 - **Migrations run on every deploy.** The build script is `pnpm db:migrate && next build`, so pending
   SQL in [`drizzle/`](drizzle/) is applied to `DATABASE_URL` before Next compiles. Drizzle's migrator is
@@ -340,8 +361,9 @@ whatever else you want on, deploy.
   deploy — `DATABASE_URL='postgresql://…' pnpm db:seed` from your machine — and again only when you
   deliberately want to reset the catalog (the console's **Reset catalog** button does the same).
 
-The workflow runs inside the `POST` function via `after()` (`maxDuration = 60`); simulated latency is not
-wall time, so a full run takes well under a second unless you set `DEMO_STEP_DELAY_MS` for stage pacing.
+The workflow runs inside the `POST` function via `after()` (`maxDuration = 60`). Render time is the
+real HTML→PDF wall clock; `DEMO_STEP_DELAY_MS` adds stage pacing between hops. Each hop also waits on
+NeuraLake.
 
 ---
 
@@ -377,7 +399,7 @@ src/lib/marketplace/
   axes.ts                 EMA updates of trust_global axes and trust_pairwise
 src/lib/verification/
   rubric.ts               html_to_pdf@v0: 6 weighted checks
-  inspect.ts              artifact facts (real-PDF hook: inspectPdfBytes)
+  inspect.ts              facts from real PDF bytes (pages, text, fonts, links, overflow)
   checks.ts               deterministic check runners
   judges.ts               independent judges: different model family, blind, not in the chain
   confidence.ts           hardcoded_v0: objective 0.45 · agreement 0.2 · track record 0.2 · process 0.05 · self-report ≤ 0.1 (penalised when it diverges)
@@ -395,32 +417,29 @@ src/app/i/                Public interviewee page (token auth, no Clerk, no chro
 src/app/developers/       Agent docs + request playground (public; key in sessionStorage)
 ```
 
-The verification stub is deliberately shaped like the real thing: C1's renderer produces an artifact whose
-*facts* (overflowing regions, missing fonts, 93% text recovery) fail the rubric, C2's passes; the checks,
-weights and confidence formula are what will run over real PDF bytes once `inspectPdfBytes` is wired.
+C1's renderer writes a real PDF whose *bytes* fail the rubric (overflow outside the page box, unembedded
+Helvetica, clipped text). C2 embeds Liberation Sans and keeps the layout inside the page box. Checks
+read `inspectPdfBytes` — they never trust the producer.
 
 ---
 
 ## Remaining build order
 
-Done in this scaffold: runner + cost instrumentation (1), objective checks over simulated artifacts (2),
+Done in this scaffold: runner + cost instrumentation (1), objective checks over **real PDF bytes** (2),
 escrow + conditional release (3), independent judges + agreement (4), registry + selection + escalation
-within budget (5), the 4-field request over HTTP (6), console with live ledger and `human_interventions: 0` (7).
+within budget (5), the 4-field request over HTTP (6), console with live ledger and `human_interventions: 0` (7),
+**NeuraLake inference with no simulated fallback** (8).
 
 Next, in order — cut from the bottom:
 
-1. **Real rendering + real inspection.** Have C1/C2 actually render HTML → PDF and implement
-   `inspectPdfBytes` (page boxes, embedded fonts, text extraction, link annotations). The rubric,
-   check runners and confidence math stay as they are.
-2. **Real inference through NeuraLake** for bid rationale, plan rationale and judge verdicts
-   (`MODEL_PROVIDER_*`). Plumbing exists; decisions remain rule-based.
-3. **MCP surface** for the buyer agent: expose `POST /api/v1/requests` + `GET …/events` as tools.
-4. **Live visualisation**: cost × latency × confidence triangle, axes deltas per hop, wallet flows.
-5. **One counter-offer round** (D-026) and the `DISPUTE` path (state exists, no UI).
-6. **Calibration**: run the scene many times, tune EMA alphas and the `hardcoded_v0` weights against outcomes.
+1. **MCP surface** for the buyer agent: expose `POST /api/v1/requests` + `GET …/events` as tools.
+2. **Live visualisation**: cost × latency × confidence triangle, axes deltas per hop, wallet flows.
+3. **One counter-offer round** (D-026) and the `DISPUTE` path (state exists, no UI).
+4. **Calibration**: run the scene many times, tune EMA alphas and the `hardcoded_v0` weights against outcomes.
 
 Self-serve buyer/seller keys and seller registration shipped as a vertical slice (hashed `api_keys`,
-`/keys`, `/agents`, `/agents/register`, `/admin`). Seed catalog A/B/C1/C2/J1/J2 remains the demoday loop.
+`/keys`, `/agents`, `/agents/register`, `/admin`). Seed catalog A/B/C1/C2/J1/J2 remains the demo loop
+(and still needs NeuraLake keys).
 
 Explicitly **not** built, by decision ([`docs/NEXT.md`](docs/NEXT.md)): Langflow as executor host, deep
 multi-round negotiation, Jev-based marketplace selection, real payment rails.

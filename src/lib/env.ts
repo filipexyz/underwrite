@@ -1,9 +1,14 @@
 /**
  * Environment access with feature flags.
  *
- * Everything optional degrades to a documented no-op so the loop runs with an
- * empty `.env` (PGlite on disk, no auth, simulated inference, no exporters).
+ * Database, Clerk, and exporters still degrade to documented no-ops when unset
+ * (PGlite on disk, open human pages, no tracing). Marketplace inference does
+ * not: without MODEL_PROVIDER_API_KEY the API returns 503.
  */
+
+export const NEURALAKE_DEFAULT_BASE_URL = "https://api.neuralake.cloud/v1";
+export const NEURALAKE_DEFAULT_NAME = "neuralake";
+export const NEURALAKE_DEFAULT_MODEL = "auto";
 
 function read(name: string): string | undefined {
   const value = process.env[name];
@@ -47,17 +52,18 @@ export const env = {
   },
 
   /**
-   * Model provider (OpenAI-compatible). NeuraLake's endpoint with `model="auto"`
-   * is the intended target; any OpenAI-compatible base URL works.
+   * NeuraLake (OpenAI-compatible). Base URL and model default to the live
+   * endpoint; an API key is required — there is no simulated inference.
    */
   get modelProvider() {
     const apiKey = read("MODEL_PROVIDER_API_KEY") ?? read("NEURALAKE_API_KEY") ?? read("OPENAI_API_KEY");
-    const baseUrl = read("MODEL_PROVIDER_BASE_URL") ?? read("NEURALAKE_BASE_URL");
+    const baseUrl = read("MODEL_PROVIDER_BASE_URL") ?? read("NEURALAKE_BASE_URL") ?? NEURALAKE_DEFAULT_BASE_URL;
     return {
-      enabled: Boolean(apiKey && baseUrl),
+      enabled: Boolean(apiKey),
       apiKey,
       baseUrl,
-      name: read("MODEL_PROVIDER_NAME") ?? "neuralake",
+      name: read("MODEL_PROVIDER_NAME") ?? NEURALAKE_DEFAULT_NAME,
+      model: read("MODEL_PROVIDER_MODEL") ?? NEURALAKE_DEFAULT_MODEL,
     };
   },
 
