@@ -17,7 +17,7 @@ import type { LedgerEvent } from "@/lib/contracts";
 import { summarizeEvent } from "@/lib/ledger/summarize";
 import { DEMO_REQUEST, type ApiRequest } from "@/lib/marketplace/requests";
 
-const TERMINAL = new Set(["completed", "failed", "no_eligible_bid"]);
+const TERMINAL = new Set(["completed", "failed", "no_eligible_bid", "no_eligible_plan"]);
 const POLL_MS = 400;
 const TIMEOUT_MS = 5 * 60_000;
 
@@ -53,10 +53,16 @@ async function main() {
 
   let detail: ApiRequest;
   if (process.argv.includes("--wait")) {
-    detail = await api<ApiRequest>("/api/v1/requests?wait=1", { method: "POST", body: JSON.stringify(DEMO_REQUEST) });
+    detail = await api<ApiRequest>("/api/v1/requests?wait=1", {
+      method: "POST",
+      body: JSON.stringify({ ...DEMO_REQUEST, execution_mode: "seed" }),
+    });
     for (const e of detail.events) printEvent(e);
   } else {
-    const accepted = await api<Accepted>("/api/v1/requests", { method: "POST", body: JSON.stringify(DEMO_REQUEST) });
+    const accepted = await api<Accepted>("/api/v1/requests", {
+      method: "POST",
+      body: JSON.stringify({ ...DEMO_REQUEST, execution_mode: "seed" }),
+    });
     console.error(`[demo] ${accepted.request_id} accepted → console: ${accepted.links.console}`);
 
     let after = 0;

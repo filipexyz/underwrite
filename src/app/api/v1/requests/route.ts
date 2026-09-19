@@ -1,19 +1,21 @@
 /**
  * POST /api/v1/requests — the only entry point (CONTRACTS.md §1).
  *
- * Body: the 4 + 1 fields (`task`, `max_cost_usd`, `max_latency_s`,
- * `min_confidence`, `failure_policy`) plus optional `selection_timeout_s` and
- * `verification` rubric. Creates the Request, logs `request_received`, and
- * kicks the Mastra workflow after the response is sent (`after()`).
+ * Body: the 4 + 1 fields plus optional `execution_mode` (`seed` | `push`).
+ * `seed` (default) kicks the Mastra auction loop after the response (`after()`).
+ * `push` holds escrow, invites Top-K, and waits for one plan+price each.
+ * Env `MARKETPLACE_PUSH=1` defaults omitted mode to push; the console demo
+ * button always forces seed.
  *
- * `?wait=1` runs the loop before responding — handy for scripts and demos.
- *
- * GET /api/v1/requests — recent requests (summary).
+ * `?wait=1` blocks: seed runs the loop to settlement; push invites then
+ * waits only through select (delivery is the seller worker).
  */
 import { after, NextResponse } from "next/server";
 import { RequestInput } from "@/lib/contracts";
 import { getDb } from "@/lib/db/client";
-import { createRequest, getRequestDetail, listRequests, toApiRequest } from "@/lib/marketplace/requests";
+import { env } from "@/lib/env";
+import { createRequest, getRequest, getRequestDetail, listRequests, toApiRequest } from "@/lib/marketplace/requests";
+import { PushJobError, resolveExecutionMode, selectPlansIfReady, sleep, startPushJob } from "@/lib/marketplace/push";
 import { runMarketplace } from "@/mastra";
 import { absoluteUrl, authorizeBuyerRequest, inferenceErrorResponse, jsonError, modelProviderUnavailableResponse, requireApiKey } from "@/lib/api/http";
 import { ensureUserWallet } from "@/lib/marketplace/credits";
@@ -21,6 +23,16 @@ import { ensureUserWallet } from "@/lib/marketplace/credits";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
+
+function jobLinks(request: Request, requestId: string) {
+  return {
+    self: absoluteUrl(request, `/api/v1/requests/${requestId}`),
+    events: absoluteUrl(request, `/api/v1/requests/${requestId}/events`),
+    console: absoluteUrl(request, `/console/requests/${requestId}`),
+    plans: absoluteUrl(request, `/api/v1/jobs/${requestId}/plans`),
+    deliverables: absoluteUrl(request, `/api/v1/jobs/${requestId}/deliverables`),
+  };
+}
 
 export async function POST(request: Request) {
   const auth = await authorizeBuyerRequest(request);
@@ -54,6 +66,45 @@ export async function POST(request: Request) {
 
   const row = await createRequest(db, parsed.data, { actor: "agent", source: "api", buyerWalletId });
   const wait = new URL(request.url).searchParams.get("wait") === "1";
+  const mode = resolveExecutionMode(parsed.data.execution_mode);
+
+  if (mode === "push") {
+    try {
+      const started = await startPushJob(db, row.requestId);
+      if (wait) {
+        if (!env.isTest) await sleep(env.planWindowMs);
+        await selectPlansIfReady(db, row.requestId);
+        const detail = await getRequestDetail(db, row.requestId);
+        return NextResponse.json(detail ? toApiRequest(detail) : { request_id: row.requestId }, { status: 200 });
+      }
+      if (!env.isTest) {
+        after(async () => {
+          try {
+            await sleep(env.planWindowMs);
+            await selectPlansIfReady(db, row.requestId);
+          } catch (error) {
+            console.error(`[underwrite] push select for ${row.requestId} crashed:`, error);
+          }
+        });
+      }
+      const current = await getRequest(db, row.requestId);
+      return NextResponse.json(
+        {
+          request_id: row.requestId,
+          status: current?.status ?? "planning",
+          execution_mode: "push",
+          plan_deadline_at: started.plan_deadline_at,
+          invited_agent_ids: started.invited,
+          human_interventions: 0,
+          links: jobLinks(request, row.requestId),
+        },
+        { status: 202 },
+      );
+    } catch (error) {
+      if (error instanceof PushJobError) return jsonError(error.status, error.message, error.details);
+      throw error;
+    }
+  }
 
   if (wait) {
     try {
@@ -83,6 +134,7 @@ export async function POST(request: Request) {
     {
       request_id: row.requestId,
       status: row.status,
+      execution_mode: "seed",
       human_interventions: 0,
       links: {
         self: absoluteUrl(request, `/api/v1/requests/${row.requestId}`),

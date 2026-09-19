@@ -91,12 +91,22 @@ export const RequestInput = z.object({
   failure_policy: FailurePolicy.default("refund"),
   selection_timeout_s: z.number().positive().default(5),
   verification: VerificationSpec.optional(),
+  /**
+   * `seed` = Mastra auction loop (demoday). `push` = locked marketplace PoC
+   * (invite → one plan+price → best-score → lock → deliver). Omit to follow
+   * `MARKETPLACE_PUSH=1` on the API, otherwise seed.
+   */
+  execution_mode: z.enum(["seed", "push"]).optional(),
 });
 export type RequestInput = z.infer<typeof RequestInput>;
+
+export const ExecutionMode = z.enum(["seed", "push"]);
+export type ExecutionMode = z.infer<typeof ExecutionMode>;
 
 export const RequestStatus = z.enum([
   "received",
   "auctioning",
+  "planning",
   "contracting",
   "executing",
   "verifying",
@@ -104,6 +114,7 @@ export const RequestStatus = z.enum([
   "completed",
   "failed",
   "no_eligible_bid",
+  "no_eligible_plan",
 ]);
 export type RequestStatus = z.infer<typeof RequestStatus>;
 
@@ -158,6 +169,32 @@ export const PlanConstraints = z.object({
   ancestors: z.array(z.string()),
 });
 export type PlanConstraints = z.infer<typeof PlanConstraints>;
+
+/**
+ * Seller-submitted plan on the push path. Single price — no reprice, no counter.
+ * `steps` / `approach` become the rationale / deliverable prose.
+ */
+export const JobPlanInput = z.object({
+  approach: z.string().optional(),
+  steps: z.union([z.string(), z.array(z.string())]).optional(),
+  price_usd: usd,
+  promised_confidence: unit,
+  max_latency_s: z.number().positive(),
+  chain: z.array(ChainHop).optional(),
+  deliverable: z.string().optional(),
+  rationale: z.string().optional(),
+});
+export type JobPlanInput = z.infer<typeof JobPlanInput>;
+
+/** Winner deliverable. `stub: true` renders a clean simulated PDF from the request. */
+export const JobDeliverableInput = z.object({
+  artifact: z.record(z.string(), z.unknown()).optional(),
+  artifact_ref: z.string().optional(),
+  self_confidence: unit.optional(),
+  stub: z.boolean().optional(),
+  content: z.string().optional(),
+});
+export type JobDeliverableInput = z.infer<typeof JobDeliverableInput>;
 
 // ---------------------------------------------------------------------------
 // §3 Bid — the auction (one round)
@@ -242,6 +279,7 @@ export const LedgerEventType = z.enum([
   "artifact_produced",
   "check_run",
   "judge_verdict",
+  "escrow_held",
   "escrow_locked",
   "escrow_released",
   "escrow_withheld",
@@ -254,6 +292,8 @@ export const LedgerEventType = z.enum([
   "escalated",
   "attribution_emitted",
   "axes_updated",
+  "plan_request",
+  "plan_selected",
 ]);
 export type LedgerEventType = z.infer<typeof LedgerEventType>;
 

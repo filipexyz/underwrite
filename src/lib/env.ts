@@ -99,6 +99,30 @@ export const env = {
   },
 
   /**
+   * Locked marketplace PoC (no reprice). When `1`, `POST /api/v1/requests`
+   * defaults to `execution_mode: "push"` unless the body sets `"seed"`.
+   * The console "Fire demo request" button always stays on the seed Mastra loop.
+   */
+  get marketplacePush(): boolean {
+    return read("MARKETPLACE_PUSH") === "1";
+  },
+
+  /** Plan window for the push path. Select when it elapses or every invitee responds. */
+  get planWindowMs(): number {
+    return Math.max(0, readNumber("PLAN_WINDOW_MS", 8_000));
+  },
+
+  /** How many hireable agents to invite on a push job. */
+  get marketplaceTopK(): number {
+    return Math.max(1, Math.round(readNumber("MARKETPLACE_TOP_K", 5)));
+  },
+
+  /** HMAC secret for seller webhooks. Unset → documented stub secret. */
+  get webhookSecret(): string {
+    return read("UNDERWRITE_WEBHOOK_SECRET") ?? "underwrite-webhook-stub";
+  },
+
+  /**
    * Agora + OpenAI GPT Live (interview pool). All three are required to start
    * a voice session. Missing keys disable `/interviews` start/finalize agent
    * calls with HTTP 503 — the marketplace is untouched.

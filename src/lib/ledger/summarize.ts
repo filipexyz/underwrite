@@ -11,7 +11,13 @@ export function summarizeEvent(e: Pick<LedgerEvent, "type" | "payload">): string
   const p = e.payload;
   switch (e.type) {
     case "request_received":
-      return `${p.requirement} · max ${usd(p.max_cost_usd)} · ≤ ${p.max_latency_s}s · min confidence ${pct(p.min_confidence)} · ${p.failure_policy} · actor ${p.actor}`;
+      return `${p.requirement} · max ${usd(p.max_cost_usd)} · ≤ ${p.max_latency_s}s · min confidence ${pct(p.min_confidence)} · ${p.failure_policy} · actor ${p.actor}${p.execution_mode ? ` · ${p.execution_mode}` : ""}`;
+    case "escrow_held":
+      return `hold ${usd(p.amount_usd)} from ${p.payer} · ${p.status ?? "HELD"}`;
+    case "plan_request":
+      return `invite via ${p.channel} · deadline ${p.plan_deadline_at}`;
+    case "plan_selected":
+      return `${p.rule ?? "best-score"} · ${p.reason}${p.candidates && Array.isArray(p.candidates) ? ` · ${(p.candidates as unknown[]).length} plan(s)` : ""}`;
     case "bid_submitted":
       return `${p.compliant ? "compliant" : `non-compliant (${p.rejection_reason})`} · ${usd(p.cost_usd)} · confidence ${pct(p.confidence)} · ${p.latency_s}s · ${chain(p.chain)}`;
     case "agent_hired":

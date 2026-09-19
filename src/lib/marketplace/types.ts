@@ -120,6 +120,13 @@ export type EngineState = {
   render_cost_usd: number;
   verification: VerificationCursor | null;
   settled: boolean;
+  /** `push` = locked marketplace PoC (invite → one plan → best-score). Default seed. */
+  execution_mode?: "seed" | "push";
+  invited_agent_ids?: string[];
+  plan_deadline_at?: string | null;
+  /** Buyer max reserved in the escrow wallet before a winner is chosen. */
+  hold_usd?: number;
+  selected_plan_id?: string | null;
 };
 
 export const EMPTY_STATE: EngineState = {

@@ -10,7 +10,8 @@ import { ESCROW_TRANSITIONS, type EscrowStatus, type Verdict } from "@/lib/contr
 import { escrows, type EscrowRow } from "@/lib/db/schema";
 import { newId } from "@/lib/ids";
 import { buyerWalletId } from "./credits";
-import { moveMoney, WALLET, type EngineContext } from "./context";
+import { moveMoney, walletBalance, WALLET, type EngineContext } from "./context";
+import { round6 } from "./quotes";
 
 export class EscrowTransitionError extends Error {
   constructor(escrowId: string, from: string, to: string) {
@@ -97,6 +98,152 @@ export async function createAndLockEscrow(
       from: args.payee_agent_id,
       to: WALLET.escrow,
       amount_usd: args.stake_usd,
+      reason: `stake_post:${locked.escrowId}`,
+      ref_event_id: stakeEvent.event_id,
+    });
+  }
+
+  return locked;
+}
+
+export class InsufficientHoldError extends Error {
+  constructor(
+    readonly ownerId: string,
+    readonly balanceUsd: number,
+    readonly requiredUsd: number,
+  ) {
+    super(`insufficient wallet balance to hold $${requiredUsd} (have $${balanceUsd})`);
+  }
+}
+
+/** Reserve the buyer's max budget in the escrow wallet before a winner is chosen. */
+export async function holdBuyerBudget(ctx: EngineContext, amountUsd: number): Promise<void> {
+  const amount = round6(amountUsd);
+  if (amount <= 0) return;
+  const payer = buyerWalletId(ctx.request);
+  const balance = await walletBalance(ctx, payer);
+  if (balance + 1e-9 < amount) throw new InsufficientHoldError(payer, balance, amount);
+
+  const event = await ctx.ledger.append({
+    type: "escrow_held",
+    payload: {
+      payer,
+      amount_usd: amount,
+      status: "HELD",
+      note: "buyer max reserved until best-score select locks a winner",
+    },
+  });
+  await moveMoney(ctx, {
+    from: payer,
+    to: WALLET.escrow,
+    amount_usd: amount,
+    reason: `escrow_hold:${ctx.request.requestId}`,
+    ref_event_id: event.event_id,
+  });
+}
+
+/** Refund a hold that never became a locked winner escrow (no plan / failed invite). */
+export async function refundBuyerHold(ctx: EngineContext, amountUsd: number, reason: string): Promise<void> {
+  const amount = round6(amountUsd);
+  if (amount <= 0) return;
+  await moveMoney(ctx, {
+    from: WALLET.escrow,
+    to: buyerWalletId(ctx.request),
+    amount_usd: amount,
+    reason,
+  });
+}
+
+/**
+ * Lock the winner escrow from an existing hold. Does not debit the buyer again.
+ * Surplus (hold − winner price) returns to the buyer. Stake is taken only when
+ * the payee wallet can cover it (registered sellers often start at $0).
+ */
+export async function createLockedEscrowFromHold(
+  ctx: EngineContext,
+  args: {
+    plan_id: string;
+    hop_index: number;
+    payer_agent_id: string | null;
+    payee_agent_id: string;
+    amount_usd: number;
+    min_confidence: number;
+    hold_usd: number;
+    stake_usd: number;
+    payload?: Record<string, unknown>;
+  },
+): Promise<EscrowRow> {
+  const amount = round6(args.amount_usd);
+  const hold = round6(args.hold_usd);
+  let stake = round6(args.stake_usd);
+  if (stake > 0) {
+    const payeeBal = await walletBalance(ctx, args.payee_agent_id);
+    if (payeeBal + 1e-9 < stake) stake = 0;
+  }
+
+  const [created] = await ctx.db
+    .insert(escrows)
+    .values({
+      escrowId: newId("esc"),
+      requestId: ctx.request.requestId,
+      planId: args.plan_id,
+      hopIndex: args.hop_index,
+      payerAgentId: args.payer_agent_id,
+      payeeAgentId: args.payee_agent_id,
+      amountUsd: amount,
+      stakeUsd: stake,
+      minConfidence: args.min_confidence,
+      status: "CREATED",
+    })
+    .returning();
+
+  const locked = await persistStatus(ctx, created, "LOCKED");
+  const lockEvent = await ctx.ledger.append({
+    type: "escrow_locked",
+    agent_id: args.payee_agent_id,
+    payload: {
+      escrow_id: locked.escrowId,
+      plan_id: args.plan_id,
+      hop_index: args.hop_index,
+      payer: args.payer_agent_id ?? buyerWalletId(ctx.request),
+      payee: args.payee_agent_id,
+      amount_usd: amount,
+      min_confidence: args.min_confidence,
+      from_hold_usd: hold,
+      ...args.payload,
+    },
+  });
+
+  const surplus = round6(hold - amount);
+  if (surplus > 0) {
+    await moveMoney(ctx, {
+      from: WALLET.escrow,
+      to: payerWallet(ctx, locked),
+      amount_usd: surplus,
+      reason: `escrow_hold_surplus:${locked.escrowId}`,
+      ref_event_id: lockEvent.event_id,
+    });
+  } else if (surplus < -1e-9) {
+    await moveMoney(ctx, {
+      from: payerWallet(ctx, locked),
+      to: WALLET.escrow,
+      amount_usd: round6(-surplus),
+      reason: `escrow_hold_topup:${locked.escrowId}`,
+      ref_event_id: lockEvent.event_id,
+    });
+  }
+
+  if (stake > 0) {
+    const stakeEvent = await ctx.ledger.append({
+      type: "stake_posted",
+      agent_id: args.payee_agent_id,
+      parent_event_id: lockEvent.event_id,
+      payload: { escrow_id: locked.escrowId, stake_usd: stake, promised_confidence: args.payload?.promised_confidence },
+    });
+    await moveMoney(ctx, {
+      from: args.payee_agent_id,
+      to: WALLET.escrow,
+      amount_usd: stake,
       reason: `stake_post:${locked.escrowId}`,
       ref_event_id: stakeEvent.event_id,
     });

@@ -19,7 +19,7 @@ export const SAMPLE_SELLER_PATCH = {
   description: "Hireable renderer for html_to_pdf.",
 };
 
-export const TERMINAL_REQUEST_STATUSES = ["completed", "failed", "no_eligible_bid"] as const;
+export const TERMINAL_REQUEST_STATUSES = ["completed", "failed", "no_eligible_bid", "no_eligible_plan"] as const;
 
 export function isTerminalRequestStatus(status: string): boolean {
   return (TERMINAL_REQUEST_STATUSES as readonly string[]).includes(status);
