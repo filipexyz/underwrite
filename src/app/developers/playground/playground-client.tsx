@@ -113,12 +113,14 @@ function KeyField({
   value,
   onChange,
   placeholder,
+  hint,
 }: {
   id: string;
   label: string;
   value: string;
   onChange: (value: string) => void;
   placeholder: string;
+  hint: string;
 }) {
   return (
     <label htmlFor={id} className="flex flex-col gap-1 text-sm">
@@ -133,9 +135,7 @@ function KeyField({
         placeholder={placeholder}
         className="input-mesh font-mono text-xs"
       />
-      <span className="mono text-[10px] text-muted">
-        Stored in sessionStorage only. Leave empty for demoday (no legacy env).
-      </span>
+      <span className="mono text-[10px] text-muted">{hint}</span>
     </label>
   );
 }
@@ -235,6 +235,7 @@ function BuyerPanel({ keyValue, onKeyChange }: { keyValue: string; onKeyChange: 
             value={keyValue}
             onChange={onKeyChange}
             placeholder="uw_buyer_…"
+            hint="Stored in sessionStorage only. Leave empty for demoday (no legacy env)."
           />
           <label htmlFor="buyer-body" className="flex flex-col gap-1 text-sm">
             <span className="eyebrow !mb-0">JSON body</span>
@@ -330,6 +331,7 @@ function SellerPanel({ keyValue, onKeyChange }: { keyValue: string; onKeyChange:
             value={keyValue}
             onChange={onKeyChange}
             placeholder="uw_seller_…"
+            hint="Stored in sessionStorage only. A seller key is always required."
           />
           <label htmlFor="seller-body" className="flex flex-col gap-1 text-sm">
             <span className="eyebrow !mb-0">PATCH JSON</span>
