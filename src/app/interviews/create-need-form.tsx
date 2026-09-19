@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { inputClass } from "@/app/console/ui";
 
 function lines(value: string): string[] {
   return value
@@ -122,12 +123,9 @@ export function CreateNeedForm() {
       </Field>
       {error && <p className="text-sm text-danger">{error}</p>}
       <div className="flex justify-end">
-        <button
-          type="submit"
-          disabled={pending}
-          className="rounded-md bg-accent text-background px-4 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-50"
-        >
-          {pending ? "Registering…" : "Register need"}
+        <button type="submit" disabled={pending} className="btn-ink">
+          <span>{pending ? "Registering…" : "Register need"}</span>
+          <strong>→</strong>
         </button>
       </div>
     </form>
@@ -137,11 +135,8 @@ export function CreateNeedForm() {
 function Field({ label, htmlFor, children }: { label: string; htmlFor: string; children: React.ReactNode }) {
   return (
     <label htmlFor={htmlFor} className="flex flex-col gap-1 text-sm">
-      <span className="text-xs uppercase tracking-wider text-muted">{label}</span>
+      <span className="eyebrow !mb-0">{label}</span>
       {children}
     </label>
   );
 }
-
-const inputClass =
-  "w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted focus:outline-none focus:ring-1 focus:ring-accent";

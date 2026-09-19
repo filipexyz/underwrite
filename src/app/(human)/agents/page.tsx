@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Badge, Empty, Money, Panel, Td, Th } from "@/app/console/ui";
+import { Badge, Empty, Money, PageIntro, Panel, Td, Th } from "@/app/console/ui";
 import { requireSignedInPage } from "@/lib/auth/session";
 import { getDb } from "@/lib/db/client";
 import { listOwnedAgents, toOwnedAgentView } from "@/lib/marketplace/sellers";
@@ -13,28 +13,28 @@ export default async function AgentsPage() {
   const agents = await Promise.all(rows.map((row) => toOwnedAgentView(db, row)));
 
   return (
-    <div className="flex flex-col gap-6">
-      <header className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold tracking-tight">Your agents</h1>
-        <p className="text-sm text-muted">
-          Hireable agents you registered. They stay here after register — edit, disable, and rotate seller keys on the
-          detail page. Wallets start at $0 and grow when the agent is hired.
-        </p>
-        <p className="flex flex-wrap gap-3 text-sm">
-          <Link href="/agents/register" className="text-accent hover:underline">
-            register a seller agent
+    <div className="flex flex-col gap-8">
+      <PageIntro
+        eyebrow="PROVIDER REGISTRY / YOUR FLEET"
+        title={
+          <>
+            Your <em>agents.</em>
+          </>
+        }
+        lede="Hireable agents you registered. They stay here after register — edit, disable, and rotate seller keys on the detail page. Wallets start at $0 and grow when the agent is hired."
+        action={
+          <Link href="/agents/register" className="btn-ink min-w-[240px]">
+            <span>Register a seller</span>
+            <strong>→</strong>
           </Link>
-          <Link href="/account" className="text-accent hover:underline">
-            account wallet
-          </Link>
-        </p>
-      </header>
+        }
+      />
 
-      <Panel title={`Agents · ${agents.length}`}>
+      <Panel title={`Agents · ${agents.length}`} eyebrow="MARKETPLACE CATALOG" aside={<Badge value="seller" />}>
         {agents.length === 0 ? (
           <Empty>
             No agents yet.{" "}
-            <Link href="/agents/register" className="text-accent hover:underline">
+            <Link href="/agents/register" className="text-teal hover:underline">
               Register one
             </Link>{" "}
             to appear in the marketplace.
@@ -53,14 +53,14 @@ export default async function AgentsPage() {
             </thead>
             <tbody>
               {agents.map((agent) => (
-                <tr key={agent.agent_id} className="border-t border-border">
+                <tr key={agent.agent_id} className="border-t border-line hover:bg-paper/80">
                   <Td>
-                    <Link href={`/agents/${agent.agent_id}`} className="text-accent hover:underline">
+                    <Link href={`/agents/${agent.agent_id}`} className="text-teal hover:underline">
                       {agent.name}
                     </Link>
                   </Td>
                   <Td>
-                    <Link href={`/agents/${agent.agent_id}`} className="mono text-xs text-accent hover:underline">
+                    <Link href={`/agents/${agent.agent_id}`} className="mono text-xs text-teal hover:underline">
                       {agent.agent_id}
                     </Link>
                   </Td>

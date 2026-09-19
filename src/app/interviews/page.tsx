@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Badge, Empty, Panel, Td, Th } from "@/app/console/ui";
+import { Badge, Empty, PageIntro, Panel, Td, Th } from "@/app/console/ui";
 import { getDb } from "@/lib/db/client";
 import { listNeeds } from "@/lib/interviews/store";
 import { CopyInvite } from "./copy-invite";
@@ -13,22 +13,24 @@ export default async function InterviewsPage() {
   const rows = await listNeeds(db);
 
   return (
-    <div className="flex flex-col gap-6">
-      <header className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold tracking-tight">Interview pool</h1>
-        <p className="text-sm text-muted max-w-2xl">
-          Register a need, copy the interviewee link, and send it. The human only opens that link (mic + agent).
-          Structured answers land back here.
-        </p>
-      </header>
+    <div className="flex flex-col gap-8">
+      <PageIntro
+        eyebrow="HUMAN POOL / AGORA GPT LIVE"
+        title={
+          <>
+            Interview <em>pool.</em>
+          </>
+        }
+        lede="Register a need, copy the interviewee link, and send it. The human only opens that link (mic + agent). Structured answers land back here."
+      />
 
       <SetupBanner />
 
-      <Panel title="Register a need">
+      <Panel title="Register a need" eyebrow="NEW BRIEF">
         <CreateNeedForm />
       </Panel>
 
-      <Panel title={`${rows.length} need${rows.length === 1 ? "" : "s"}`}>
+      <Panel title={`${rows.length} need${rows.length === 1 ? "" : "s"}`} eyebrow="OPEN MANDATES">
         {rows.length === 0 ? (
           <Empty>Nothing yet. Register a brief above, then copy the interviewee link.</Empty>
         ) : (
@@ -45,9 +47,9 @@ export default async function InterviewsPage() {
             </thead>
             <tbody>
               {rows.map((row) => (
-                <tr key={row.id} className="border-t border-border hover:bg-background/40">
+                <tr key={row.id} className="border-t border-line hover:bg-paper/80">
                   <Td>
-                    <Link href={`/interviews/${row.id}`} className="mono text-xs text-accent hover:underline">
+                    <Link href={`/interviews/${row.id}`} className="mono text-xs text-teal hover:underline">
                       {row.id}
                     </Link>
                   </Td>

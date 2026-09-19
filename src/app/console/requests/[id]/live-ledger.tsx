@@ -9,17 +9,17 @@ import { Badge, TERMINAL_STATUSES } from "../../ui";
 type Feed = { status: string; metrics: LedgerMetrics; events: LedgerEvent[] };
 
 const TYPE_TONE: Record<string, string> = {
-  escrow_released: "text-accent",
-  stake_refunded: "text-accent",
-  escrow_withheld: "text-danger",
-  stake_forfeited: "text-danger",
-  escalated: "text-danger",
-  attribution_emitted: "text-danger",
-  plan_rejected: "text-danger",
+  escrow_released: "text-acid",
+  stake_refunded: "text-acid",
+  escrow_withheld: "text-orange",
+  stake_forfeited: "text-orange",
+  escalated: "text-orange",
+  attribution_emitted: "text-orange",
+  plan_rejected: "text-orange",
   check_run: "",
   judge_verdict: "",
-  wallet_updated: "text-muted",
-  axes_updated: "text-muted",
+  wallet_updated: "text-[#87948f]",
+  axes_updated: "text-[#87948f]",
 };
 
 export function LiveLedger({
@@ -72,44 +72,45 @@ export function LiveLedger({
   const live = !TERMINAL_STATUSES.has(feed.status);
 
   return (
-    <section className="rounded-lg border border-border bg-panel">
-      <header className="flex items-center justify-between px-4 py-2.5 border-b border-border">
-        <div className="flex items-center gap-3">
-          <h2 className="text-sm font-semibold tracking-wide">Ledger</h2>
+    <section className="terminal">
+      <header className="terminal-head">
+        <div className="flex flex-wrap items-center gap-3">
+          <span>LIVE PROTOCOL LEDGER</span>
           <Badge value={feed.status} />
-          {live && <span className="mono text-xs text-warn animate-pulse">● live</span>}
-          <span className="mono text-xs text-muted">{feed.events.length} events</span>
+          {live ? <span className="text-acid">● live</span> : null}
+          <span className="text-[#87948f]">{feed.events.length} events</span>
         </div>
-        <div className="flex items-center gap-4 text-xs mono">
+        <div className="flex flex-wrap items-center gap-4">
           <span>
-            human_interventions: <span className={feed.metrics.human_interventions === 0 ? "text-accent" : "text-danger"}>{feed.metrics.human_interventions}</span>
+            human_interventions{" "}
+            <b className={feed.metrics.human_interventions === 0 ? "" : "!text-orange"}>{feed.metrics.human_interventions}</b>
           </span>
-          <span className="text-muted">cost ${feed.metrics.total_cost_usd.toFixed(5)}</span>
-          <span className="text-muted">
+          <span className="text-[#87948f]">cost ${feed.metrics.total_cost_usd.toFixed(5)}</span>
+          <span className="text-[#87948f]">
             tokens {feed.metrics.tokens_in}/{feed.metrics.tokens_out}
           </span>
-          <label className="flex items-center gap-1.5 text-muted cursor-pointer">
+          <label className="flex items-center gap-1.5 text-[#87948f] cursor-pointer">
             <input type="checkbox" checked={showMoney} onChange={(e) => setShowMoney(e.target.checked)} />
             wallets
           </label>
         </div>
       </header>
-      <ol className="max-h-[70vh] overflow-y-auto divide-y divide-border/60">
+      <ol className="ledger">
         {visible.map((e) => (
-          <li key={e.event_id} className="grid grid-cols-[3rem_12rem_9rem_1fr_7rem] gap-3 px-4 py-1.5 text-xs items-baseline">
-            <span className="mono text-muted">{e.seq}</span>
-            <span className={`mono ${TYPE_TONE[e.type] ?? ""}`}>{e.type}</span>
-            <span className="mono truncate text-muted">{e.agent_id ?? ""}</span>
+          <li key={e.event_id} className="ledger-row">
+            <span className="seq">{e.seq}</span>
+            <b className={TYPE_TONE[e.type] ?? ""}>{e.type.replaceAll("_", " ")}</b>
+            <span className="truncate text-[#87948f]">{e.agent_id ?? ""}</span>
             <span className="truncate" title={summarizeEvent(e)}>
               {summarizeEvent(e)}
             </span>
-            <span className="mono text-right text-muted">
+            <span className="text-right text-[#87948f]">
               {e.cost_usd > 0 ? `$${e.cost_usd.toFixed(5)}` : ""}
               {e.tokens_in + e.tokens_out > 0 ? ` · ${e.tokens_in + e.tokens_out}t` : ""}
             </span>
           </li>
         ))}
-        {visible.length === 0 && <li className="px-4 py-3 text-sm text-muted">Waiting for the first event…</li>}
+        {visible.length === 0 && <li className="await text-[#87948f] font-mono text-[13px] py-9">Awaiting the first ledger event…</li>}
       </ol>
     </section>
   );

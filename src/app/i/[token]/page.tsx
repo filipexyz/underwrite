@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { Brand } from "@/components/site-chrome";
 import { getDb } from "@/lib/db/client";
 import { env } from "@/lib/env";
 import { getNeedByToken } from "@/lib/interviews/store";
@@ -24,18 +25,19 @@ export default async function PublicInterviewPage({ params }: { params: Promise<
   const finished = need.status === "completed" || need.status === "cancelled";
 
   return (
-    <main className="min-h-full flex flex-col items-center px-6 py-16">
+    <main className="min-h-full flex flex-col items-center px-6 py-10">
       <div className="w-full max-w-lg flex flex-col gap-8">
-        <header className="flex flex-col gap-2 text-center">
-          <p className="mono text-xs text-accent tracking-widest uppercase">interview</p>
-          <h1 className="text-3xl font-semibold tracking-tight">{need.title}</h1>
+        <Brand />
+        <header className="flex flex-col gap-2">
+          <p className="eyebrow">interview / public token</p>
+          <h1 className="page-title !text-[36px]">{need.title}</h1>
         </header>
 
         {finished ? (
-          <section className="rounded-lg border border-border bg-panel p-8 flex flex-col gap-3 text-center">
-            <p className="text-xs uppercase tracking-wider text-accent">done</p>
-            <h2 className="text-xl font-semibold">This interview is already finished</h2>
-            <p className="text-sm text-muted">You can close this tab.</p>
+          <section className="certificate text-center">
+            <p className="eyebrow !mb-2 !text-ink">done</p>
+            <h2 className="font-sans text-xl font-semibold">This interview is already finished</h2>
+            <p className="font-sans text-sm text-ink/70 mt-2">You can close this tab.</p>
           </section>
         ) : env.agora.enabled ? (
           <InterviewRoom
@@ -45,7 +47,7 @@ export default async function PublicInterviewPage({ params }: { params: Promise<
             requiredFields={need.brief.required_fields}
           />
         ) : (
-          <section className="rounded-lg border border-border bg-panel p-6 text-sm text-muted text-center">
+          <section className="border border-ink bg-panel p-6 text-sm text-[#53605a] text-center">
             This interview isn&apos;t ready yet. Ask the person who sent the link.
           </section>
         )}

@@ -178,10 +178,10 @@ export function InterviewRoom({
 
   if (phase === "thanks") {
     return (
-      <section className="rounded-lg border border-border bg-panel p-8 flex flex-col gap-3 text-center">
-        <p className="mono text-xs uppercase tracking-wider text-accent">done</p>
-        <h2 className="text-2xl font-semibold tracking-tight">Thanks — you can close this tab</h2>
-        <p className="text-sm text-muted">Your answers were saved.</p>
+      <section className="certificate text-center">
+        <p className="eyebrow !mb-2 !text-ink">done</p>
+        <h2 className="font-sans text-2xl font-semibold tracking-tight">Thanks — you can close this tab</h2>
+        <p className="font-sans text-sm text-ink/70 mt-2">Your answers were saved.</p>
       </section>
     );
   }
@@ -189,35 +189,28 @@ export function InterviewRoom({
   const status = statusLabel(phase, agentState, agentConnected);
 
   return (
-    <section className="rounded-lg border border-border bg-panel p-6 flex flex-col gap-5 items-center text-center">
-      <p className={`mono text-xs uppercase tracking-wider ${status === "listening" || status === "speaking" ? "text-accent" : "text-muted"}`}>
+    <section className="border border-ink bg-panel p-6 flex flex-col gap-5 items-center text-center">
+      <p className={`eyebrow !mb-0 ${status === "listening" || status === "speaking" ? "text-teal" : ""}`}>
         {status}
       </p>
-      <p className="text-sm text-muted max-w-sm">Allow the microphone. The agent asks one question at a time.</p>
+      <p className="text-sm text-[#53605a] max-w-sm">Allow the microphone. The agent asks one question at a time.</p>
       {error && <p className="text-sm text-danger">{error}</p>}
       <div className="flex flex-wrap justify-center gap-2">
         {phase === "idle" && (
-          <button type="button" onClick={() => void join()} className="rounded-md bg-accent text-background px-5 py-2 text-sm font-medium hover:opacity-90">
-            Start
+          <button type="button" onClick={() => void join()} className="btn-ink">
+            <span>Start</span>
+            <strong>→</strong>
           </button>
         )}
         {phase === "connecting" && <span className="mono text-xs text-muted">joining…</span>}
         {phase === "live" && (
           <>
-            <button
-              type="button"
-              onClick={() => void toggleMic()}
-              className="rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-background"
-            >
+            <button type="button" onClick={() => void toggleMic()} className="btn-ghost">
               {micOn ? "Mute" : "Unmute"}
             </button>
-            <button
-              type="button"
-              disabled={!joined}
-              onClick={() => void finalize(transcript)}
-              className="rounded-md bg-accent text-background px-4 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-50"
-            >
-              Finish
+            <button type="button" disabled={!joined} onClick={() => void finalize(transcript)} className="btn-ink">
+              <span>Finish</span>
+              <strong>→</strong>
             </button>
           </>
         )}

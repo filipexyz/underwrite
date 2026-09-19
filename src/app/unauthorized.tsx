@@ -1,14 +1,21 @@
 import Link from "next/link";
+import { SiteChrome } from "@/components/site-chrome";
 
 export default function UnauthorizedPage() {
   return (
-    <main className="mx-auto w-full max-w-xl px-6 py-24 flex flex-col gap-4">
-      <p className="mono text-xs text-warn tracking-widest uppercase">401</p>
-      <h1 className="text-2xl font-semibold tracking-tight">Sign in required</h1>
-      <p className="text-muted text-sm">Self-serve keys, seller registration, and the admin area need a Clerk session.</p>
-      <Link href="/" className="text-accent text-sm hover:underline w-fit">
-        ← home
-      </Link>
-    </main>
+    <SiteChrome>
+      <main className="mx-auto w-full max-w-xl px-[max(4vw,28px)] py-24 flex flex-col gap-4">
+        <p className="eyebrow">401 / SESSION</p>
+        <h1 className="page-title">
+          Sign in <em>required.</em>
+        </h1>
+        <p className="text-[#53605a] text-sm leading-relaxed">
+          Self-serve keys, seller registration, and the admin area need a Clerk session.
+        </p>
+        <Link href="/" className="btn-ghost w-fit">
+          ← home
+        </Link>
+      </main>
+    </SiteChrome>
   );
 }

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { desc } from "drizzle-orm";
-import { Badge, Empty, Money, Panel, Td, Th } from "@/app/console/ui";
+import { Badge, Empty, Money, PageIntro, Panel, Td, Th } from "@/app/console/ui";
 import { listApiKeys, toPublicApiKey } from "@/lib/auth/api-keys";
 import { requireAdminPage } from "@/lib/auth/session";
 import { getDb } from "@/lib/db/client";
@@ -31,33 +31,35 @@ export default async function AdminPage() {
   const walletsSorted = [...walletRows].sort((a, b) => b.capitalUsd - a.capitalUsd || a.ownerId.localeCompare(b.ownerId));
 
   return (
-    <div className="flex flex-col gap-6">
-      <header className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold tracking-tight">Admin</h1>
-        <p className="text-sm text-muted">
-          Configuration and audit only. Buyers and sellers mint their own keys. Seed catalog stays for demoday;
-          registered sellers sit alongside.
-        </p>
-      </header>
+    <div className="flex flex-col gap-8">
+      <PageIntro
+        eyebrow="INTERNAL / CONFIGURATION + AUDIT"
+        title={
+          <>
+            Ops <em>console.</em>
+          </>
+        }
+        lede="Configuration and audit only. Buyers and sellers mint their own keys. Seed catalog stays for demoday; registered sellers sit alongside."
+      />
 
-      <Panel title="Safe knobs (env)">
-        <ul className="text-sm flex flex-col gap-1.5">
-          <li>
-            <span className="mono text-xs text-muted">UNDERWRITE_API_KEY</span>{" "}
-            {env.apiKey ? "set — legacy global bearer still accepted" : "unset — prefer DB buyer keys"}
+      <Panel title="Safe knobs (env)" eyebrow="DEPLOYMENT KEY">
+        <ul className="text-sm flex flex-col">
+          <li className="flex justify-between gap-4 border-t border-line py-2.5 font-mono text-[10px] tracking-wide first:border-t-0">
+            <b className="text-teal">UNDERWRITE_API_KEY</b>
+            <span className="text-right text-[#5c6862]">{env.apiKey ? "set — legacy global bearer still accepted" : "unset — prefer DB buyer keys"}</span>
           </li>
-          <li>
-            <span className="mono text-xs text-muted">UNDERWRITE_ADMIN_USER_IDS</span>{" "}
-            {env.adminUserIds ? "set — bootstrap allowlist" : "unset — use Clerk publicMetadata.role=admin"}
+          <li className="flex justify-between gap-4 border-t border-line py-2.5 font-mono text-[10px] tracking-wide">
+            <b className="text-teal">UNDERWRITE_ADMIN_USER_IDS</b>
+            <span className="text-right text-[#5c6862]">{env.adminUserIds ? "set — bootstrap allowlist" : "unset — use Clerk publicMetadata.role=admin"}</span>
           </li>
-          <li>
-            <span className="mono text-xs text-muted">Clerk public metadata</span>{" "}
-            {`{ "role": "admin" }`} or {`{ "admin": true }`}
+          <li className="flex justify-between gap-4 border-t border-line py-2.5 font-mono text-[10px] tracking-wide">
+            <b className="text-teal">Clerk public metadata</b>
+            <span className="text-right text-[#5c6862]">{`{ "role": "admin" }`} or {`{ "admin": true }`}</span>
           </li>
         </ul>
       </Panel>
 
-      <Panel title={`Agents · ${agents.length}`}>
+      <Panel title={`Agents · ${agents.length}`} eyebrow="FULL REGISTRY">
         {agents.length === 0 ? (
           <Empty>
             Empty registry. <code>pnpm db:seed</code> loads A/B/C1/C2/J1/J2 — otherwise requests settle as{" "}
@@ -79,7 +81,7 @@ export default async function AdminPage() {
             </thead>
             <tbody>
               {agents.map((agent) => (
-                <tr key={agent.agent_id} className="border-t border-border">
+                <tr key={agent.agent_id} className="border-t border-line">
                   <Td>
                     <span className="mono text-xs">{agent.agent_id}</span>
                   </Td>
@@ -101,14 +103,14 @@ export default async function AdminPage() {
                     {agent.status === "disabled" ? (
                       <form action={enableAgent}>
                         <input type="hidden" name="id" value={agent.agent_id} />
-                        <button type="submit" className="text-xs text-accent hover:underline">
+                        <button type="submit" className="font-mono text-[10px] tracking-wider uppercase text-teal hover:underline">
                           enable
                         </button>
                       </form>
                     ) : (
                       <form action={disableAgent}>
                         <input type="hidden" name="id" value={agent.agent_id} />
-                        <button type="submit" className="text-xs text-danger hover:underline">
+                        <button type="submit" className="font-mono text-[10px] tracking-wider uppercase text-danger hover:underline">
                           disable
                         </button>
                       </form>
@@ -121,7 +123,7 @@ export default async function AdminPage() {
         )}
       </Panel>
 
-      <Panel title={`API keys · ${keys.length}`}>
+      <Panel title={`API keys · ${keys.length}`} eyebrow="HASHED CREDENTIALS">
         {keys.length === 0 ? (
           <Empty>No hashed keys yet. Users mint them on /keys.</Empty>
         ) : (
@@ -139,7 +141,7 @@ export default async function AdminPage() {
             </thead>
             <tbody>
               {keys.map((key) => (
-                <tr key={key.id} className="border-t border-border">
+                <tr key={key.id} className="border-t border-line">
                   <Td>
                     <span className="mono text-xs">{key.id}</span>
                   </Td>
@@ -162,7 +164,7 @@ export default async function AdminPage() {
                     {!key.revoked_at ? (
                       <form action={revokeAnyKey}>
                         <input type="hidden" name="id" value={key.id} />
-                        <button type="submit" className="text-xs text-danger hover:underline">
+                        <button type="submit" className="font-mono text-[10px] tracking-wider uppercase text-danger hover:underline">
                           revoke
                         </button>
                       </form>
@@ -175,8 +177,8 @@ export default async function AdminPage() {
         )}
       </Panel>
 
-      <div className="grid gap-6 md:grid-cols-2">
-        <Panel title="Wallets" aside={<span className="mono text-xs text-muted">Σ <Money value={capital} digits={2} /></span>}>
+      <div className="grid gap-4 md:grid-cols-2">
+        <Panel title="Wallets" eyebrow="BALANCES" aside={<span className="mono text-xs text-muted">Σ <Money value={capital} digits={2} /></span>}>
           <table className="w-full">
             <thead>
               <tr>
@@ -187,7 +189,7 @@ export default async function AdminPage() {
             </thead>
             <tbody>
               {walletsSorted.map((wallet) => (
-                <tr key={wallet.ownerId} className="border-t border-border">
+                <tr key={wallet.ownerId} className="border-t border-line">
                   <Td>
                     <span className="mono text-xs">{wallet.ownerId}</span>
                   </Td>
@@ -202,23 +204,23 @@ export default async function AdminPage() {
             </tbody>
           </table>
         </Panel>
-        <Panel title="Ledger summary" aside={<span className="mono text-xs text-muted">{events.length} recent rows</span>}>
-          <p className="text-sm text-muted mb-3">{walletRows.length} wallets · {events.length} recent ledger rows</p>
+        <Panel title="Ledger summary" eyebrow="RECENT ROWS" aside={<span className="mono text-xs text-muted">{events.length} recent</span>}>
+          <p className="text-sm text-[#53605a] mb-3">{walletRows.length} wallets · {events.length} recent ledger rows</p>
           {events.length === 0 ? (
             <Empty>No ledger events yet.</Empty>
           ) : (
-            <ul className="flex flex-col gap-1 text-xs">
+            <ul className="flex flex-col text-xs">
               {events.map((event) => (
-                <li key={event.seq} className="flex gap-3">
-                  <span className="mono text-muted w-8 shrink-0">{event.seq}</span>
-                  <span className="mono">{event.type}</span>
-                  <span className="mono text-muted truncate">{event.requestId}</span>
+                <li key={event.seq} className="flex gap-3 border-t border-line py-2 font-mono first:border-t-0">
+                  <span className="text-muted w-8 shrink-0">{event.seq}</span>
+                  <span>{event.type}</span>
+                  <span className="text-muted truncate">{event.requestId}</span>
                 </li>
               ))}
             </ul>
           )}
         </Panel>
-        <Panel title="Recent requests">
+        <Panel title="Recent requests" eyebrow="MARKET">
           {requests.length === 0 ? (
             <Empty>Nothing in the marketplace yet.</Empty>
           ) : (
@@ -232,9 +234,9 @@ export default async function AdminPage() {
               </thead>
               <tbody>
                 {requests.map((request) => (
-                  <tr key={request.request_id} className="border-t border-border">
+                  <tr key={request.request_id} className="border-t border-line">
                     <Td>
-                      <Link href={`/console/requests/${request.request_id}`} className="mono text-xs text-accent hover:underline">
+                      <Link href={`/console/requests/${request.request_id}`} className="mono text-xs text-teal hover:underline">
                         {request.request_id}
                       </Link>
                     </Td>
