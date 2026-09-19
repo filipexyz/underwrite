@@ -42,6 +42,15 @@ const STATUS_STYLE: Record<string, string> = {
   thinking: "border-[#d6823e] text-warn",
   speaking: "border-[#62ad9e] text-teal",
   selected: "border-[#62ad9e] text-teal bg-acid/40",
+  "200": "border-[#62ad9e] text-teal",
+  "202": "border-[#62ad9e] text-teal",
+  "400": "border-[#d4a090] text-danger",
+  "401": "border-[#d4a090] text-danger",
+  "402": "border-[#d4a090] text-danger",
+  "403": "border-[#d4a090] text-danger",
+  "404": "border-[#d4a090] text-danger",
+  "422": "border-[#d6823e] text-warn",
+  calling: "border-[#d6823e] text-warn",
 };
 
 export const TERMINAL_STATUSES = new Set(["completed", "failed", "no_eligible_bid"]);

@@ -2,17 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-
-export function opsHintForPath(pathname: string, fallback: string): string {
-  if (pathname.startsWith("/admin")) return "admin · config · audit";
-  if (pathname.startsWith("/console")) return "console · live ledger";
-  if (pathname.startsWith("/interviews")) return "interviews · agora gpt live";
-  if (pathname.startsWith("/agents/register")) return "register · seller manifest";
-  if (pathname.startsWith("/agents")) return "agents · your fleet";
-  if (pathname.startsWith("/keys")) return "keys · self-serve";
-  if (pathname.startsWith("/account")) return "account · test credits";
-  return fallback;
-}
+import { opsHintForPath } from "@/lib/ui/ops-hint";
 
 export function OpsHint({ fallback }: { fallback: string }) {
   const pathname = usePathname() ?? "/";
@@ -21,6 +11,8 @@ export function OpsHint({ fallback }: { fallback: string }) {
 
 const LINKS = [
   { href: "/", label: "home", match: (path: string) => path === "/" },
+  { href: "/developers", label: "docs", match: (path: string) => path === "/developers" },
+  { href: "/developers/playground", label: "playground", match: (path: string) => path.startsWith("/developers/playground") },
   { href: "/console", label: "console", match: (path: string) => path.startsWith("/console") },
   { href: "/interviews", label: "interviews", match: (path: string) => path.startsWith("/interviews") },
   { href: "/account", label: "account", match: (path: string) => path.startsWith("/account") },

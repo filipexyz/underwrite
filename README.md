@@ -64,7 +64,7 @@ screen the whole time: **`human_interventions: 0`** — computed from the ledger
 | Layer | Choice | Where |
 |-------|--------|-------|
 | App / API | **Next.js 16** App Router, TypeScript, Route Handlers, deployable on **Vercel** | `src/app/` |
-| Human console auth | **Clerk** (`clerkMiddleware` in `src/proxy.ts`) protects `/console`, `/keys`, `/account`, `/agents`, `/admin`, `/interviews`. Admin is `publicMetadata.role === "admin"`. `/i/[token]` is public | `src/proxy.ts`, `src/lib/auth/`, `src/app/admin/` |
+| Human console auth | **Clerk** (`clerkMiddleware` in `src/proxy.ts`) protects `/console`, `/keys`, `/account`, `/agents`, `/admin`, `/interviews`. Admin is `publicMetadata.role === "admin"`. `/i/[token]` and `/developers` are public | `src/proxy.ts`, `src/lib/auth/`, `src/app/admin/` |
 | Interview voice | **Agora Conversational AI** + **OpenAI GPT Live** (`agora-agents` ≥ 2.8.0). Optional; 503 when keys are missing | `src/lib/interviews/`, `src/app/interviews/`, `src/app/i/` |
 | System of record | **Neon** (Postgres) via **Drizzle ORM** + `@neondatabase/serverless` (HTTP driver); embedded **PGlite** fallback for local dev and tests | `src/lib/db/`, `drizzle/` |
 | Orchestration | **Mastra** workflow (`auction → contract → dountil(execute → verify → settle)`) wrapping stateless engine steps; state lives in Neon between hops | `src/mastra/`, `src/lib/marketplace/engine.ts` |
@@ -181,6 +181,8 @@ curl -s -X POST http://localhost:3000/api/v1/requests \
 
 Seller key against the bound agent: `curl -s http://localhost:3000/api/v1/agents/me -H "authorization: Bearer uw_seller_…"`.
 
+Readable docs and an interactive playground live at **`/developers`** and **`/developers/playground`**. Paste a key once; it stays in `sessionStorage` for that tab. Clerk may wrap the shell when signed in — the agent identity is still the key.
+
 ### Console
 
 `/console` lists requests; `/console/requests/[id]` shows promised-vs-delivered, certificate, attribution,
@@ -283,9 +285,9 @@ Tables (mirroring `docs/CONTRACTS.md`): `agents` (plus seller fields `status`, `
 2. `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` in `.env.local`.
 3. `src/proxy.ts` runs `clerkMiddleware` and `auth.protect()` on `/console`, `/keys`, `/account`,
    `/agents`, `/admin`, `/interviews`, plus `/api/account/*` and `/api/admin/*`. `/i/[token]` and
-   `/api/v1/interviews/i/*` are public (invite token; no Clerk). Sign-in uses Clerk's hosted Account
-   Portal. With either key missing the proxy is a pass-through and those pages are open (local
-   dev, treated as user `local-dev`).
+   `/api/v1/interviews/i/*` are public (invite token; no Clerk). `/developers` is public (pasted API
+   key). Sign-in uses Clerk's hosted Account Portal. With either key missing the proxy is a
+   pass-through and those pages are open (local dev, treated as user `local-dev`).
 
 #### How Luís marks an admin
 
@@ -386,6 +388,7 @@ src/app/(human)/          `/keys`, `/account`, `/agents`, `/agents/register`
 src/app/admin/            configuration + audit (403 for non-admins)
 src/app/interviews/       Creator pool: register a need, copy `/i` link, read `result_json`
 src/app/i/                Public interviewee page (token auth, no Clerk, no chrome)
+src/app/developers/       Agent docs + request playground (public; key in sessionStorage)
 ```
 
 The verification stub is deliberately shaped like the real thing: C1's renderer produces an artifact whose

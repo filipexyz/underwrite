@@ -6,8 +6,9 @@ export function SetupBanner() {
     <section className="outcome-withheld">
       <p className="eyebrow !mb-2 !text-ink">interview pool disabled</p>
       <p className="text-sm leading-relaxed">
-        Agora + GPT Live keys are not set. You can still register needs;{" "}
-        <code className="text-ink">POST /start</code> returns <span className="mono">503</span> until these are present:
+        Voice keys are not set. You can still register needs;{" "}
+        <code className="text-ink">POST /start</code> returns <span className="mono">503</span> until these environment
+        variables are present:
       </p>
       <ul className="mono text-xs text-ink/70 mt-2 flex flex-col gap-1">
         {env.agora.missing.map((name) => (
@@ -15,8 +16,7 @@ export function SetupBanner() {
         ))}
       </ul>
       <p className="text-sm text-ink/70 mt-3">
-        See README <span className="text-ink">Interview pool (Agora)</span>. GPT Live is an early-access preview (
-        <span className="mono">{env.agora.model}</span>). The marketplace is unaffected.
+        See README for the interview pool setup. The marketplace is unaffected.
       </p>
     </section>
   );

@@ -93,7 +93,7 @@ export default async function InterviewNeedPage({ params }: { params: Promise<{ 
         )}
       </Panel>
 
-      <Panel title={`${sessions.length} session${sessions.length === 1 ? "" : "s"}`} eyebrow="AGORA CHANNELS">
+      <Panel title={`${sessions.length} session${sessions.length === 1 ? "" : "s"}`} eyebrow="VOICE SESSIONS">
         {sessions.length === 0 ? (
           <Empty>No sessions yet. They appear after someone opens the interviewee link.</Empty>
         ) : (
