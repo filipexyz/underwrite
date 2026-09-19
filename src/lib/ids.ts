@@ -11,7 +11,9 @@ export type IdPrefix =
   | "art"
   | "run"
   | "key"
-  | "agt";
+  | "agt"
+  | "need"
+  | "sess";
 
 export function newId(prefix: IdPrefix): string {
   return `${prefix}_${randomUUID().replace(/-/g, "").slice(0, 20)}`;

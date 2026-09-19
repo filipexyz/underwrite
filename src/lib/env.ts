@@ -91,4 +91,30 @@ export const env = {
   get isTest(): boolean {
     return read("NODE_ENV") === "test" || read("VITEST") === "true";
   },
+
+  /**
+   * Agora + OpenAI GPT Live (interview pool). All three are required to start
+   * a voice session. Missing keys disable `/interviews` start/finalize agent
+   * calls with HTTP 503 — the marketplace is untouched.
+   */
+  get agora() {
+    const appId = read("NEXT_PUBLIC_AGORA_APP_ID");
+    const certificate = read("AGORA_APP_CERTIFICATE") ?? read("NEXT_AGORA_APP_CERTIFICATE");
+    const openaiKey =
+      read("AGORA_OPENAI_API_KEY") ?? read("NEXT_OPENAI_API_KEY") ?? read("OPENAI_API_KEY") ?? read("MODEL_PROVIDER_API_KEY");
+    const missing: string[] = [];
+    if (!appId) missing.push("NEXT_PUBLIC_AGORA_APP_ID");
+    if (!certificate) missing.push("AGORA_APP_CERTIFICATE");
+    if (!openaiKey) missing.push("AGORA_OPENAI_API_KEY (or OPENAI_API_KEY)");
+    return {
+      enabled: missing.length === 0,
+      missing,
+      appId,
+      certificate,
+      openaiKey,
+      model: read("AGORA_GPT_LIVE_MODEL") ?? "gpt-live-1",
+      voice: read("AGORA_GPT_LIVE_VOICE") ?? "cedar",
+      area: (read("AGORA_AREA") ?? "US").toUpperCase(),
+    };
+  },
 } as const;
