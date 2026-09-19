@@ -316,7 +316,68 @@ export const attributions = pgTable(
     explanation: text("explanation").notNull(),
     createdAt: createdAt(),
   },
-  (t) => [index("attributions_request_idx").on(t.requestId)],
+    (t) => [index("attributions_request_idx").on(t.requestId)],
+  );
+
+// ---------------------------------------------------------------------------
+// Interview pool (Agora + GPT Live) — parallel to the marketplace.
+// ---------------------------------------------------------------------------
+
+export type InterviewBrief = {
+  goal: string;
+  questions: string[];
+  context: string;
+  required_fields: string[];
+  success_criteria: string;
+};
+
+export type InterviewAnswers = {
+  answers: Record<string, string>;
+  notes?: string;
+  source?: "agent_json" | "client" | "llm_extract" | "partial";
+};
+
+export type TranscriptTurn = {
+  role: "user" | "assistant" | "system";
+  text: string;
+  at?: number;
+  uid?: string;
+  turn_id?: number;
+};
+
+export const interviewNeeds = pgTable(
+  "interview_needs",
+  {
+    id: text("id").primaryKey(),
+    title: text("title").notNull(),
+    brief: jsonb("brief").$type<InterviewBrief>().notNull(),
+    status: text("status").notNull(),
+    createdByClerkUserId: text("created_by_clerk_user_id").notNull(),
+    publicToken: text("public_token").notNull().unique(),
+    assignedSessionId: text("assigned_session_id"),
+    resultJson: jsonb("result_json").$type<InterviewAnswers | Record<string, unknown>>(),
+    createdAt: createdAt(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+  },
+  (t) => [index("interview_needs_created_at_idx").on(t.createdAt), index("interview_needs_status_idx").on(t.status)],
+);
+
+export const interviewSessions = pgTable(
+  "interview_sessions",
+  {
+    id: text("id").primaryKey(),
+    needId: text("need_id")
+      .notNull()
+      .references(() => interviewNeeds.id),
+    agoraChannel: text("agora_channel").notNull(),
+    agoraAgentId: text("agora_agent_id"),
+    status: text("status").notNull(),
+    transcriptJson: jsonb("transcript_json").$type<TranscriptTurn[]>(),
+    answersJson: jsonb("answers_json").$type<InterviewAnswers | Record<string, unknown>>(),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    endedAt: timestamp("ended_at", { withTimezone: true }),
+  },
+  (t) => [index("interview_sessions_need_idx").on(t.needId)],
 );
 
 export type AgentRow = typeof agents.$inferSelect;
@@ -331,6 +392,8 @@ export type EscrowRow = typeof escrows.$inferSelect;
 export type VerificationRow = typeof verifications.$inferSelect;
 export type LedgerEventRow = typeof ledgerEvents.$inferSelect;
 export type AttributionRow = typeof attributions.$inferSelect;
+export type InterviewNeedRow = typeof interviewNeeds.$inferSelect;
+export type InterviewSessionRow = typeof interviewSessions.$inferSelect;
 
 export type AxisColumns = Pick<
   TrustAxesRow,

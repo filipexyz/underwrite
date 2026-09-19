@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 const LINKS = [
   { href: "/", label: "home", match: (path: string) => path === "/" },
   { href: "/console", label: "console", match: (path: string) => path.startsWith("/console") },
+  { href: "/interviews", label: "interviews", match: (path: string) => path.startsWith("/interviews") },
   { href: "/account", label: "account", match: (path: string) => path.startsWith("/account") },
   { href: "/keys", label: "keys", match: (path: string) => path.startsWith("/keys") },
   { href: "/agents", label: "agents", match: (path: string) => path.startsWith("/agents") && !path.startsWith("/agents/register") },
@@ -43,6 +44,7 @@ export function AppBrand({ fallback }: { fallback: string }) {
 export function sectionFromPath(pathname: string): string {
   if (pathname.startsWith("/admin")) return "admin";
   if (pathname.startsWith("/console")) return "console";
+  if (pathname.startsWith("/interviews")) return "interviews";
   if (pathname.startsWith("/agents/register")) return "register";
   if (pathname.startsWith("/agents")) return "agents";
   if (pathname.startsWith("/account")) return "account";
@@ -52,6 +54,7 @@ export function sectionFromPath(pathname: string): string {
 
 export function sectionHref(section: string): string {
   if (section === "console") return "/console";
+  if (section === "interviews") return "/interviews";
   if (section === "admin") return "/admin";
   if (section === "register") return "/agents/register";
   if (section === "agents") return "/agents";

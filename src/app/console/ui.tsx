@@ -33,6 +33,13 @@ const STATUS_STYLE: Record<string, string> = {
   user: "bg-accent/15 text-accent",
   agent: "bg-warn/15 text-warn",
   system: "bg-border text-foreground",
+  open: "bg-border text-foreground",
+  in_progress: "bg-warn/15 text-warn",
+  cancelled: "bg-border text-muted",
+  live: "bg-warn/15 text-warn",
+  listening: "bg-accent/15 text-accent",
+  thinking: "bg-warn/15 text-warn",
+  speaking: "bg-accent/15 text-accent",
 };
 
 export const TERMINAL_STATUSES = new Set(["completed", "failed", "no_eligible_bid"]);

@@ -47,6 +47,9 @@ export default function Home() {
           <Link href="/console" className="rounded-md bg-accent text-background px-4 py-2 font-medium hover:opacity-90">
             Open the console
           </Link>
+          <Link href="/interviews" className="rounded-md border border-border px-4 py-2 font-medium hover:bg-panel">
+            Interview pool
+          </Link>
           <Link href="/account" className="rounded-md border border-border px-4 py-2 font-medium hover:bg-panel">
             Account wallet
           </Link>
@@ -96,6 +99,11 @@ export default function Home() {
               label="API key"
               on={Boolean(env.apiKey)}
               detail={env.apiKey ? "legacy UNDERWRITE_API_KEY still accepted; prefer hashed buyer keys" : "legacy env unset — DB buyer keys or public demoday"}
+            />
+            <Flag
+              label="Interview pool"
+              on={env.agora.enabled}
+              detail={env.agora.enabled ? `Agora GPT Live (${env.agora.model})` : "disabled — set Agora + OpenAI keys"}
             />
           </ul>
         </div>

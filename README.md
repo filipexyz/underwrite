@@ -64,7 +64,8 @@ screen the whole time: **`human_interventions: 0`** — computed from the ledger
 | Layer | Choice | Where |
 |-------|--------|-------|
 | App / API | **Next.js 16** App Router, TypeScript, Route Handlers, deployable on **Vercel** | `src/app/` |
-| Human console auth | **Clerk** (`clerkMiddleware` in `src/proxy.ts`) protects `/console`, `/keys`, `/account`, `/agents`, `/admin`. Admin is `publicMetadata.role === "admin"` | `src/proxy.ts`, `src/lib/auth/`, `src/app/admin/` |
+| Human console auth | **Clerk** (`clerkMiddleware` in `src/proxy.ts`) protects `/console`, `/keys`, `/account`, `/agents`, `/admin`, `/interviews`. Admin is `publicMetadata.role === "admin"`. `/i/[token]` is public | `src/proxy.ts`, `src/lib/auth/`, `src/app/admin/` |
+| Interview voice | **Agora Conversational AI** + **OpenAI GPT Live** (`agora-agents` ≥ 2.8.0). Optional; 503 when keys are missing | `src/lib/interviews/`, `src/app/interviews/`, `src/app/i/` |
 | System of record | **Neon** (Postgres) via **Drizzle ORM** + `@neondatabase/serverless` (HTTP driver); embedded **PGlite** fallback for local dev and tests | `src/lib/db/`, `drizzle/` |
 | Orchestration | **Mastra** workflow (`auction → contract → dountil(execute → verify → settle)`) wrapping stateless engine steps; state lives in Neon between hops | `src/mastra/`, `src/lib/marketplace/engine.ts` |
 | Model calls | Vercel AI SDK (`ai` + `@ai-sdk/openai-compatible`) → any OpenAI-compatible endpoint (NeuraLake); deterministic simulation when no key | `src/lib/observability/inference.ts` |
@@ -196,6 +197,64 @@ vars — documented on the page.
 
 ---
 
+## Interview pool (Agora)
+
+Internal conversation pool, **parallel to the marketplace** (does not touch escrow or agent API keys).
+
+Someone registers a **need** (goal, questions, required fields, success criteria). A voice agent
+interviews the human over Agora. The session **finalizes** into structured answers on the need row
+for later internal use (marketplace context, product research, onboarding).
+
+This uses **OpenAI GPT Live via Agora** (`openai_gpt_live` / `gpt-live-1` by default) so ASR, reasoning
+and TTS are one MLLM stage — the [openai-gpt-live-nextjs](https://recipes.agora.io/recipes/openai-gpt-live-nextjs)
+recipe and [GPT Live docs](https://docs.agora.io/en/ai/models/mllm/openai-gpt-live). Custom LLM is not
+used unless GPT Live is blocked in your Agora project.
+
+> **Preview / alpha.** GPT Live is early access. Agora Agents TS SDK `≥ 2.8.0` routes start calls to
+> the preview endpoint and sends `agora-feature: live-models`. Do not treat this path as production.
+
+### Env
+
+All three are required to **start** a live interview. With any missing, `/interviews` shows setup
+instructions and `POST /api/v1/interviews/needs/[id]/start` returns **503**. Registering and listing
+needs still works. Marketplace routes are unchanged.
+
+| Variable | Where | Notes |
+|----------|--------|--------|
+| `NEXT_PUBLIC_AGORA_APP_ID` | browser + server | Agora Console → project → App ID |
+| `AGORA_APP_CERTIFICATE` | server only | Alias: `NEXT_AGORA_APP_CERTIFICATE` (Agora CLI / recipe). Never commit. |
+| `AGORA_OPENAI_API_KEY` | server only | Dedicated GPT Live key. Fallbacks: `NEXT_OPENAI_API_KEY`, `OPENAI_API_KEY`, `MODEL_PROVIDER_API_KEY` |
+| `AGORA_GPT_LIVE_MODEL` | server | Default `gpt-live-1`. Some preview docs still say `gpt-live-1-diamond-alpha`. |
+| `AGORA_GPT_LIVE_VOICE` | server | Default `cedar` |
+| `AGORA_AREA` | server | `US` (default), `EU`, `AP`, `CN` |
+
+### Flow
+
+1. Open `/interviews` (Clerk-protected when Clerk keys are set). Register a need.
+2. Copy the **interviewee link** `/i/[token]` (unguessable; possession is auth — no Clerk).
+3. The human opens that page only: Start → mic + GPT Live agent. No console chrome.
+4. **Finish** → `POST /api/v1/interviews/i/[token]/finalize` stops the agent, parses the final JSON
+   (or a post-call extract), writes `result_json` on the need. The link is spent (`completed`).
+5. The creator reads answers on `/interviews/[id]`.
+
+### APIs
+
+| Route | What |
+|-------|------|
+| `POST /api/v1/interviews/needs` | Create a need (Clerk session, or open when Clerk is off). |
+| `GET /api/v1/interviews/needs` | List. Includes `{ agora: { enabled, missing } }`. |
+| `GET /api/v1/interviews/needs/[id]` | Detail + sessions + `result_json`. |
+| `POST /api/v1/interviews/needs/[id]/start` | Creator start (Clerk). Same engine as the public start. **503** if Agora keys are missing. |
+| `POST /api/v1/interviews/sessions/[id]/finalize` | Creator finalize (Clerk). |
+| `GET /api/v1/interviews/i/[token]` | Public invite lookup. |
+| `POST /api/v1/interviews/i/[token]/start` | Interviewee start. Auth = token. **410** if already completed. |
+| `POST /api/v1/interviews/i/[token]/finalize` | Interviewee finish. Auth = token. |
+
+`/i/[token]` is public. `/interviews` is the creator pool. These routes do **not** use
+`UNDERWRITE_API_KEY`. Tables: `interview_needs` (includes `public_token`), `interview_sessions`.
+
+---
+
 ## Setup: Neon, Clerk, model provider, tracing
 
 ### Neon
@@ -206,7 +265,7 @@ vars — documented on the page.
 2. `DATABASE_URL=postgresql://…` in `.env.local`.
 3. `pnpm db:migrate` applies the committed SQL in [`drizzle/`](drizzle/) (`0000_init.sql`,
    `0001_api_keys_and_seller_agents.sql`, `0002_buyer_wallet_and_credits.sql`,
-   `0003_agent_description.sql`, …) with Drizzle's
+   `0003_agent_description.sql`, `0004_interview_pool.sql`, `0005_interview_invite_token.sql`, …) with Drizzle's
    migrator (on Vercel this happens automatically as part of `pnpm build`). `pnpm db:seed` inserts the
    catalog — a one-time step: it is idempotent, but it also resets axes, wallets and clears pairwise
    trust, so it is never run by the build. **Seed is still required once on Neon.** An empty hireable
@@ -216,15 +275,16 @@ vars — documented on the page.
 Tables (mirroring `docs/CONTRACTS.md`): `agents` (plus seller fields `status`, `owner_clerk_user_id`,
 `contact`, `webhook_url`, `description`), `api_keys` (hashed secrets only), `trust_axes`, `trust_pairwise`, `wallets`,
 `requests` (plus optional `buyer_wallet_id` for user-funded requests), `bids`, `plans`, `escrows`,
-`verifications`, `ledger_events`, `attributions`.
+`verifications`, `ledger_events`, `attributions`. Interview pool: `interview_needs`, `interview_sessions`.
 
 ### Clerk
 
 1. Create an application at [dashboard.clerk.com](https://dashboard.clerk.com) → **API keys**.
 2. `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` in `.env.local`.
 3. `src/proxy.ts` runs `clerkMiddleware` and `auth.protect()` on `/console`, `/keys`, `/account`,
-   `/agents`, `/admin`, plus `/api/account/*` and `/api/admin/*`. Sign-in uses Clerk's hosted
-   Account Portal. With either key missing the proxy is a pass-through and those pages are open (local
+   `/agents`, `/admin`, `/interviews`, plus `/api/account/*` and `/api/admin/*`. `/i/[token]` and
+   `/api/v1/interviews/i/*` are public (invite token; no Clerk). Sign-in uses Clerk's hosted Account
+   Portal. With either key missing the proxy is a pass-through and those pages are open (local
    dev, treated as user `local-dev`).
 
 #### How Luís marks an admin
@@ -240,7 +300,8 @@ bootstrap if metadata is awkward: `UNDERWRITE_ADMIN_USER_IDS=user_xxx,user_yyy` 
 user ids). Non-admins hitting `/admin` get HTTP 403.
 
 The buyer of the demo is still an agent over HTTP. Clerk is for humans: debug console, self-serve keys,
-seller registration, and the narrow admin/audit surface.
+seller registration, the interview **creator** pool, and the narrow admin/audit surface. Interviewees
+are not signed in.
 
 ### Model provider (NeuraLake or any OpenAI-compatible endpoint)
 
@@ -316,12 +377,15 @@ src/lib/verification/
   confidence.ts           hardcoded_v0: objective 0.45 · agreement 0.2 · track record 0.2 · process 0.05 · self-report ≤ 0.1 (penalised when it diverges)
 src/mastra/               Mastra instance + marketplace workflow
 src/lib/auth/             hashed API keys, buyer/seller auth helper, Clerk admin guard
-src/app/api/v1/           agent-facing route handlers (requests + seller `/agents/me`)
+src/lib/interviews/       need/session store, GPT Live prompt, transcript JSON extract, Agora start/stop
+src/app/api/v1/           agent-facing route handlers (requests + seller `/agents/me` + interviews)
 src/app/api/account/      Clerk-session self-serve key + owner agent APIs
 src/app/api/admin/        Clerk-admin list/disable/revoke/audit APIs
 src/app/console/          Clerk-protected debug console with live ledger
 src/app/(human)/          `/keys`, `/account`, `/agents`, `/agents/register`
 src/app/admin/            configuration + audit (403 for non-admins)
+src/app/interviews/       Creator pool: register a need, copy `/i` link, read `result_json`
+src/app/i/                Public interviewee page (token auth, no Clerk, no chrome)
 ```
 
 The verification stub is deliberately shaped like the real thing: C1's renderer produces an artifact whose
