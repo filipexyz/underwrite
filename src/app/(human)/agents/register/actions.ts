@@ -1,12 +1,14 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { setIssuedSellerSecret } from "@/lib/auth/issued-secret";
 import { requireSignedInPage } from "@/lib/auth/session";
 import { AgentRole, LatencyClass, RiskTolerance } from "@/lib/contracts";
 import { getDb } from "@/lib/db/client";
 import { AgentRegisterInput, parseSpecialties, registerSellerAgent } from "@/lib/marketplace/sellers";
 
-export type RegisterFormState = { error?: string; secret?: string; agentId?: string } | null;
+export type RegisterFormState = { error?: string } | null;
 
 export async function registerAgentAction(_prev: RegisterFormState, formData: FormData): Promise<RegisterFormState> {
   const { userId } = await requireSignedInPage();
@@ -23,6 +25,7 @@ export async function registerAgentAction(_prev: RegisterFormState, formData: Fo
     risk_tolerance: String(formData.get("risk_tolerance") ?? "mid"),
     contact: String(formData.get("contact") ?? ""),
     webhook_url: String(formData.get("webhook_url") ?? ""),
+    description: String(formData.get("description") ?? ""),
   });
   if (!parsed.success) {
     const first = parsed.error.issues[0];
@@ -34,9 +37,11 @@ export async function registerAgentAction(_prev: RegisterFormState, formData: Fo
 
   const { db } = await getDb();
   const created = await registerSellerAgent(db, userId, parsed.data);
+  await setIssuedSellerSecret(created.agent.agentId, created.secret);
   revalidatePath("/keys");
   revalidatePath("/account");
+  revalidatePath("/agents");
   revalidatePath("/agents/register");
   revalidatePath("/admin");
-  return { secret: created.secret, agentId: created.agent.agentId };
+  redirect(`/agents/${created.agent.agentId}`);
 }

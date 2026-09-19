@@ -1,5 +1,6 @@
 /**
- * $1000 test credits: user wallets, registered-agent wallets, buyer debit on lock.
+ * Test credits: Clerk users start at $1000. Registered agents start at $0
+ * and earn by being hired. Buyer debit on lock.
  */
 import { eq } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -10,6 +11,7 @@ import { getDb, openDb, type Db } from "@/lib/db/client";
 import { wallets } from "@/lib/db/schema";
 import { seed } from "@/lib/db/seed";
 import {
+  STARTING_AGENT_CREDITS_USD,
   STARTING_TEST_CREDITS_USD,
   classifyWallet,
   ensureAgentWallet,
@@ -33,6 +35,7 @@ describe("test-credit wallets", () => {
   it("creates a user wallet at $1000 and never resets an existing balance", async () => {
     const first = await ensureUserWallet(db, "user_credits");
     expect(first.capitalUsd).toBe(1000);
+    expect(STARTING_TEST_CREDITS_USD).toBe(1000);
     await db.update(wallets).set({ capitalUsd: 50 }).where(eq(wallets.ownerId, "user_credits"));
     const again = await ensureUserWallet(db, "user_credits");
     expect(again.capitalUsd).toBe(50);
@@ -45,15 +48,16 @@ describe("test-credit wallets", () => {
     expect(classifyWallet(SYSTEM_WALLETS.escrow, [])).toBe("system");
   });
 
-  it("ensureAgentWallet seeds $1000 and never resets", async () => {
+  it("ensureAgentWallet starts at $0 and never resets an earned balance", async () => {
     const first = await ensureAgentWallet(db, "agt_orphan_wallet");
-    expect(first.capitalUsd).toBe(STARTING_TEST_CREDITS_USD);
+    expect(first.capitalUsd).toBe(STARTING_AGENT_CREDITS_USD);
+    expect(first.capitalUsd).toBe(0);
     await db.update(wallets).set({ capitalUsd: 12 }).where(eq(wallets.ownerId, "agt_orphan_wallet"));
     const again = await ensureAgentWallet(db, "agt_orphan_wallet");
     expect(again.capitalUsd).toBe(12);
   });
 
-  it("gives a registered seller a $1000 wallet (seed wallets stay catalog values)", async () => {
+  it("gives a registered seller a $0 wallet (seed wallets stay catalog values)", async () => {
     const created = await registerSellerAgent(db, "user_seller_wallet", {
       name: "Credit seller",
       role: "executor",
@@ -66,9 +70,15 @@ describe("test-credit wallets", () => {
       risk_tolerance: "mid",
     });
     const agentWallet = await getWallet(db, created.agent.agentId);
-    expect(agentWallet?.capitalUsd).toBe(1000);
+    expect(agentWallet?.capitalUsd).toBe(0);
     const seedA = await getWallet(db, "a-delegator");
     expect(seedA?.capitalUsd).toBe(1);
+  });
+
+  it("does not grant $1000 when a registered-agent wallet already exists at $0", async () => {
+    await db.insert(wallets).values({ ownerId: "agt_prezero", capitalUsd: 0, riskTolerance: "mid" });
+    const healed = await ensureAgentWallet(db, "agt_prezero");
+    expect(healed.capitalUsd).toBe(0);
   });
 
   it("debits the buyer user wallet through escrow and leaves the system buyer wallet alone", async () => {

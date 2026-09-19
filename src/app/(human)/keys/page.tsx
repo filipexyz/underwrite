@@ -98,7 +98,13 @@ function KeyTable({
                   <Badge value={key.role} />
                 </Td>
                 <Td>
-                  <span className="mono text-xs text-muted">{key.agent_id ?? "—"}</span>
+                  {key.agent_id ? (
+                    <Link href={`/agents/${key.agent_id}`} className="mono text-xs text-accent hover:underline">
+                      {key.agent_id}
+                    </Link>
+                  ) : (
+                    <span className="mono text-xs text-muted">—</span>
+                  )}
                 </Td>
                 <Td>
                   <Badge value={key.revoked_at ? "revoked" : "active"} />

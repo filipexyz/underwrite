@@ -38,6 +38,7 @@ export async function createSellerKey(_prev: KeyFormState, formData: FormData): 
     scopes: ["agents:me"],
   });
   revalidatePath("/keys");
+  revalidatePath(`/agents/${agentId}`);
   return { secret: issued.secret };
 }
 
@@ -51,4 +52,5 @@ export async function revokeOwnKey(formData: FormData): Promise<void> {
   await revokeApiKey(db, id);
   revalidatePath("/keys");
   revalidatePath("/admin");
+  revalidatePath("/agents");
 }

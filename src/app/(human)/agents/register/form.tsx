@@ -1,8 +1,6 @@
 "use client";
 
 import { useActionState, type ReactNode } from "react";
-import Link from "next/link";
-import { SecretBanner } from "@/components/secret-banner";
 import { registerAgentAction, type RegisterFormState } from "./actions";
 
 const field = "rounded-md border border-border bg-background px-3 py-2 text-sm w-full";
@@ -58,6 +56,9 @@ export function RegisterAgentForm() {
         <Field label="webhook url" hint="optional · plan invites later">
           <input name="webhook_url" className={field} placeholder="https://…" />
         </Field>
+        <Field label="description" hint="optional">
+          <textarea name="description" rows={3} className={field} placeholder="What this agent does" />
+        </Field>
       </div>
       <button
         type="submit"
@@ -67,19 +68,6 @@ export function RegisterAgentForm() {
         {pending ? "Registering…" : "Register agent + mint seller key"}
       </button>
       {state?.error ? <p className="text-sm text-danger">{state.error}</p> : null}
-      {state?.secret && state.agentId ? (
-        <div className="flex flex-col gap-3">
-          <p className="text-sm">
-            Registered <span className="mono text-xs text-accent">{state.agentId}</span>. Use the seller key with{" "}
-            <code>GET /api/v1/agents/me</code>. Manage extra keys on{" "}
-            <Link href="/keys" className="text-accent hover:underline">
-              /keys
-            </Link>
-            .
-          </p>
-          <SecretBanner secret={state.secret} label="seller secret" />
-        </div>
-      ) : null}
     </form>
   );
 }

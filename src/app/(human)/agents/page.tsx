@@ -2,91 +2,75 @@ import Link from "next/link";
 import { Badge, Empty, Money, Panel, Td, Th } from "@/app/console/ui";
 import { requireSignedInPage } from "@/lib/auth/session";
 import { getDb } from "@/lib/db/client";
-import { STARTING_TEST_CREDITS_USD, ensureUserWallet } from "@/lib/marketplace/credits";
 import { listOwnedAgents, toOwnedAgentView } from "@/lib/marketplace/sellers";
 
 export const dynamic = "force-dynamic";
 
-export default async function AccountPage() {
+export default async function AgentsPage() {
   const { userId } = await requireSignedInPage();
   const { db } = await getDb();
-  const [wallet, rows] = await Promise.all([ensureUserWallet(db, userId), listOwnedAgents(db, userId)]);
+  const rows = await listOwnedAgents(db, userId);
   const agents = await Promise.all(rows.map((row) => toOwnedAgentView(db, row)));
 
   return (
     <div className="flex flex-col gap-6">
       <header className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold tracking-tight">Account</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Your agents</h1>
         <p className="text-sm text-muted">
-          Test-credit wallet for this Clerk user. Buyer keys debit this balance on escrow lock; refunds credit it
-          back. No real money.
+          Hireable agents you registered. They stay here after register — edit, disable, and rotate seller keys on the
+          detail page. Wallets start at $0 and grow when the agent is hired.
         </p>
-        <p className="mono text-xs text-muted">owner {userId}</p>
-      </header>
-
-      <Panel title="User wallet" aside={<Badge value="user" />}>
-        <p className="text-3xl font-semibold tracking-tight">
-          <Money value={wallet.capitalUsd} digits={2} />
-        </p>
-        <p className="text-sm text-muted mt-2">
-          Starting grant is <Money value={STARTING_TEST_CREDITS_USD} digits={2} /> test credits, created on first
-          sign-in. Existing balances are never reset. Only Clerk users get this grant — agents start at $0.
-        </p>
-        <p className="flex flex-wrap gap-3 mt-4 text-sm">
-          <Link href="/keys" className="text-accent hover:underline">
-            mint API keys
-          </Link>
-          <Link href="/agents" className="text-accent hover:underline">
-            Manage agents
-          </Link>
+        <p className="flex flex-wrap gap-3 text-sm">
           <Link href="/agents/register" className="text-accent hover:underline">
             register a seller agent
           </Link>
-        </p>
-      </Panel>
-
-      <Panel
-        title={`Seller agent wallets · ${agents.length}`}
-        aside={
-          <Link href="/agents" className="text-xs text-accent hover:underline">
-            Manage agents
+          <Link href="/account" className="text-accent hover:underline">
+            account wallet
           </Link>
-        }
-      >
+        </p>
+      </header>
+
+      <Panel title={`Agents · ${agents.length}`}>
         {agents.length === 0 ? (
           <Empty>
-            No registered agents yet.{" "}
+            No agents yet.{" "}
             <Link href="/agents/register" className="text-accent hover:underline">
               Register one
             </Link>{" "}
-            — the seller wallet starts at $0.00 and earns by being hired.
+            to appear in the marketplace.
           </Empty>
         ) : (
           <table className="w-full">
             <thead>
               <tr>
-                <Th>agent</Th>
                 <Th>name</Th>
+                <Th>id</Th>
+                <Th>role</Th>
                 <Th>status</Th>
-                <Th right>balance</Th>
+                <Th>specialties</Th>
+                <Th right>wallet</Th>
               </tr>
             </thead>
             <tbody>
               {agents.map((agent) => (
                 <tr key={agent.agent_id} className="border-t border-border">
                   <Td>
-                    <Link href={`/agents/${agent.agent_id}`} className="mono text-xs text-accent hover:underline">
-                      {agent.agent_id}
-                    </Link>
-                  </Td>
-                  <Td>
                     <Link href={`/agents/${agent.agent_id}`} className="text-accent hover:underline">
                       {agent.name}
                     </Link>
                   </Td>
                   <Td>
+                    <Link href={`/agents/${agent.agent_id}`} className="mono text-xs text-accent hover:underline">
+                      {agent.agent_id}
+                    </Link>
+                  </Td>
+                  <Td>
+                    <Badge value={agent.role} />
+                  </Td>
+                  <Td>
                     <Badge value={agent.status} />
                   </Td>
+                  <Td className="text-muted text-xs">{agent.specialties.join(", ")}</Td>
                   <Td right>
                     <Money value={agent.wallet_usd} digits={2} />
                   </Td>

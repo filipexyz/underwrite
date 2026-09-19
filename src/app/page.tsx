@@ -53,6 +53,9 @@ export default function Home() {
           <Link href="/keys" className="rounded-md border border-border px-4 py-2 font-medium hover:bg-panel">
             Mint API keys
           </Link>
+          <Link href="/agents" className="rounded-md border border-border px-4 py-2 font-medium hover:bg-panel">
+            Manage agents
+          </Link>
           <Link href="/agents/register" className="rounded-md border border-border px-4 py-2 font-medium hover:bg-panel">
             Register an agent
           </Link>
@@ -75,7 +78,7 @@ export default function Home() {
           <h2 className="font-semibold">This deployment</h2>
           <ul className="flex flex-col gap-2 text-sm">
             <Flag label="Database" on={driver === "neon-http"} detail={driver === "neon-http" ? "Neon over HTTP" : "embedded PGlite (no DATABASE_URL)"} />
-            <Flag label="Clerk" on={env.clerk.enabled} detail={env.clerk.enabled ? "/console, /account, /keys, /admin are signed-in" : "human pages are open — set Clerk keys to protect them"} />
+            <Flag label="Clerk" on={env.clerk.enabled} detail={env.clerk.enabled ? "/console, /account, /keys, /agents, /admin are signed-in" : "human pages are open — set Clerk keys to protect them"} />
             <Flag
               label="Admin metadata"
               on
@@ -86,7 +89,7 @@ export default function Home() {
               on={Boolean(env.adminUserIds)}
               detail={env.adminUserIds ? "UNDERWRITE_ADMIN_USER_IDS bootstrap is set" : "optional UNDERWRITE_ADMIN_USER_IDS unset — metadata is primary"}
             />
-            <Flag label="Self-serve keys" on detail="/keys mints buyer keys; /agents/register mints a seller key once" />
+            <Flag label="Self-serve keys" on detail="/keys mints buyer keys; /agents lists yours; /agents/register mints a seller key once" />
             <Flag label="Model provider" on={env.modelProvider.enabled} detail={env.modelProvider.enabled ? env.modelProvider.name : "simulated inference (deterministic tokens/cost)"} />
             <Flag label="Langfuse" on={obs.langfuse} detail={obs.langfuse ? "exporting Mastra traces" : "no keys — tracing is a no-op"} />
             <Flag

@@ -61,6 +61,7 @@ export const agents = pgTable("agents", {
   ownerClerkUserId: text("owner_clerk_user_id"),
   contact: text("contact"),
   webhookUrl: text("webhook_url"),
+  description: text("description"),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 }, (t) => [

@@ -13,6 +13,8 @@ export async function disableAgent(formData: FormData): Promise<void> {
   const { db } = await getDb();
   await setAgentStatus(db, id, "disabled");
   revalidatePath("/admin");
+  revalidatePath("/agents");
+  revalidatePath("/account");
 }
 
 export async function enableAgent(formData: FormData): Promise<void> {
@@ -24,6 +26,8 @@ export async function enableAgent(formData: FormData): Promise<void> {
   if (!existing) return;
   await setAgentStatus(db, id, enableStatusFor(existing));
   revalidatePath("/admin");
+  revalidatePath("/agents");
+  revalidatePath("/account");
 }
 
 export async function revokeAnyKey(formData: FormData): Promise<void> {
