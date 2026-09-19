@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Badge, Empty, Panel, Td, Th } from "@/app/console/ui";
 import { getDb } from "@/lib/db/client";
 import { listNeeds } from "@/lib/interviews/store";
+import { CopyInvite } from "./copy-invite";
 import { CreateNeedForm } from "./create-need-form";
 import { SetupBanner } from "./setup-banner";
 
@@ -37,6 +38,7 @@ export default async function InterviewsPage() {
                 <Th>need</Th>
                 <Th>status</Th>
                 <Th>title</Th>
+                <Th>invite</Th>
                 <Th>goal</Th>
                 <Th right>created</Th>
               </tr>
@@ -53,6 +55,13 @@ export default async function InterviewsPage() {
                     <Badge value={row.status} />
                   </Td>
                   <Td>{row.title}</Td>
+                  <Td>
+                    {row.status === "completed" || row.status === "cancelled" ? (
+                      <span className="text-xs text-muted">spent</span>
+                    ) : (
+                      <CopyInvite path={`/i/${row.publicToken}`} compact />
+                    )}
+                  </Td>
                   <Td className="max-w-md truncate text-muted">{row.brief.goal}</Td>
                   <Td right>
                     <span className="mono text-xs text-muted">{new Date(row.createdAt).toLocaleString()}</span>

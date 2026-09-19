@@ -193,10 +193,7 @@ export function InterviewRoom({
       <p className={`mono text-xs uppercase tracking-wider ${status === "listening" || status === "speaking" ? "text-accent" : "text-muted"}`}>
         {status}
       </p>
-      <p className="text-sm text-muted max-w-sm">
-        Allow the microphone. A voice agent will ask a few questions, one at a time. You can hit Finish when it says it is
-        done — or it will wrap up on its own.
-      </p>
+      <p className="text-sm text-muted max-w-sm">Allow the microphone. The agent asks one question at a time.</p>
       {error && <p className="text-sm text-danger">{error}</p>}
       <div className="flex flex-wrap justify-center gap-2">
         {phase === "idle" && (

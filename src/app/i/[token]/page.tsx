@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getDb } from "@/lib/db/client";
 import { env } from "@/lib/env";
@@ -5,6 +6,14 @@ import { getNeedByToken } from "@/lib/interviews/store";
 import { InterviewRoom } from "./interview-room";
 
 export const dynamic = "force-dynamic";
+
+export async function generateMetadata({ params }: { params: Promise<{ token: string }> }): Promise<Metadata> {
+  const { token } = await params;
+  const { db } = await getDb();
+  const need = await getNeedByToken(db, token);
+  if (!need) return { title: "Interview" };
+  return { title: need.title, description: "Voice interview. You can close this tab when it is done." };
+}
 
 export default async function PublicInterviewPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;

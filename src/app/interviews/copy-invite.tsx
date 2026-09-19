@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-export function CopyInvite({ path }: { path: string }) {
+export function CopyInvite({ path, compact = false }: { path: string; compact?: boolean }) {
   const [copied, setCopied] = useState(false);
 
   async function copy() {
@@ -10,6 +10,18 @@ export function CopyInvite({ path }: { path: string }) {
     await navigator.clipboard.writeText(absolute);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
+  }
+
+  if (compact) {
+    return (
+      <button
+        type="button"
+        onClick={() => void copy()}
+        className="rounded-md border border-border px-2 py-1 text-xs font-medium hover:bg-background"
+      >
+        {copied ? "Copied" : "Copy link"}
+      </button>
+    );
   }
 
   return (

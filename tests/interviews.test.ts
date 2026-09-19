@@ -10,7 +10,7 @@ import { env } from "@/lib/env";
 import { extractAnswersFromTranscript, extractLastJsonObject, normalizeAnswers } from "@/lib/interviews/extract";
 import { buildInterviewGreeting, buildInterviewPrompt } from "@/lib/interviews/prompt";
 import { parseRtmMessage, upsertTranscript } from "@/lib/interviews/rtm";
-import { createNeed, finalizeSession, getNeed, getNeedByToken, insertLiveSession, listNeeds } from "@/lib/interviews/store";
+import { createNeed, finalizeSession, getNeed, getNeedByToken, insertLiveSession, listNeeds, toPublicNeed } from "@/lib/interviews/store";
 import type { InterviewBrief } from "@/lib/interviews/types";
 
 const brief: InterviewBrief = {
@@ -103,7 +103,11 @@ describe("interview store + HTTP", () => {
     const need = await createNeed(db, { title: "Seller desk", brief }, "user_test");
     expect(need.status).toBe("open");
     expect(need.publicToken.length).toBeGreaterThan(16);
+    expect(need.publicToken).not.toBe(need.id);
     expect(await getNeedByToken(db, need.publicToken)).toMatchObject({ id: need.id });
+    expect(toPublicNeed(need)).toEqual({ title: "Seller desk", status: "open", completed: false });
+    expect(toPublicNeed(need)).not.toHaveProperty("result_json");
+    expect(toPublicNeed(need)).not.toHaveProperty("id");
     const listed = await listNeeds(db, 10);
     expect(listed.some((row) => row.id === need.id)).toBe(true);
 
@@ -134,9 +138,14 @@ describe("interview store + HTTP", () => {
       }),
     );
     expect(create.status).toBe(201);
-    const created = (await create.json()) as { need: { id: string }; agora: { enabled: boolean } };
+    const created = (await create.json()) as {
+      need: { id: string; public_token: string; invite_path: string };
+      agora: { enabled: boolean };
+    };
     expect(created.agora.enabled).toBe(false);
     expect(created.need.id).toMatch(/^need_/);
+    expect(created.need.public_token).not.toBe(created.need.id);
+    expect(created.need.invite_path).toBe(`/i/${created.need.public_token}`);
 
     const list = await listNeedsRoute(new Request("http://localhost/api/v1/interviews/needs"));
     expect(list.status).toBe(200);
@@ -182,9 +191,10 @@ describe("interview store + HTTP", () => {
       params: Promise.resolve({ token }),
     });
     expect(lookup.status).toBe(200);
-    const publicBody = (await lookup.json()) as { interview: { title: string; completed: boolean } };
-    expect(publicBody.interview.title).toBe("Public link");
-    expect(publicBody.interview.completed).toBe(false);
+    const publicBody = (await lookup.json()) as { interview: Record<string, unknown> };
+    expect(publicBody.interview).toEqual({ title: "Public link", status: "open", completed: false });
+    expect(publicBody.interview).not.toHaveProperty("result_json");
+    expect(publicBody.interview).not.toHaveProperty("id");
 
     const missing = await publicGet(new Request("http://localhost/api/v1/interviews/i/nope"), {
       params: Promise.resolve({ token: "nope" }),
@@ -213,5 +223,15 @@ describe("interview store + HTTP", () => {
       params: Promise.resolve({ token }),
     });
     expect(again.status).toBe(410);
+
+    const againFinalize = await publicFinalize(
+      new Request(`http://localhost/api/v1/interviews/i/${token}/finalize`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ answers_json: { answers: { deliverable: "x", confidence_method: "y" } } }),
+      }),
+      { params: Promise.resolve({ token }) },
+    );
+    expect(againFinalize.status).toBe(410);
   });
 });
