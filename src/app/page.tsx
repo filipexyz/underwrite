@@ -43,12 +43,18 @@ export default function Home() {
           planning, subcontracting, verification, escrow, attribution — happens between agents. Counter on screen the whole time:{" "}
           <code className="text-foreground">human_interventions: 0</code>.
         </p>
-        <div className="flex gap-3 pt-2">
+        <div className="flex flex-wrap gap-3 pt-2">
           <Link href="/console" className="rounded-md bg-accent text-background px-4 py-2 font-medium hover:opacity-90">
             Open the console
           </Link>
-          <Link href="/api/v1/requests" className="rounded-md border border-border px-4 py-2 font-medium hover:bg-panel">
-            GET /api/v1/requests
+          <Link href="/keys" className="rounded-md border border-border px-4 py-2 font-medium hover:bg-panel">
+            Mint API keys
+          </Link>
+          <Link href="/agents/register" className="rounded-md border border-border px-4 py-2 font-medium hover:bg-panel">
+            Register an agent
+          </Link>
+          <Link href="/admin" className="rounded-md border border-border px-4 py-2 font-medium hover:bg-panel">
+            Admin
           </Link>
         </div>
       </header>
@@ -66,10 +72,25 @@ export default function Home() {
           <h2 className="font-semibold">This deployment</h2>
           <ul className="flex flex-col gap-2 text-sm">
             <Flag label="Database" on={driver === "neon-http"} detail={driver === "neon-http" ? "Neon over HTTP" : "embedded PGlite (no DATABASE_URL)"} />
-            <Flag label="Clerk" on={env.clerk.enabled} detail={env.clerk.enabled ? "/console is protected" : "console is open — set Clerk keys to protect it"} />
+            <Flag label="Clerk" on={env.clerk.enabled} detail={env.clerk.enabled ? "/console, /keys, /admin are signed-in" : "human pages are open — set Clerk keys to protect them"} />
+            <Flag
+              label="Admin metadata"
+              on
+              detail='documented: Clerk Dashboard → Users → Public metadata { "role": "admin" } (or { "admin": true })'
+            />
+            <Flag
+              label="Admin allowlist"
+              on={Boolean(env.adminUserIds)}
+              detail={env.adminUserIds ? "UNDERWRITE_ADMIN_USER_IDS bootstrap is set" : "optional UNDERWRITE_ADMIN_USER_IDS unset — metadata is primary"}
+            />
+            <Flag label="Self-serve keys" on detail="/keys mints buyer keys; /agents/register mints a seller key once" />
             <Flag label="Model provider" on={env.modelProvider.enabled} detail={env.modelProvider.enabled ? env.modelProvider.name : "simulated inference (deterministic tokens/cost)"} />
             <Flag label="Langfuse" on={obs.langfuse} detail={obs.langfuse ? "exporting Mastra traces" : "no keys — tracing is a no-op"} />
-            <Flag label="API key" on={Boolean(env.apiKey)} detail={env.apiKey ? "/api/v1 requires a bearer key" : "/api/v1 is public"} />
+            <Flag
+              label="API key"
+              on={Boolean(env.apiKey)}
+              detail={env.apiKey ? "legacy UNDERWRITE_API_KEY still accepted; prefer hashed buyer keys" : "legacy env unset — DB buyer keys or public demoday"}
+            />
           </ul>
         </div>
       </section>

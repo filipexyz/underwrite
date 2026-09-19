@@ -22,7 +22,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export async function POST(request: Request) {
-  const denied = requireApiKey(request);
+  const denied = await requireApiKey(request);
   if (denied) return denied;
 
   let body: unknown;
@@ -68,7 +68,7 @@ export async function POST(request: Request) {
 }
 
 export async function GET(request: Request) {
-  const denied = requireApiKey(request);
+  const denied = await requireApiKey(request);
   if (denied) return denied;
   const { db } = await getDb();
   const limit = Math.min(Number(new URL(request.url).searchParams.get("limit") ?? 50) || 50, 200);

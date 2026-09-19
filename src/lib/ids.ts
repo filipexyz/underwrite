@@ -9,7 +9,9 @@ export type IdPrefix =
   | "ver"
   | "att"
   | "art"
-  | "run";
+  | "run"
+  | "key"
+  | "agt";
 
 export function newId(prefix: IdPrefix): string {
   return `${prefix}_${randomUUID().replace(/-/g, "").slice(0, 20)}`;

@@ -61,6 +61,7 @@ export async function loadRegistry(db: Db, category: string): Promise<Registry> 
 
   const map = new Map<string, RegistryAgent>();
   for (const row of agentRows) {
+    if (row.status === "disabled") continue;
     const axes = axesByAgent.get(row.agentId) ?? emptyAxes;
     map.set(row.agentId, { ...row, axes, trust_global: trustGlobal(axes) });
   }

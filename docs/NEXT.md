@@ -20,6 +20,6 @@ Rule: an idea lands here by default. It only leaves this file if it beats the qu
 | **Risk tolerance affecting acceptance** | Renan | Field is in the manifest (D-025) but the decision policy stays the 3 strategies (D-030) for now. |
 | **Multi-round negotiation** | Renan | Capped at one counter-offer (D-026). More rounds = dead demo. |
 | **Planning subsidy for losing bidders** | Luís | Superseded by the stake mechanism (D-028) — forfeited stakes fund the commission instead. |
-| **Open third-party agent registration** | Luís, D-007 | The protocol supports it; the catalog is seeded. Self-registration is a "what's next" slide. |
+| **Open third-party agent registration** | Luís, D-007 | Vertical slice shipped: `/agents/register` + hashed seller keys. Deeper IAM / plan-invite webhooks stay later. |
 | **Real payment rails** | — | Simulated wallets only. No real money leaves anything. |
 | **Copy/design deliverables as verification targets** | D-008 | Weak signal, no ground truth. Verifiable deliverables first. |

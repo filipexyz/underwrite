@@ -22,6 +22,14 @@ const STATUS_STYLE: Record<string, string> = {
   pass: "bg-accent/15 text-accent",
   fail: "bg-danger/15 text-danger",
   inconclusive: "bg-warn/15 text-warn",
+  seed: "bg-border text-foreground",
+  registered: "bg-accent/15 text-accent",
+  disabled: "bg-danger/15 text-danger",
+  buyer: "bg-accent/15 text-accent",
+  seller: "bg-warn/15 text-warn",
+  admin_service: "bg-border text-foreground",
+  revoked: "bg-danger/15 text-danger",
+  active: "bg-accent/15 text-accent",
 };
 
 export const TERMINAL_STATUSES = new Set(["completed", "failed", "no_eligible_bid"]);
