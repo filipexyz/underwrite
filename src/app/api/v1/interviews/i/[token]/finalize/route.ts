@@ -1,13 +1,21 @@
 /**
- * POST /api/v1/interviews/i/[token]/finalize — interviewee finish.
- * Auth = invite token. Single-use after the need is completed.
+ * POST /api/v1/interviews/i/[token]/finalize — agent-only completion.
+ * Auth = invite token. Rejects (409) if required brief fields are incomplete.
+ * Humans have no Finish control; this is called after the agent emits completion JSON
+ * or a server-side extract confirms every required field.
  */
 import { NextResponse } from "next/server";
 import { jsonError } from "@/lib/api/http";
 import { getDb } from "@/lib/db/client";
 import { stopGptLiveAgent } from "@/lib/interviews/agora";
 import { agoraPublicStatus } from "@/lib/interviews/auth";
-import { finalizeSession, getNeedByToken, getSession, listSessionsForNeed } from "@/lib/interviews/store";
+import {
+  finalizeSession,
+  getNeedByToken,
+  getSession,
+  isIncompleteInterviewError,
+  listSessionsForNeed,
+} from "@/lib/interviews/store";
 import { FinalizeSessionInput } from "@/lib/interviews/types";
 
 export const runtime = "nodejs";
@@ -41,15 +49,21 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
   if (!session) return jsonError(409, "no session to finalize — start the interview first");
 
   try {
-    await stopGptLiveAgent(session.agoraAgentId);
+    const result = await finalizeSession(db, session, parsed.data);
+    try {
+      await stopGptLiveAgent(session.agoraAgentId);
+    } catch (error) {
+      console.warn("[interviews] stop agent failed (answers already persisted):", error);
+    }
+    return NextResponse.json({
+      agora: agoraPublicStatus(),
+      completed: true,
+      answers_present: Boolean(result.answers),
+    });
   } catch (error) {
-    console.warn("[interviews] stop agent failed (continuing to persist answers):", error);
+    if (isIncompleteInterviewError(error)) {
+      return jsonError(409, error.message, { missing: error.missing });
+    }
+    throw error;
   }
-
-  const result = await finalizeSession(db, session, parsed.data);
-  return NextResponse.json({
-    agora: agoraPublicStatus(),
-    completed: true,
-    answers_present: Boolean(result.answers),
-  });
 }

@@ -7,10 +7,25 @@ import { POST as publicFinalize } from "@/app/api/v1/interviews/i/[token]/finali
 import { POST as finalizeRoute } from "@/app/api/v1/interviews/sessions/[id]/finalize/route";
 import { getDb } from "@/lib/db/client";
 import { env } from "@/lib/env";
-import { extractAnswersFromTranscript, extractLastJsonObject, normalizeAnswers } from "@/lib/interviews/extract";
+import {
+  answersCoverRequiredFields,
+  extractAnswersFromTranscript,
+  extractLastJsonObject,
+  missingRequiredFields,
+  normalizeAnswers,
+} from "@/lib/interviews/extract";
 import { buildInterviewGreeting, buildInterviewPrompt } from "@/lib/interviews/prompt";
 import { parseRtmMessage, upsertTranscript } from "@/lib/interviews/rtm";
-import { createNeed, finalizeSession, getNeed, getNeedByToken, insertLiveSession, listNeeds, toPublicNeed } from "@/lib/interviews/store";
+import {
+  createNeed,
+  finalizeSession,
+  getNeed,
+  getNeedByToken,
+  insertLiveSession,
+  isIncompleteInterviewError,
+  listNeeds,
+  toPublicNeed,
+} from "@/lib/interviews/store";
 import type { InterviewBrief } from "@/lib/interviews/types";
 
 const brief: InterviewBrief = {
@@ -62,7 +77,24 @@ describe("interview extract + prompt", () => {
     expect(prompt).toContain("Ask exactly one question");
     expect(prompt).toContain("What do you deliver?");
     expect(prompt).toContain("- deliverable");
+    expect(prompt).toContain("Humans cannot end this interview");
+    expect(prompt).toContain("Do not say you are done");
+    expect(prompt).toContain("will reject an incomplete brief");
     expect(buildInterviewGreeting(brief)).toContain("What do you deliver?");
+  });
+
+  it("treats a brief as complete only when every required field is filled", () => {
+    const partial = normalizeAnswers({ deliverable: "PDF" }, brief.required_fields);
+    expect(answersCoverRequiredFields(partial, brief.required_fields)).toBe(false);
+    expect(missingRequiredFields(partial, brief.required_fields)).toEqual(["confidence_method"]);
+
+    const complete = normalizeAnswers(
+      { answers: { deliverable: "PDF", confidence_method: "rubric" } },
+      brief.required_fields,
+    );
+    expect(answersCoverRequiredFields(complete, brief.required_fields)).toBe(true);
+    expect(missingRequiredFields(complete, brief.required_fields)).toEqual([]);
+    expect(answersCoverRequiredFields(null, brief.required_fields)).toBe(false);
   });
 });
 
@@ -129,6 +161,29 @@ describe("interview store + HTTP", () => {
     expect(reloaded?.completedAt).toBeTruthy();
   });
 
+  it("rejects finalize when the brief is incomplete and leaves the need open", async () => {
+    const { db } = await getDb();
+    const need = await createNeed(db, { title: "Incomplete brief", brief }, "user_test");
+    const session = await insertLiveSession(db, need, "interview-incomplete");
+
+    try {
+      await finalizeSession(db, session, {
+        transcript_json: [{ role: "assistant", text: '{"answers":{"deliverable":"PDF"}}' }],
+      });
+      throw new Error("expected finalizeSession to reject an incomplete brief");
+    } catch (error) {
+      expect(isIncompleteInterviewError(error)).toBe(true);
+      if (isIncompleteInterviewError(error)) {
+        expect(error.missing).toEqual(["confidence_method"]);
+      }
+    }
+
+    const stillOpen = await getNeed(db, need.id);
+    expect(stillOpen?.status).toBe("in_progress");
+    expect(stillOpen?.completedAt).toBeNull();
+    expect(stillOpen?.resultJson).toBeNull();
+  });
+
   it("POST /needs then GET list; start is 503 when Agora keys are missing", async () => {
     const create = await createNeedRoute(
       new Request("http://localhost/api/v1/interviews/needs", {
@@ -182,6 +237,28 @@ describe("interview store + HTTP", () => {
     expect(body.need.result_json.answers.deliverable).toBe("PDF");
   });
 
+  it("creator finalize HTTP rejects an incomplete brief with 409", async () => {
+    const { db } = await getDb();
+    const need = await createNeed(db, { title: "Creator incomplete", brief }, "local-dev");
+    const session = await insertLiveSession(db, need, "interview-http-incomplete");
+    const res = await finalizeRoute(
+      new Request(`http://localhost/api/v1/interviews/sessions/${session.id}/finalize`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          transcript_json: [{ role: "user", text: "We ship PDFs." }],
+          answers_json: { answers: { deliverable: "PDF" } },
+        }),
+      }),
+      { params: Promise.resolve({ id: session.id }) },
+    );
+    expect(res.status).toBe(409);
+    const body = (await res.json()) as { error: string; details: { missing: string[] } };
+    expect(body.error).toMatch(/incomplete/);
+    expect(body.details.missing).toEqual(["confidence_method"]);
+    expect((await getNeed(db, need.id))?.status).toBe("in_progress");
+  });
+
   it("public invite: lookup works, start is 503 without Agora, finalize persists, then start is 410", async () => {
     const { db } = await getDb();
     const need = await createNeed(db, { title: "Public link", brief }, "local-dev");
@@ -233,5 +310,45 @@ describe("interview store + HTTP", () => {
       { params: Promise.resolve({ token }) },
     );
     expect(againFinalize.status).toBe(410);
+  });
+
+  it("public finalize rejects incomplete answers (409) then accepts a complete agent JSON", async () => {
+    const { db } = await getDb();
+    const need = await createNeed(db, { title: "Public incomplete", brief }, "local-dev");
+    const token = need.publicToken;
+    await insertLiveSession(db, need, "interview-public-incomplete");
+
+    const incomplete = await publicFinalize(
+      new Request(`http://localhost/api/v1/interviews/i/${token}/finalize`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          transcript_json: [{ role: "assistant", text: '{"answers":{"deliverable":"PDF"}}' }],
+        }),
+      }),
+      { params: Promise.resolve({ token }) },
+    );
+    expect(incomplete.status).toBe(409);
+    const incompleteBody = (await incomplete.json()) as { details: { missing: string[] } };
+    expect(incompleteBody.details.missing).toEqual(["confidence_method"]);
+    expect((await getNeed(db, need.id))?.status).toBe("in_progress");
+
+    const complete = await publicFinalize(
+      new Request(`http://localhost/api/v1/interviews/i/${token}/finalize`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          transcript_json: [
+            {
+              role: "assistant",
+              text: '{"answers":{"deliverable":"compiled PDF","confidence_method":"judges"}}',
+            },
+          ],
+        }),
+      }),
+      { params: Promise.resolve({ token }) },
+    );
+    expect(complete.status).toBe(200);
+    expect((await getNeed(db, need.id))?.status).toBe("completed");
   });
 });

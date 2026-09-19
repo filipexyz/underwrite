@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 
 export const metadata: Metadata = {
   title: { default: "Interview", template: "%s" },
-  description: "Voice interview. You can close this tab when it is done.",
+  description: "Live voice interview. The interviewer ends the call when everything is answered.",
 };
 
 /** No console nav, no marketplace chrome, no Clerk. */

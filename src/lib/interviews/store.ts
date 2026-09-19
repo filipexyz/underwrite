@@ -7,7 +7,13 @@ import {
   type InterviewSessionRow,
 } from "@/lib/db/schema";
 import { newId, newInviteToken } from "@/lib/ids";
-import { extractAnswersFromTranscript, normalizeAnswers, transcriptToPrompt } from "./extract";
+import {
+  answersCoverRequiredFields,
+  extractAnswersFromTranscript,
+  missingRequiredFields,
+  normalizeAnswers,
+  transcriptToPrompt,
+} from "./extract";
 import { runInference } from "@/lib/observability/inference";
 import { env } from "@/lib/env";
 import type { CreateNeedInput, InterviewAnswers, InterviewNeedStatus, TranscriptTurn } from "./types";
@@ -154,25 +160,52 @@ async function extractWithLlm(transcript: TranscriptTurn[], requiredFields: stri
   const { extractLastJsonObject } = await import("./extract");
   const parsed = extractLastJsonObject(result.text);
   const normalized = parsed === null ? null : normalizeAnswers(parsed, requiredFields);
-  if (!normalized) return null;
+  if (!answersCoverRequiredFields(normalized, requiredFields)) return null;
   return { ...normalized, source: "llm_extract" };
+}
+
+export class IncompleteInterviewError extends Error {
+  readonly missing: string[];
+  readonly answers: InterviewAnswers | null;
+
+  constructor(missing: string[], answers: InterviewAnswers | null) {
+    super("cannot finalize: required answers are incomplete");
+    this.name = "IncompleteInterviewError";
+    this.missing = missing;
+    this.answers = answers;
+  }
+}
+
+export function isIncompleteInterviewError(error: unknown): error is IncompleteInterviewError {
+  return error instanceof IncompleteInterviewError;
 }
 
 export async function finalizeSession(
   db: Db,
   session: InterviewSessionRow,
   input: { transcript_json?: TranscriptTurn[]; answers_json?: unknown },
-): Promise<{ session: InterviewSessionRow; need: InterviewNeedRow; answers: InterviewAnswers | null }> {
+): Promise<{ session: InterviewSessionRow; need: InterviewNeedRow; answers: InterviewAnswers }> {
   const need = await getNeed(db, session.needId);
   if (!need) throw new Error(`need not found for session ${session.id}`);
 
+  const requiredFields = need.brief.required_fields;
   const transcript = input.transcript_json ?? session.transcriptJson ?? [];
   let answers =
-    (input.answers_json ? normalizeAnswers(input.answers_json, need.brief.required_fields) : null) ??
-    extractAnswersFromTranscript(transcript, need.brief.required_fields);
+    (input.answers_json ? normalizeAnswers(input.answers_json, requiredFields) : null) ??
+    extractAnswersFromTranscript(transcript, requiredFields);
 
   if (answers && input.answers_json) answers = { ...answers, source: answers.source === "partial" ? "partial" : "client" };
-  if (!answers) answers = await extractWithLlm(transcript, need.brief.required_fields);
+  if (!answersCoverRequiredFields(answers, requiredFields)) {
+    const extracted = await extractWithLlm(transcript, requiredFields);
+    if (extracted) answers = extracted;
+  }
+
+  if (!answersCoverRequiredFields(answers, requiredFields)) {
+    if (transcript.length > 0) {
+      await db.update(interviewSessions).set({ transcriptJson: transcript }).where(eq(interviewSessions.id, session.id));
+    }
+    throw new IncompleteInterviewError(missingRequiredFields(answers, requiredFields), answers);
+  }
 
   const endedAt = new Date();
   const [updatedSession] = await db
@@ -180,7 +213,7 @@ export async function finalizeSession(
     .set({
       status: "completed",
       transcriptJson: transcript,
-      answersJson: answers ?? null,
+      answersJson: answers,
       endedAt,
     })
     .where(eq(interviewSessions.id, session.id))
@@ -191,7 +224,7 @@ export async function finalizeSession(
     .update(interviewNeeds)
     .set({
       status: terminal,
-      resultJson: answers ?? null,
+      resultJson: answers,
       completedAt: endedAt,
       assignedSessionId: session.id,
     })

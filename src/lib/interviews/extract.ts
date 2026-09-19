@@ -101,6 +101,22 @@ export function extractAnswersFromTranscript(
   return parsed === null ? null : normalizeAnswers(parsed, requiredFields);
 }
 
+/** Required brief fields that are still empty after normalize. */
+export function missingRequiredFields(
+  answers: InterviewAnswers | null | undefined,
+  requiredFields: string[],
+): string[] {
+  if (!answers) return [...requiredFields];
+  return requiredFields.filter((field) => !answers.answers[field]?.trim());
+}
+
+export function answersCoverRequiredFields(
+  answers: InterviewAnswers | null | undefined,
+  requiredFields: string[],
+): answers is InterviewAnswers {
+  return missingRequiredFields(answers, requiredFields).length === 0;
+}
+
 export function transcriptToPrompt(transcript: TranscriptTurn[]): string {
   return transcript
     .map((t) => `${t.role}: ${t.text}`)

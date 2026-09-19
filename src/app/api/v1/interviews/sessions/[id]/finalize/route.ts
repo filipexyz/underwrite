@@ -1,16 +1,16 @@
 /**
  * POST /api/v1/interviews/sessions/[id]/finalize
  *
- * Stops the GPT Live agent, persists transcript + structured answers, marks
- * the need completed. Answers come from the client, the agent's final JSON
- * turn, or a post-call LLM extract when a model provider is configured.
+ * Creator path. Same completeness rule as the public token: reject (409) if the
+ * brief is incomplete. Stops the GPT Live agent only after answers cover every
+ * required field (agent JSON, client payload, or post-call LLM extract).
  */
 import { NextResponse } from "next/server";
 import { jsonError } from "@/lib/api/http";
 import { getDb } from "@/lib/db/client";
 import { stopGptLiveAgent } from "@/lib/interviews/agora";
 import { agoraPublicStatus, requireInterviewUser } from "@/lib/interviews/auth";
-import { finalizeSession, getSession, toApiNeed, toApiSession } from "@/lib/interviews/store";
+import { finalizeSession, getSession, isIncompleteInterviewError, toApiNeed, toApiSession } from "@/lib/interviews/store";
 import { FinalizeSessionInput } from "@/lib/interviews/types";
 
 export const runtime = "nodejs";
@@ -40,16 +40,22 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   }
 
   try {
-    await stopGptLiveAgent(session.agoraAgentId);
+    const result = await finalizeSession(db, session, parsed.data);
+    try {
+      await stopGptLiveAgent(session.agoraAgentId);
+    } catch (error) {
+      console.warn("[interviews] stop agent failed (answers already persisted):", error);
+    }
+    return NextResponse.json({
+      agora: agoraPublicStatus(),
+      session: toApiSession(result.session),
+      need: toApiNeed(result.need),
+      answers: result.answers,
+    });
   } catch (error) {
-    console.warn("[interviews] stop agent failed (continuing to persist answers):", error);
+    if (isIncompleteInterviewError(error)) {
+      return jsonError(409, error.message, { missing: error.missing });
+    }
+    throw error;
   }
-
-  const result = await finalizeSession(db, session, parsed.data);
-  return NextResponse.json({
-    agora: agoraPublicStatus(),
-    session: toApiSession(result.session),
-    need: toApiNeed(result.need),
-    answers: result.answers,
-  });
 }
