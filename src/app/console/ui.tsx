@@ -30,6 +30,9 @@ const STATUS_STYLE: Record<string, string> = {
   admin_service: "bg-border text-foreground",
   revoked: "bg-danger/15 text-danger",
   active: "bg-accent/15 text-accent",
+  user: "bg-accent/15 text-accent",
+  agent: "bg-warn/15 text-warn",
+  system: "bg-border text-foreground",
 };
 
 export const TERMINAL_STATUSES = new Set(["completed", "failed", "no_eligible_bid"]);

@@ -9,8 +9,19 @@ import { wallets, type WalletRow } from "@/lib/db/schema";
 
 export const STARTING_TEST_CREDITS_USD = 1000;
 
+const SYSTEM_OWNER_IDS = new Set<string>(Object.values(SYSTEM_WALLETS));
+
+export type WalletKind = "user" | "agent" | "system";
+
 export function buyerWalletId(request: { buyerWalletId?: string | null }): string {
   return request.buyerWalletId ?? SYSTEM_WALLETS.buyer;
+}
+
+export function classifyWallet(ownerId: string, agentIds: Iterable<string>): WalletKind {
+  if (SYSTEM_OWNER_IDS.has(ownerId)) return "system";
+  const known = agentIds instanceof Set ? agentIds : new Set(agentIds);
+  if (known.has(ownerId)) return "agent";
+  return "user";
 }
 
 export async function getWallet(db: Db, ownerId: string): Promise<WalletRow | null> {
@@ -35,6 +46,16 @@ export async function ensureWallet(
   const raced = await getWallet(db, ownerId);
   if (!raced) throw new Error(`wallet vanished: ${ownerId}`);
   return raced;
+}
+
+/** Clerk user (or `local-dev`) wallet keyed by that id in `wallets.owner_id`. */
+export function ensureUserWallet(db: Db, clerkUserId: string): Promise<WalletRow> {
+  return ensureWallet(db, clerkUserId, STARTING_TEST_CREDITS_USD);
+}
+
+/** Registered seller agent wallet. Seed catalog wallets are left alone. */
+export function ensureAgentWallet(db: Db, agentId: string): Promise<WalletRow> {
+  return ensureWallet(db, agentId, STARTING_TEST_CREDITS_USD);
 }
 
 export async function listWallets(db: Db): Promise<WalletRow[]> {

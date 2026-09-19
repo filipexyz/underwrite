@@ -6,6 +6,7 @@ import { requireAdminPage } from "@/lib/auth/session";
 import { getDb } from "@/lib/db/client";
 import { ledgerEvents, wallets } from "@/lib/db/schema";
 import { env } from "@/lib/env";
+import { classifyWallet } from "@/lib/marketplace/credits";
 import { listAllAgents, toPublicAgent } from "@/lib/marketplace/sellers";
 import { listRequests } from "@/lib/marketplace/requests";
 import { disableAgent, enableAgent, revokeAnyKey } from "./actions";
@@ -25,6 +26,8 @@ export default async function AdminPage() {
   const agents = agentRows.map(toPublicAgent);
   const keys = keyRows.map(toPublicApiKey);
   const capital = walletRows.reduce((sum, row) => sum + row.capitalUsd, 0);
+  const agentIds = new Set(agentRows.map((row) => row.agentId));
+  const walletByOwner = new Map(walletRows.map((row) => [row.ownerId, row]));
   const walletsSorted = [...walletRows].sort((a, b) => b.capitalUsd - a.capitalUsd || a.ownerId.localeCompare(b.ownerId));
 
   return (
@@ -70,6 +73,7 @@ export default async function AdminPage() {
                 <Th>status</Th>
                 <Th>owner</Th>
                 <Th>specialties</Th>
+                <Th right>wallet</Th>
                 <Th></Th>
               </tr>
             </thead>
@@ -90,6 +94,9 @@ export default async function AdminPage() {
                     <span className="mono text-xs text-muted">{agent.owner_clerk_user_id ?? "—"}</span>
                   </Td>
                   <Td className="text-muted text-xs">{agent.specialties.join(", ")}</Td>
+                  <Td right>
+                    <Money value={walletByOwner.get(agent.agent_id)?.capitalUsd} digits={2} />
+                  </Td>
                   <Td>
                     {agent.status === "disabled" ? (
                       <form action={enableAgent}>
@@ -174,6 +181,7 @@ export default async function AdminPage() {
             <thead>
               <tr>
                 <Th>owner</Th>
+                <Th>kind</Th>
                 <Th right>balance</Th>
               </tr>
             </thead>
@@ -182,6 +190,9 @@ export default async function AdminPage() {
                 <tr key={wallet.ownerId} className="border-t border-border">
                   <Td>
                     <span className="mono text-xs">{wallet.ownerId}</span>
+                  </Td>
+                  <Td>
+                    <Badge value={classifyWallet(wallet.ownerId, agentIds)} />
                   </Td>
                   <Td right>
                     <Money value={wallet.capitalUsd} digits={2} />

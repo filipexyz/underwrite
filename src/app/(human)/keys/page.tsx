@@ -4,7 +4,7 @@ import { requireSignedInPage } from "@/lib/auth/session";
 import { getDb } from "@/lib/db/client";
 import { listOwnedAgents } from "@/lib/marketplace/sellers";
 import { Badge, Empty, Money, Panel, Td, Th } from "@/app/console/ui";
-import { STARTING_TEST_CREDITS_USD, ensureWallet } from "@/lib/marketplace/credits";
+import { ensureUserWallet } from "@/lib/marketplace/credits";
 import { revokeOwnKey } from "./actions";
 import { CreateBuyerKeyForm, CreateSellerKeyForm } from "./forms";
 
@@ -16,7 +16,7 @@ export default async function KeysPage() {
   const [keyRows, agents, wallet] = await Promise.all([
     listApiKeys(db, { ownerClerkUserId: userId }),
     listOwnedAgents(db, userId),
-    ensureWallet(db, userId, STARTING_TEST_CREDITS_USD),
+    ensureUserWallet(db, userId),
   ]);
   const keys = keyRows.map(toPublicApiKey);
   const buyer = keys.filter((k) => k.role === "buyer");

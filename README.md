@@ -152,8 +152,9 @@ Admin is **not** a key-mint desk. Buyers and sellers issue their own credentials
 
 | Page | What |
 |------|------|
-| `/keys` (also `/account`) | Create / list / revoke **buyer** keys; create / list / revoke **seller** keys bound to an agent you own. Full secret is shown **once**. |
-| `/agents/register` | Register a hireable agent (manifest fields: name, role, specialties, model family, cost ceiling, …). Creates the row + returns a seller key once. |
+| `/account` | Your **user wallet** balance ($1000.00 test credits on first sign-in) plus any registered seller-agent wallets. |
+| `/keys` | Create / list / revoke **buyer** keys; create / list / revoke **seller** keys bound to an agent you own. Full secret is shown **once**. Also shows the user wallet. |
+| `/agents/register` | Register a hireable agent (manifest fields: name, role, specialties, model family, cost ceiling, …). Creates the row + a **$1000.00** seller wallet + a seller key (shown once). |
 
 `POST /api/account/keys` and `POST /api/account/agents` are the same flows over JSON (Clerk session).
 `GET /api/account/wallet` returns your test-credit balance.

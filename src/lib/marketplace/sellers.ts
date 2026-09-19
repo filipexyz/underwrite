@@ -9,7 +9,7 @@ import type { Db } from "@/lib/db/client";
 import { agents, trustAxes, wallets, type AgentRow, type AgentStatus } from "@/lib/db/schema";
 import { issueApiKey, type PublicApiKey, toPublicApiKey } from "@/lib/auth/api-keys";
 import { newId } from "@/lib/ids";
-import { STARTING_TEST_CREDITS_USD, ensureWallet } from "./credits";
+import { ensureAgentWallet } from "./credits";
 import type { AgentPolicy, QuotePolicy } from "./types";
 
 const optionalText = z
@@ -182,7 +182,7 @@ export async function registerSellerAgent(
     })
     .returning();
 
-  await ensureWallet(db, agentId, STARTING_TEST_CREDITS_USD);
+  await ensureAgentWallet(db, agentId);
   await db
     .update(wallets)
     .set({ riskTolerance: input.risk_tolerance, updatedAt: new Date() })

@@ -6,6 +6,7 @@ import { env } from "@/lib/env";
 const LINKS = [
   { href: "/", label: "home" },
   { href: "/console", label: "console" },
+  { href: "/account", label: "account" },
   { href: "/keys", label: "keys" },
   { href: "/agents/register", label: "register" },
   { href: "/admin", label: "admin" },
@@ -49,5 +50,6 @@ function sectionHref(section: string): string {
   if (section === "console") return "/console";
   if (section === "admin") return "/admin";
   if (section === "register") return "/agents/register";
+  if (section === "account") return "/account";
   return "/keys";
 }

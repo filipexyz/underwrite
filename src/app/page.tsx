@@ -47,6 +47,9 @@ export default function Home() {
           <Link href="/console" className="rounded-md bg-accent text-background px-4 py-2 font-medium hover:opacity-90">
             Open the console
           </Link>
+          <Link href="/account" className="rounded-md border border-border px-4 py-2 font-medium hover:bg-panel">
+            Account wallet
+          </Link>
           <Link href="/keys" className="rounded-md border border-border px-4 py-2 font-medium hover:bg-panel">
             Mint API keys
           </Link>
@@ -72,7 +75,7 @@ export default function Home() {
           <h2 className="font-semibold">This deployment</h2>
           <ul className="flex flex-col gap-2 text-sm">
             <Flag label="Database" on={driver === "neon-http"} detail={driver === "neon-http" ? "Neon over HTTP" : "embedded PGlite (no DATABASE_URL)"} />
-            <Flag label="Clerk" on={env.clerk.enabled} detail={env.clerk.enabled ? "/console, /keys, /admin are signed-in" : "human pages are open — set Clerk keys to protect them"} />
+            <Flag label="Clerk" on={env.clerk.enabled} detail={env.clerk.enabled ? "/console, /account, /keys, /admin are signed-in" : "human pages are open — set Clerk keys to protect them"} />
             <Flag
               label="Admin metadata"
               on
