@@ -3,7 +3,7 @@ import { listApiKeys, toPublicApiKey } from "@/lib/auth/api-keys";
 import { requireSignedInPage } from "@/lib/auth/session";
 import { getDb } from "@/lib/db/client";
 import { listOwnedAgents } from "@/lib/marketplace/sellers";
-import { Badge, Empty, Money, Panel, Td, Th } from "@/app/console/ui";
+import { Badge, Empty, Money, PageIntro, Panel, Td, Th } from "@/app/console/ui";
 import { ensureUserWallet } from "@/lib/marketplace/credits";
 import { revokeOwnKey } from "./actions";
 import { CreateBuyerKeyForm, CreateSellerKeyForm } from "./forms";
@@ -23,26 +23,34 @@ export default async function KeysPage() {
   const seller = keys.filter((k) => k.role === "seller");
 
   return (
-    <div className="flex flex-col gap-6">
-      <header className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold tracking-tight">API keys</h1>
-        <p className="text-sm text-muted">
-          Mint your own credentials. Buyer keys call <code>POST /api/v1/requests</code>. Seller keys call{" "}
-          <code>GET/PATCH /api/v1/agents/me</code>. The full secret is shown once.
-        </p>
-        <p className="mono text-xs text-muted">
-          owner {userId} · wallet <Money value={wallet.capitalUsd} digits={2} /> test credits
-        </p>
-      </header>
+    <div className="flex flex-col gap-8">
+      <PageIntro
+        eyebrow="CREDENTIALS / SELF-SERVE"
+        title={
+          <>
+            API <em>keys.</em>
+          </>
+        }
+        lede={
+          <>
+            Mint your own credentials. Buyer keys call <code>POST /api/v1/requests</code>. Seller keys call{" "}
+            <code>GET/PATCH /api/v1/agents/me</code>. The full secret is shown once.
+          </>
+        }
+      />
+      <p className="mono text-xs text-muted -mt-4">
+        owner {userId} · wallet <Money value={wallet.capitalUsd} digits={2} /> test credits
+      </p>
 
-      <div className="grid gap-6 md:grid-cols-2">
-        <Panel title="New buyer key">
+      <div className="grid gap-4 md:grid-cols-2">
+        <Panel title="New buyer key" eyebrow="CONSUMER AGENT">
           <CreateBuyerKeyForm />
         </Panel>
         <Panel
           title="New seller key"
+          eyebrow="PROVIDER AGENT"
           aside={
-            <Link href="/agents/register" className="text-xs text-accent hover:underline">
+            <Link href="/agents/register" className="btn-ghost">
               register an agent
             </Link>
           }
@@ -67,7 +75,7 @@ function KeyTable({
   empty: string;
 }) {
   return (
-    <Panel title={title}>
+    <Panel title={title} eyebrow="HASHED PREFIXES">
       {keys.length === 0 ? (
         <Empty>{empty}</Empty>
       ) : (
@@ -86,7 +94,7 @@ function KeyTable({
           </thead>
           <tbody>
             {keys.map((key) => (
-              <tr key={key.id} className="border-t border-border">
+              <tr key={key.id} className="border-t border-line">
                 <Td>
                   <span className="mono text-xs">{key.id}</span>
                 </Td>
@@ -99,7 +107,7 @@ function KeyTable({
                 </Td>
                 <Td>
                   {key.agent_id ? (
-                    <Link href={`/agents/${key.agent_id}`} className="mono text-xs text-accent hover:underline">
+                    <Link href={`/agents/${key.agent_id}`} className="mono text-xs text-teal hover:underline">
                       {key.agent_id}
                     </Link>
                   ) : (
@@ -116,7 +124,7 @@ function KeyTable({
                   {!key.revoked_at ? (
                     <form action={revokeOwnKey}>
                       <input type="hidden" name="id" value={key.id} />
-                      <button type="submit" className="text-xs text-danger hover:underline">
+                      <button type="submit" className="font-mono text-[10px] tracking-wider uppercase text-danger hover:underline">
                         revoke
                       </button>
                     </form>

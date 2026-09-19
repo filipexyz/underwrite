@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getDb } from "@/lib/db/client";
 import { getRequestDetail } from "@/lib/marketplace/requests";
-import { Badge, Empty, Money, Panel, Pct, Td, Th } from "../../ui";
+import { Badge, Empty, Money, NetworkStrip, PageIntro, Panel, Pct, PhaseRail, Stat, Td, Th } from "../../ui";
 import { LiveLedger } from "./live-ledger";
 
 export const dynamic = "force-dynamic";
@@ -18,6 +18,43 @@ type Certificate = {
   judges_agree: boolean;
 };
 
+function settlementSteps(input: {
+  status: string;
+  planCount: number;
+  escrowCount: number;
+  released: boolean;
+  withheld: boolean;
+  verifyCount: number;
+}) {
+  const { status, planCount, escrowCount, released, withheld, verifyCount } = input;
+  const step = (n: string, title: string, sub: string, done: boolean, active: boolean) => ({
+    n,
+    title,
+    sub,
+    state: (done ? "passed" : active ? "active" : "waiting") as "waiting" | "active" | "passed",
+  });
+  return [
+    step("01", "Contract posted", "4 fields + failure policy", true, false),
+    step("02", "Plans ranked", "conf · cost · latency · chain", planCount > 0, status === "auctioning" || status === "received"),
+    step("03", "Escrow locked", "winning plan staked", escrowCount > 0, status === "contracting"),
+    step(
+      "04",
+      "Dispatch",
+      "selected agent works",
+      ["verifying", "escalated", "completed", "failed"].includes(status) || verifyCount > 0,
+      status === "executing",
+    ),
+    step("05", "Judge vs plan", "SLA / acceptance", verifyCount > 0 && (status === "completed" || status === "failed" || status === "escalated"), status === "verifying"),
+    step(
+      "06",
+      released ? "Escrow released" : withheld ? "Escrow withheld" : "Settle",
+      released ? "pay + certificate" : withheld ? "refund / escalate" : "awaiting verdict",
+      status === "completed" || status === "failed",
+      status === "escalated",
+    ),
+  ];
+}
+
 export default async function RequestPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { db } = await getDb();
@@ -30,68 +67,114 @@ export default async function RequestPage({ params }: { params: Promise<{ id: st
   const latest = verifications.at(-1) ?? null;
   const first = verifications[0] ?? null;
   const topPromise = plans.find((p) => p.parentPlanId === null)?.promisedConfidence ?? null;
+  const released = escrows.some((e) => e.status === "RELEASED");
+  const withheld = escrows.some((e) => e.status === "WITHHELD" || e.status === "REFUNDED");
+  const winner = plans.find((p) => p.status === "validated") ?? plans.find((p) => p.parentPlanId === null);
+  const selectedBid = bids.find((b) => b.selected);
 
   return (
-    <div className="flex flex-col gap-6">
-      <header className="flex flex-col gap-2">
-        <Link href="/console" className="text-xs text-muted hover:text-foreground">
+    <div className="flex flex-col gap-8">
+      <div>
+        <Link href="/console" className="eyebrow inline-block hover:text-ink">
           ← requests
         </Link>
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="mono text-xl font-semibold tracking-tight">{request.requestId}</h1>
-          <Badge value={request.status} />
-          <span className="mono text-sm">
-            human_interventions: <span className={metrics.human_interventions === 0 ? "text-accent" : "text-danger"}>{metrics.human_interventions}</span>
-          </span>
-        </div>
-        <p className="text-sm text-muted">{request.requirement}</p>
-        <dl className="grid grid-cols-2 md:grid-cols-6 gap-3 text-sm pt-1">
-          <Stat label="max cost" value={<Money value={request.maxCostUsd} />} />
-          <Stat label="max latency" value={<span className="mono">{request.maxLatencyS}s</span>} />
-          <Stat label="min confidence" value={<Pct value={request.minConfidence} />} />
-          <Stat label="failure policy" value={<span className="mono">{request.failurePolicy}</span>} />
-          <Stat label="total cost" value={<Money value={metrics.total_cost_usd} digits={5} />} />
-          <Stat label="handoffs" value={<span className="mono">{metrics.handoffs}</span>} />
-        </dl>
-        {request.error && <p className="text-sm text-danger">{request.error}</p>}
-      </header>
+        <PageIntro
+          eyebrow="RUN EXPLAINER / THE MARKET DECISION"
+          title={
+            <>
+              What happened to this <em>task?</em>
+            </>
+          }
+          lede={request.requirement}
+          action={
+            <div className="flex flex-col items-end gap-2 text-right">
+              <span className="mono text-xs text-muted">{request.requestId}</span>
+              <Badge value={request.status} />
+              <span className="mono text-xs">
+                human_interventions:{" "}
+                <span className={metrics.human_interventions === 0 ? "text-teal" : "text-danger"}>{metrics.human_interventions}</span>
+              </span>
+            </div>
+          }
+        />
+      </div>
 
-      {outcome.certificate && (
-        <section className="rounded-lg border border-accent/40 bg-accent/5 p-4 flex flex-wrap items-center gap-6">
-          <div>
-            <p className="text-xs uppercase tracking-wider text-muted">certificate</p>
-            <p className="text-2xl font-semibold">
-              <Pct value={outcome.certificate.delivered_confidence} tone="good" />{" "}
-              <span className="text-sm text-muted font-normal">delivered · promised {Math.round(outcome.certificate.promised_confidence * 100)}%</span>
-            </p>
+      <dl className="grid grid-cols-2 md:grid-cols-6 gap-4 text-sm border border-line bg-panel p-5">
+        <Stat label="max cost" value={<Money value={request.maxCostUsd} />} />
+        <Stat label="max latency" value={<span className="mono">{request.maxLatencyS}s</span>} />
+        <Stat label="min confidence" value={<Pct value={request.minConfidence} />} />
+        <Stat label="failure policy" value={<span className="mono">{request.failurePolicy}</span>} />
+        <Stat label="total cost" value={<Money value={metrics.total_cost_usd} digits={5} />} />
+        <Stat label="handoffs" value={<span className="mono">{metrics.handoffs}</span>} />
+      </dl>
+
+      <PhaseRail
+        steps={settlementSteps({
+          status: request.status,
+          planCount: plans.length,
+          escrowCount: escrows.length,
+          released,
+          withheld,
+          verifyCount: verifications.length,
+        })}
+      />
+
+      <NetworkStrip
+        nodes={[
+          { label: "BUYER", note: "task + stake", kind: "consumer" },
+          { label: "MARKET", note: "rank + escrow", kind: "market" },
+          { label: "AGENTS", note: winner?.agentId ?? "awaiting plan", kind: "providers" },
+          { label: "JUDGE", note: latest ? latest.verdict : "verify vs plan", kind: "judge" },
+          { label: "ESCROW", note: released ? "RELEASED" : withheld ? "WITHHELD" : "LOCKED", kind: "escrow" },
+        ]}
+      />
+
+      {outcome.certificate ? (
+        <section className="certificate">
+          <p className="eyebrow !mb-2 !text-ink">SETTLEMENT COMPLETE / CERTIFICATE</p>
+          <div className="flex flex-wrap items-end justify-between gap-6">
+            <div>
+              <h2 className="font-sans text-[34px] tracking-[-2px] font-semibold m-0 text-ink">
+                Escrow released.
+              </h2>
+              <p className="mt-2 max-w-xl font-sans text-xs leading-relaxed text-ink/80">
+                Delivered <Pct value={outcome.certificate.delivered_confidence} tone="good" /> · promised{" "}
+                {Math.round(outcome.certificate.promised_confidence * 100)}%. Judges{" "}
+                {outcome.certificate.judges_agree ? "agree" : "disagree"}. Chain {outcome.certificate.chain.join(" → ")}.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-8 font-sans">
+              <Stat label="price" value={<Money value={outcome.certificate.price_usd} />} />
+              <Stat label="attempts / escalations" value={<span className="mono">{outcome.certificate.attempts} / {outcome.certificate.escalations}</span>} />
+              <Stat label="elapsed (sim)" value={<span className="mono">{outcome.certificate.elapsed_s.toFixed(1)}s</span>} />
+            </div>
           </div>
-          <Stat label="price" value={<Money value={outcome.certificate.price_usd} />} />
-          <Stat label="chain" value={<span className="mono text-xs">{outcome.certificate.chain.join(" → ")}</span>} />
-          <Stat label="attempts / escalations" value={<span className="mono">{outcome.certificate.attempts} / {outcome.certificate.escalations}</span>} />
-          <Stat label="elapsed (sim)" value={<span className="mono">{outcome.certificate.elapsed_s.toFixed(1)}s</span>} />
-          <Stat label="judges" value={<span className="mono">{outcome.certificate.judges_agree ? "agree" : "disagree"}</span>} />
         </section>
-      )}
-      {request.status === "failed" && outcome.reason && (
-        <section className="rounded-lg border border-danger/40 bg-danger/5 p-4 text-sm">
-          <p className="text-xs uppercase tracking-wider text-muted">honest failure</p>
-          <p>{outcome.reason}</p>
+      ) : null}
+
+      {request.status === "failed" && outcome.reason ? (
+        <section className="outcome-withheld">
+          <p className="eyebrow !mb-2 !text-ink">SETTLEMENT COMPLETE / WITHHELD</p>
+          <h2 className="font-sans text-[28px] tracking-[-1px] font-semibold m-0">Escrow withheld — honest failure.</h2>
+          <p className="mt-2 text-sm leading-relaxed">{outcome.reason}</p>
         </section>
-      )}
+      ) : null}
+
+      {request.error ? <p className="text-sm text-danger">{request.error}</p> : null}
 
       {(first || latest) && (
         <section className="grid gap-4 md:grid-cols-2">
-          <Panel title="Promised vs delivered">
+          <Panel title="Promised vs delivered" eyebrow="SLA GATE">
             <div className="flex items-end gap-8">
               <div>
-                <p className="text-xs uppercase tracking-wider text-muted">promised (top plan)</p>
+                <p className="eyebrow">promised (top plan)</p>
                 <p className="text-3xl font-semibold">
                   <Pct value={topPromise} />
                 </p>
               </div>
               {first && (
                 <div>
-                  <p className="text-xs uppercase tracking-wider text-muted">delivered · attempt 1 ({first.producerAgentId})</p>
+                  <p className="eyebrow">delivered · attempt 1 ({first.producerAgentId})</p>
                   <p className="text-3xl font-semibold">
                     <Pct value={first.confidence.computed} tone={first.verdict === "pass" ? "good" : "bad"} />
                   </p>
@@ -99,7 +182,7 @@ export default async function RequestPage({ params }: { params: Promise<{ id: st
               )}
               {latest && latest !== first && (
                 <div>
-                  <p className="text-xs uppercase tracking-wider text-muted">delivered · attempt {verifications.length} ({latest.producerAgentId})</p>
+                  <p className="eyebrow">delivered · attempt {verifications.length} ({latest.producerAgentId})</p>
                   <p className="text-3xl font-semibold">
                     <Pct value={latest.confidence.computed} tone={latest.verdict === "pass" ? "good" : "bad"} />
                   </p>
@@ -107,7 +190,7 @@ export default async function RequestPage({ params }: { params: Promise<{ id: st
               )}
             </div>
           </Panel>
-          <Panel title="Attribution">
+          <Panel title="Attribution" eyebrow="WALK-BACK">
             {attributions.length === 0 ? (
               <Empty>No failure to attribute{request.status === "completed" ? " — first delivery met the SLA." : "."}</Empty>
             ) : (
@@ -130,7 +213,59 @@ export default async function RequestPage({ params }: { params: Promise<{ id: st
       )}
 
       <section className="grid gap-4 md:grid-cols-2">
-        <Panel title="Bids (one round)">
+        <Panel
+          title="Provider plans"
+          eyebrow="02 / RANK + SELECT"
+          aside={selectedBid ? <Badge value="selected" /> : null}
+        >
+          {plans.length === 0 ? (
+            <Empty>No plan published yet. Marketplace is requesting compliant plans (confidence, cost, latency, chain).</Empty>
+          ) : (
+            <table className="w-full">
+              <thead>
+                <tr>
+                  <Th>agent</Th>
+                  <Th>strategy</Th>
+                  <Th right>promised</Th>
+                  <Th right>max cost</Th>
+                  <Th right>deadline</Th>
+                  <Th>declared chain</Th>
+                  <Th>status</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {plans.map((p) => (
+                  <tr key={p.planId} className="border-t border-line">
+                    <Td>
+                      <span className="mono text-xs">{p.agentId}</span>
+                      {p.supersedesPlanId && <span className="ml-2 text-xs text-warn">re-plan</span>}
+                    </Td>
+                    <Td>
+                      <span className="mono text-xs">{p.strategyChosen}</span>
+                    </Td>
+                    <Td right>
+                      <Pct value={p.promisedConfidence} />
+                    </Td>
+                    <Td right>
+                      <Money value={p.maxCostUsd} />
+                    </Td>
+                    <Td right>
+                      <span className="mono">{p.estLatencyS}s</span>
+                    </Td>
+                    <Td>
+                      <span className="mono text-xs text-muted">{p.chain.map((h) => `${h.agent_id} $${h.cost_usd}`).join(" → ")}</span>
+                    </Td>
+                    <Td>
+                      <Badge value={p.status} />
+                    </Td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </Panel>
+
+        <Panel title="Bids (one round)" eyebrow="POLICY SCORE">
           {bids.length === 0 ? (
             <Empty>Auction not run yet.</Empty>
           ) : (
@@ -147,7 +282,7 @@ export default async function RequestPage({ params }: { params: Promise<{ id: st
               </thead>
               <tbody>
                 {bids.map((b) => (
-                  <tr key={b.bidId} className="border-t border-border">
+                  <tr key={b.bidId} className="border-t border-line">
                     <Td>
                       <span className="mono text-xs">{b.agentId}</span>
                     </Td>
@@ -163,51 +298,14 @@ export default async function RequestPage({ params }: { params: Promise<{ id: st
                     <Td>
                       <span className="mono text-xs text-muted">{b.chain.map((h) => h.agent_id).join(" → ")}</span>
                     </Td>
-                    <Td>{b.selected ? <Badge value="selected" /> : b.compliant ? <span className="text-xs text-muted">compliant</span> : <span className="text-xs text-danger">{b.rejectionReason}</span>}</Td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </Panel>
-
-        <Panel title="Chain & escrows" aside={hops.length > 0 ? <span className="mono text-xs text-muted">{hops.map((h) => h.agent_id).join(" → ")}</span> : null}>
-          {escrows.length === 0 ? (
-            <Empty>No escrow locked yet.</Empty>
-          ) : (
-            <table className="w-full">
-              <thead>
-                <tr>
-                  <Th>hop</Th>
-                  <Th>payer → payee</Th>
-                  <Th right>amount</Th>
-                  <Th right>stake</Th>
-                  <Th right>floor</Th>
-                  <Th>status</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {escrows.map((e) => (
-                  <tr key={e.escrowId} className="border-t border-border">
                     <Td>
-                      <span className="mono">{e.hopIndex}</span>
-                    </Td>
-                    <Td>
-                      <span className="mono text-xs">
-                        {e.payerAgentId ?? "buyer"} → {e.payeeAgentId}
-                      </span>
-                    </Td>
-                    <Td right>
-                      <Money value={e.amountUsd} />
-                    </Td>
-                    <Td right>
-                      <Money value={e.stakeUsd} />
-                    </Td>
-                    <Td right>
-                      <Pct value={e.minConfidence} />
-                    </Td>
-                    <Td>
-                      <Badge value={e.status} />
+                      {b.selected ? (
+                        <Badge value="selected" />
+                      ) : b.compliant ? (
+                        <span className="text-xs text-muted">compliant</span>
+                      ) : (
+                        <span className="text-xs text-danger">{b.rejectionReason}</span>
+                      )}
                     </Td>
                   </tr>
                 ))}
@@ -217,16 +315,65 @@ export default async function RequestPage({ params }: { params: Promise<{ id: st
         </Panel>
       </section>
 
+      <Panel
+        title="Chain & escrows"
+        eyebrow="03 / LOCK → RELEASE OR WITHHOLD"
+        aside={hops.length > 0 ? <span className="mono text-xs text-muted">{hops.map((h) => h.agent_id).join(" → ")}</span> : null}
+      >
+        {escrows.length === 0 ? (
+          <Empty>No escrow locked yet. Stake locks on the winning plan before dispatch.</Empty>
+        ) : (
+          <table className="w-full">
+            <thead>
+              <tr>
+                <Th>hop</Th>
+                <Th>payer → payee</Th>
+                <Th right>amount</Th>
+                <Th right>stake</Th>
+                <Th right>floor</Th>
+                <Th>status</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {escrows.map((e) => (
+                <tr key={e.escrowId} className="border-t border-line">
+                  <Td>
+                    <span className="mono">{e.hopIndex}</span>
+                  </Td>
+                  <Td>
+                    <span className="mono text-xs">
+                      {e.payerAgentId ?? "buyer"} → {e.payeeAgentId}
+                    </span>
+                  </Td>
+                  <Td right>
+                    <Money value={e.amountUsd} />
+                  </Td>
+                  <Td right>
+                    <Money value={e.stakeUsd} />
+                  </Td>
+                  <Td right>
+                    <Pct value={e.minConfidence} />
+                  </Td>
+                  <Td>
+                    <Badge value={e.status} />
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </Panel>
+
       {verifications.length > 0 && (
         <section className="grid gap-4 md:grid-cols-2">
           {verifications.map((v, i) => (
-            <Panel key={v.verificationId} title={`Verification · attempt ${i + 1} · ${v.producerAgentId}`} aside={<Badge value={v.verdict} />}>
+            <Panel key={v.verificationId} title={`Verification · attempt ${i + 1} · ${v.producerAgentId}`} eyebrow="05 / JUDGE VS PLAN" aside={<Badge value={v.verdict} />}>
               <table className="w-full">
                 <tbody>
                   {v.checks.map((c) => (
-                    <tr key={c.check_id} className="border-t border-border/60">
+                    <tr key={c.check_id} className="border-t border-line/80">
                       <Td>
-                        <span className={`mono text-xs ${c.passed ? "text-accent" : "text-danger"}`}>{c.passed ? "PASS" : "FAIL"}</span>
+                        <span className={`mono text-xs ${c.passed ? "text-teal" : "text-danger"}`}>{c.passed ? "PASS" : "FAIL"}</span>
                       </Td>
                       <Td>
                         <span className="mono text-xs">{c.check_id}</span>
@@ -257,64 +404,7 @@ export default async function RequestPage({ params }: { params: Promise<{ id: st
         </section>
       )}
 
-      <Panel title="Plans (the plan is the contract)">
-        {plans.length === 0 ? (
-          <Empty>No plan published yet.</Empty>
-        ) : (
-          <table className="w-full">
-            <thead>
-              <tr>
-                <Th>agent</Th>
-                <Th>strategy</Th>
-                <Th right>promised</Th>
-                <Th right>max cost</Th>
-                <Th right>deadline</Th>
-                <Th>declared chain</Th>
-                <Th>status</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {plans.map((p) => (
-                <tr key={p.planId} className="border-t border-border">
-                  <Td>
-                    <span className="mono text-xs">{p.agentId}</span>
-                    {p.supersedesPlanId && <span className="ml-2 text-xs text-warn">re-plan</span>}
-                  </Td>
-                  <Td>
-                    <span className="mono text-xs">{p.strategyChosen}</span>
-                  </Td>
-                  <Td right>
-                    <Pct value={p.promisedConfidence} />
-                  </Td>
-                  <Td right>
-                    <Money value={p.maxCostUsd} />
-                  </Td>
-                  <Td right>
-                    <span className="mono">{p.estLatencyS}s</span>
-                  </Td>
-                  <Td>
-                    <span className="mono text-xs text-muted">{p.chain.map((h) => `${h.agent_id} $${h.cost_usd}`).join(" → ")}</span>
-                  </Td>
-                  <Td>
-                    <Badge value={p.status} />
-                  </Td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </Panel>
-
       <LiveLedger requestId={request.requestId} initialStatus={request.status} initialEvents={events} initialMetrics={metrics} />
-    </div>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div>
-      <dt className="text-xs uppercase tracking-wider text-muted">{label}</dt>
-      <dd className="pt-0.5">{value}</dd>
     </div>
   );
 }

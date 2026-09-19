@@ -1,10 +1,9 @@
 "use client";
 
 import { useActionState, type ReactNode } from "react";
+import { inputClass } from "@/app/console/ui";
 import { SecretBanner } from "@/components/secret-banner";
 import { mintOwnedSellerKey, updateOwnedAgent, type AgentFormState } from "./actions";
-
-const field = "rounded-md border border-border bg-background px-3 py-2 text-sm w-full";
 
 export function EditAgentForm({
   agent,
@@ -26,13 +25,13 @@ export function EditAgentForm({
       <input type="hidden" name="agent_id" value={agent.agent_id} />
       <div className="grid gap-4 md:grid-cols-2">
         <Field label="name">
-          <input name="name" required className={field} defaultValue={agent.name} />
+          <input name="name" required className={inputClass} defaultValue={agent.name} />
         </Field>
         <Field label="specialties" hint="comma-separated">
-          <input name="specialties" required className={field} defaultValue={agent.specialties.join(", ")} />
+          <input name="specialties" required className={inputClass} defaultValue={agent.specialties.join(", ")} />
         </Field>
         <Field label="model family">
-          <input name="model_family" required className={field} defaultValue={agent.model_family} />
+          <input name="model_family" required className={inputClass} defaultValue={agent.model_family} />
         </Field>
         <Field label="cost ceiling usd">
           <input
@@ -41,26 +40,23 @@ export function EditAgentForm({
             min={0.001}
             max={10}
             step="0.001"
-            className={field}
+            className={inputClass}
             defaultValue={agent.cost_ceiling_usd}
           />
         </Field>
         <Field label="webhook url" hint="optional">
-          <input name="webhook_url" className={field} defaultValue={agent.webhook_url ?? ""} placeholder="https://…" />
+          <input name="webhook_url" className={inputClass} defaultValue={agent.webhook_url ?? ""} placeholder="https://…" />
         </Field>
         <Field label="contact" hint="optional">
-          <input name="contact" className={field} defaultValue={agent.contact ?? ""} />
+          <input name="contact" className={inputClass} defaultValue={agent.contact ?? ""} />
         </Field>
         <Field label="description" hint="optional">
-          <textarea name="description" rows={3} className={field} defaultValue={agent.description ?? ""} />
+          <textarea name="description" rows={3} className={inputClass} defaultValue={agent.description ?? ""} />
         </Field>
       </div>
-      <button
-        type="submit"
-        disabled={pending}
-        className="rounded-md bg-accent text-background px-4 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-50 w-fit"
-      >
-        {pending ? "Saving…" : "Save changes"}
+      <button type="submit" disabled={pending} className="btn-ink w-full md:w-auto">
+        <span>{pending ? "Saving…" : "Save changes"}</span>
+        <strong>→</strong>
       </button>
       {state?.error ? <p className="text-sm text-danger">{state.error}</p> : null}
     </form>
@@ -73,15 +69,12 @@ export function MintSellerKeyForm({ agentId, agentName }: { agentId: string; age
     <form action={action} className="flex flex-col gap-3">
       <input type="hidden" name="agent_id" value={agentId} />
       <label className="flex flex-col gap-1 text-sm">
-        <span className="text-muted text-xs uppercase tracking-wider">name</span>
-        <input name="name" defaultValue={`${agentName} seller key`} className={field} />
+        <span className="eyebrow !mb-0">name</span>
+        <input name="name" defaultValue={`${agentName} seller key`} className={inputClass} />
       </label>
-      <button
-        type="submit"
-        disabled={pending}
-        className="rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-background disabled:opacity-50 w-fit"
-      >
-        {pending ? "Minting…" : "Rotate / mint seller key"}
+      <button type="submit" disabled={pending} className="btn-ghost justify-between w-full md:w-auto">
+        <span>{pending ? "Minting…" : "Rotate / mint seller key"}</span>
+        <strong>→</strong>
       </button>
       {state?.error ? <p className="text-sm text-danger">{state.error}</p> : null}
       {state?.secret ? <SecretBanner secret={state.secret} label="seller secret" /> : null}
@@ -92,7 +85,7 @@ export function MintSellerKeyForm({ agentId, agentName }: { agentId: string; age
 function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return (
     <label className="flex flex-col gap-1 text-sm">
-      <span className="text-muted text-xs uppercase tracking-wider">
+      <span className="eyebrow !mb-0">
         {label}
         {hint ? <span className="normal-case tracking-normal text-muted/80"> · {hint}</span> : null}
       </span>

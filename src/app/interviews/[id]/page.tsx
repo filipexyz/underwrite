@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Badge, Empty, Panel, Td, Th } from "@/app/console/ui";
+import { Badge, Empty, PageIntro, Panel, Td, Th } from "@/app/console/ui";
 import { getDb } from "@/lib/db/client";
 import { getNeedDetail } from "@/lib/interviews/store";
 import { CopyInvite } from "../copy-invite";
@@ -17,36 +17,41 @@ export default async function InterviewNeedPage({ params }: { params: Promise<{ 
   const invitePath = `/i/${need.publicToken}`;
 
   return (
-    <div className="flex flex-col gap-6">
-      <header className="flex flex-col gap-2">
-        <Link href="/interviews" className="text-xs text-muted hover:text-foreground">
+    <div className="flex flex-col gap-8">
+      <div>
+        <Link href="/interviews" className="eyebrow inline-block hover:text-ink">
           ← pool
         </Link>
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-semibold tracking-tight">{need.title}</h1>
-          <Badge value={need.status} />
-        </div>
-        <p className="mono text-xs text-muted">{need.id}</p>
-      </header>
+        <PageIntro
+          eyebrow="NEED / INTERVIEWEE LINK"
+          title={
+            <>
+              {need.title}
+            </>
+          }
+          lede={<span className="mono text-xs">{need.id}</span>}
+          action={<Badge value={need.status} />}
+        />
+      </div>
 
       <SetupBanner />
 
-      <Panel title="Interviewee link">
-        <p className="text-sm text-muted mb-3">
+      <Panel title="Interviewee link" eyebrow="PUBLIC TOKEN">
+        <p className="text-sm text-[#53605a] mb-3 leading-relaxed">
           Send this link. The human only sees a mic + the agent — no console, no Clerk. Possession of the token is auth.
           After the need is completed the link is spent.
         </p>
         <CopyInvite path={invitePath} />
       </Panel>
 
-      <Panel title="Brief">
+      <Panel title="Brief" eyebrow="QUESTIONS + FIELDS">
         <dl className="grid gap-3 text-sm md:grid-cols-2">
           <div className="md:col-span-2">
-            <dt className="text-xs uppercase tracking-wider text-muted">Goal</dt>
+            <dt className="eyebrow">Goal</dt>
             <dd>{need.brief.goal}</dd>
           </div>
           <div>
-            <dt className="text-xs uppercase tracking-wider text-muted">Questions</dt>
+            <dt className="eyebrow">Questions</dt>
             <dd>
               <ol className="list-decimal pl-5 flex flex-col gap-1">
                 {need.brief.questions.map((q) => (
@@ -56,7 +61,7 @@ export default async function InterviewNeedPage({ params }: { params: Promise<{ 
             </dd>
           </div>
           <div>
-            <dt className="text-xs uppercase tracking-wider text-muted">Required fields</dt>
+            <dt className="eyebrow">Required fields</dt>
             <dd>
               <ul className="mono text-xs flex flex-col gap-1">
                 {need.brief.required_fields.map((f) => (
@@ -67,30 +72,28 @@ export default async function InterviewNeedPage({ params }: { params: Promise<{ 
           </div>
           {need.brief.context ? (
             <div className="md:col-span-2">
-              <dt className="text-xs uppercase tracking-wider text-muted">Context</dt>
+              <dt className="eyebrow">Context</dt>
               <dd className="text-muted">{need.brief.context}</dd>
             </div>
           ) : null}
           {need.brief.success_criteria ? (
             <div className="md:col-span-2">
-              <dt className="text-xs uppercase tracking-wider text-muted">Success criteria</dt>
+              <dt className="eyebrow">Success criteria</dt>
               <dd className="text-muted">{need.brief.success_criteria}</dd>
             </div>
           ) : null}
         </dl>
       </Panel>
 
-      <Panel title="Result">
+      <Panel title="Result" eyebrow="STRUCTURED ANSWERS">
         {need.resultJson ? (
-          <pre className="text-xs leading-relaxed overflow-x-auto rounded bg-background p-3 border border-border">
-            {JSON.stringify(need.resultJson, null, 2)}
-          </pre>
+          <pre className="text-xs leading-relaxed overflow-x-auto bg-[#d8dfd8] p-3.5 font-mono">{JSON.stringify(need.resultJson, null, 2)}</pre>
         ) : (
           <Empty>No answers yet. Share the interviewee link; results land here after Finish.</Empty>
         )}
       </Panel>
 
-      <Panel title={`${sessions.length} session${sessions.length === 1 ? "" : "s"}`}>
+      <Panel title={`${sessions.length} session${sessions.length === 1 ? "" : "s"}`} eyebrow="AGORA CHANNELS">
         {sessions.length === 0 ? (
           <Empty>No sessions yet. They appear after someone opens the interviewee link.</Empty>
         ) : (
@@ -106,7 +109,7 @@ export default async function InterviewNeedPage({ params }: { params: Promise<{ 
             </thead>
             <tbody>
               {sessions.map((session) => (
-                <tr key={session.id} className="border-t border-border">
+                <tr key={session.id} className="border-t border-line">
                   <Td className="mono text-xs">{session.id}</Td>
                   <Td>
                     <Badge value={session.status} />

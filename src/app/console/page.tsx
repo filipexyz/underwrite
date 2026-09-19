@@ -2,7 +2,7 @@ import Link from "next/link";
 import { getDb } from "@/lib/db/client";
 import { listRequests } from "@/lib/marketplace/requests";
 import { fireDemoRequest, resetCatalog } from "./actions";
-import { Badge, Empty, Money, Panel, Pct, Td, Th } from "./ui";
+import { Badge, Empty, Money, PageIntro, Panel, Pct, Td, Th } from "./ui";
 
 export const dynamic = "force-dynamic";
 
@@ -11,37 +11,40 @@ export default async function ConsolePage() {
   const rows = await listRequests(db);
 
   return (
-    <div className="flex flex-col gap-6">
-      <header className="flex items-end justify-between gap-6">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Requests</h1>
-          <p className="text-sm text-muted">Every request an agent (or you, once) fired at the marketplace. Click one for the live ledger.</p>
-        </div>
-        <div className="flex flex-col items-end gap-1.5">
-          <div className="flex gap-2">
+    <div className="flex flex-col gap-8">
+      <PageIntro
+        eyebrow="INTERNAL / AGENT WORKFLOW OBSERVABILITY"
+        title={
+          <>
+            One task. <em>Every handoff.</em>
+          </>
+        }
+        lede="Every request an agent (or you, once) fired at the marketplace. Click one for the live settlement ledger. Trust is memory: after one run A stops hiring B. Reset the catalog to replay the escalation scene."
+        action={
+          <>
+            <form action={fireDemoRequest}>
+              <button type="submit" className="btn-ink w-full min-w-[280px]">
+                <span>Fire demo request</span>
+                <strong>→</strong>
+              </button>
+            </form>
             <form action={resetCatalog}>
               <button
                 type="submit"
                 title="Restore seeded axes, wallets and an empty pairwise-trust graph. The ledger is never touched."
-                className="rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-panel"
+                className="btn-ghost w-full justify-between"
               >
                 Reset catalog
               </button>
             </form>
-            <form action={fireDemoRequest}>
-              <button type="submit" className="rounded-md bg-accent text-background px-4 py-2 text-sm font-medium hover:opacity-90">
-                Fire demo request
-              </button>
-            </form>
-          </div>
-          <p className="text-xs text-muted">Trust is memory: after one run A stops hiring B. Reset the catalog to replay the escalation scene.</p>
-        </div>
-      </header>
+          </>
+        }
+      />
 
-      <Panel title={`${rows.length} request${rows.length === 1 ? "" : "s"}`}>
+      <Panel title={`${rows.length} request${rows.length === 1 ? "" : "s"}`} eyebrow="MARKET LEDGER" aside={<Badge value="live" />}>
         {rows.length === 0 ? (
           <Empty>
-            Nothing yet. Fire the demo above, or <code>POST /api/v1/requests</code> as an agent.
+            Waiting for a mandate. Fire the demo above, or <code>POST /api/v1/requests</code> as an agent.
           </Empty>
         ) : (
           <table className="w-full">
@@ -60,9 +63,9 @@ export default async function ConsolePage() {
             </thead>
             <tbody>
               {rows.map((r) => (
-                <tr key={r.request_id} className="border-t border-border hover:bg-background/40">
+                <tr key={r.request_id} className="border-t border-line hover:bg-paper/80">
                   <Td>
-                    <Link href={`/console/requests/${r.request_id}`} className="mono text-xs text-accent hover:underline">
+                    <Link href={`/console/requests/${r.request_id}`} className="mono text-xs text-teal hover:underline">
                       {r.request_id}
                     </Link>
                   </Td>

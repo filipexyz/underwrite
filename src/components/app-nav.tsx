@@ -3,6 +3,22 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+export function opsHintForPath(pathname: string, fallback: string): string {
+  if (pathname.startsWith("/admin")) return "admin · config · audit";
+  if (pathname.startsWith("/console")) return "console · live ledger";
+  if (pathname.startsWith("/interviews")) return "interviews · agora gpt live";
+  if (pathname.startsWith("/agents/register")) return "register · seller manifest";
+  if (pathname.startsWith("/agents")) return "agents · your fleet";
+  if (pathname.startsWith("/keys")) return "keys · self-serve";
+  if (pathname.startsWith("/account")) return "account · test credits";
+  return fallback;
+}
+
+export function OpsHint({ fallback }: { fallback: string }) {
+  const pathname = usePathname() ?? "/";
+  return <span className="hidden lg:inline eyebrow !m-0 text-muted">{opsHintForPath(pathname, fallback)}</span>;
+}
+
 const LINKS = [
   { href: "/", label: "home", match: (path: string) => path === "/" },
   { href: "/console", label: "console", match: (path: string) => path.startsWith("/console") },
@@ -22,43 +38,13 @@ export function AppNav() {
         <Link
           key={link.href}
           href={link.href}
-          className={link.match(pathname) ? "text-foreground" : "text-muted hover:text-foreground"}
+          className={`font-mono text-[10px] font-medium tracking-[1px] uppercase ${
+            link.match(pathname) ? "text-ink" : "text-muted hover:text-ink"
+          }`}
         >
           {link.label}
         </Link>
       ))}
     </>
   );
-}
-
-export function AppBrand({ fallback }: { fallback: string }) {
-  const pathname = usePathname() ?? "/";
-  const section = sectionFromPath(pathname) ?? fallback;
-  return (
-    <Link href={sectionHref(section)} className="font-semibold tracking-tight">
-      underwrite<span className="text-muted">/{section}</span>
-    </Link>
-  );
-}
-
-export function sectionFromPath(pathname: string): string {
-  if (pathname.startsWith("/admin")) return "admin";
-  if (pathname.startsWith("/console")) return "console";
-  if (pathname.startsWith("/interviews")) return "interviews";
-  if (pathname.startsWith("/agents/register")) return "register";
-  if (pathname.startsWith("/agents")) return "agents";
-  if (pathname.startsWith("/account")) return "account";
-  if (pathname.startsWith("/keys")) return "keys";
-  return "home";
-}
-
-export function sectionHref(section: string): string {
-  if (section === "console") return "/console";
-  if (section === "interviews") return "/interviews";
-  if (section === "admin") return "/admin";
-  if (section === "register") return "/agents/register";
-  if (section === "agents") return "/agents";
-  if (section === "account") return "/account";
-  if (section === "keys") return "/keys";
-  return "/";
 }

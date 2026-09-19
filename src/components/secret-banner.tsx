@@ -15,17 +15,14 @@ export function SecretBanner({ secret, label = "API secret" }: { secret: string;
   }
 
   return (
-    <div className="rounded-lg border border-accent/40 bg-accent/5 p-4 flex flex-col gap-2">
-      <p className="text-xs uppercase tracking-wider text-muted">copy once · {label}</p>
-      <p className="text-sm text-muted">This plaintext is not stored. Leave this page and it is gone.</p>
+    <div className="certificate">
+      <p className="eyebrow !mb-2 !text-ink">copy once · {label}</p>
+      <p className="font-sans text-sm text-ink/80 mb-3">This plaintext is not stored. Leave this page and it is gone.</p>
       <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
-        <code className="mono text-xs break-all rounded bg-background border border-border px-2 py-1.5 flex-1">{secret}</code>
-        <button
-          type="button"
-          onClick={copy}
-          className="rounded-md bg-accent text-background px-3 py-1.5 text-sm font-medium hover:opacity-90 shrink-0"
-        >
-          {copied ? "Copied" : "Copy"}
+        <code className="mono text-xs break-all bg-paper border border-ink px-2 py-1.5 flex-1 text-ink">{secret}</code>
+        <button type="button" onClick={copy} className="btn-ink shrink-0">
+          <span>{copied ? "Copied" : "Copy"}</span>
+          <strong>→</strong>
         </button>
       </div>
     </div>
