@@ -156,8 +156,9 @@ bids, plans, escrows, both verifications, and the **live ledger** (polls `?after
    right fit for Vercel functions).
 2. `DATABASE_URL=postgresql://…` in `.env.local`.
 3. `pnpm db:migrate` applies the committed SQL in [`drizzle/`](drizzle/) (`0000_init.sql`) with Drizzle's
-   migrator. `pnpm db:seed` inserts the catalog (idempotent — safe to re-run; it also resets axes,
-   wallets and clears pairwise trust).
+   migrator (on Vercel this happens automatically as part of `pnpm build`). `pnpm db:seed` inserts the
+   catalog — a one-time step: it is idempotent, but it also resets axes, wallets and clears pairwise
+   trust, so it is never run by the build.
 4. Changed `src/lib/db/schema.ts`? `pnpm db:generate` writes the next migration; commit it.
 
 Tables (mirroring `docs/CONTRACTS.md`): `agents`, `trust_axes`, `trust_pairwise`, `wallets`, `requests`,
@@ -190,9 +191,22 @@ with or without a provider.
 ### Vercel
 
 Import the repo, set `DATABASE_URL` (required — the PGlite fallback is local-only), the Clerk keys and
-whatever else you want on, deploy. The workflow runs inside the `POST` function via `after()`
-(`maxDuration = 60`); simulated latency is not wall time, so a full run takes well under a second unless
-you set `DEMO_STEP_DELAY_MS` for stage pacing.
+whatever else you want on, deploy.
+
+- **Migrations run on every deploy.** The build script is `pnpm db:migrate && next build`, so pending
+  SQL in [`drizzle/`](drizzle/) is applied to `DATABASE_URL` before Next compiles. Drizzle's migrator is
+  idempotent: already-applied migrations are skipped, and a deploy with nothing new is a no-op.
+- **Without `DATABASE_URL` the build fails fast** with an explicit message instead of silently building
+  against an embedded database that would vanish per invocation. Every Vercel environment that deploys
+  (Production *and* Preview) needs its own URL — a [Neon branch](https://neon.tech/docs/introduction/branching)
+  per preview works well.
+- **Seeding is not part of the build.** `pnpm db:seed` resets axes, wallets and pairwise trust, which
+  would erase what the marketplace has learned between deploys. Run it **once**, by hand, after the first
+  deploy — `DATABASE_URL='postgresql://…' pnpm db:seed` from your machine — and again only when you
+  deliberately want to reset the catalog (the console's **Reset catalog** button does the same).
+
+The workflow runs inside the `POST` function via `after()` (`maxDuration = 60`); simulated latency is not
+wall time, so a full run takes well under a second unless you set `DEMO_STEP_DELAY_MS` for stage pacing.
 
 ---
 
@@ -200,8 +214,9 @@ you set `DEMO_STEP_DELAY_MS` for stage pacing.
 
 | Script | What |
 |--------|------|
-| `pnpm dev` / `pnpm build` / `pnpm start` | Next.js |
-| `pnpm db:migrate` | Apply `drizzle/*.sql` to `DATABASE_URL` (or `./.data/pglite`) |
+| `pnpm dev` / `pnpm start` | Next.js dev / production server |
+| `pnpm build` | `pnpm db:migrate && next build` — migrates first, so Vercel deploys apply pending migrations |
+| `pnpm db:migrate` | Apply `drizzle/*.sql` to `DATABASE_URL` (or `./.data/pglite`); idempotent |
 | `pnpm db:seed` | (Re)seed the catalog, axes, wallets; clear pairwise trust |
 | `pnpm db:generate` | Diff `src/lib/db/schema.ts` → new migration |
 | `pnpm demo [--base URL] [--wait]` | Fire the demo request over HTTP and stream the ledger |
