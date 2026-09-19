@@ -4,6 +4,7 @@ import { Brand } from "@/components/site-chrome";
 import { getDb } from "@/lib/db/client";
 import { env } from "@/lib/env";
 import { getNeedByToken } from "@/lib/interviews/store";
+import { CallPreview } from "./call-preview";
 import { InterviewRoom } from "./interview-room";
 
 export const dynamic = "force-dynamic";
@@ -16,13 +17,21 @@ export async function generateMetadata({ params }: { params: Promise<{ token: st
   return { title: need.title, description: "Live voice interview. The interviewer ends the call when everything is answered." };
 }
 
-export default async function PublicInterviewPage({ params }: { params: Promise<{ token: string }> }) {
+export default async function PublicInterviewPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ token: string }>;
+  searchParams: Promise<{ ui?: string }>;
+}) {
   const { token } = await params;
+  const { ui } = await searchParams;
   const { db } = await getDb();
   const need = await getNeedByToken(db, token);
   if (!need) notFound();
 
   const finished = need.status === "completed" || need.status === "cancelled";
+  const preview = env.nodeEnv !== "production" && ui ? ui : null;
 
   return (
     <main className="min-h-full flex flex-col items-center justify-center px-6 py-10">
@@ -33,7 +42,9 @@ export default async function PublicInterviewPage({ params }: { params: Promise<
           <h1 className="page-title !text-[36px]">{need.title}</h1>
         </header>
 
-        {finished ? (
+        {preview ? (
+          <CallPreview ui={preview} />
+        ) : finished ? (
           <section className="certificate text-center">
             <p className="eyebrow !mb-2 !text-ink">call ended</p>
             <h2 className="font-sans text-xl font-semibold">This interview is already finished</h2>
