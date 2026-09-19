@@ -1,13 +1,20 @@
 /**
- * Test credits. No real money. Clerk users and registered seller agents
- * start at $1000; the seeded A/B/C1/C2/J1/J2 wallets stay as catalog data.
+ * Test credits. No real money.
+ *
+ * Clerk users (and `local-dev`) start at $1000. Registered seller agents
+ * start at $0 and earn by being hired. Seed catalog wallets stay as
+ * A/B/C1/C2/J1/J2 data and are never granted or healed to $1000.
  */
 import { eq } from "drizzle-orm";
 import { SYSTEM_WALLETS } from "@/lib/contracts";
 import type { Db } from "@/lib/db/client";
 import { wallets, type WalletRow } from "@/lib/db/schema";
 
+/** Clerk user / `local-dev` starting grant. Agents do not receive this. */
 export const STARTING_TEST_CREDITS_USD = 1000;
+
+/** Registered seller agents start empty and earn by being hired. */
+export const STARTING_AGENT_CREDITS_USD = 0;
 
 const SYSTEM_OWNER_IDS = new Set<string>(Object.values(SYSTEM_WALLETS));
 
@@ -53,9 +60,9 @@ export function ensureUserWallet(db: Db, clerkUserId: string): Promise<WalletRow
   return ensureWallet(db, clerkUserId, STARTING_TEST_CREDITS_USD);
 }
 
-/** Registered seller agent wallet. Seed catalog wallets are left alone. */
+/** Registered seller agent wallet at $0 if missing. Never grants $1000. Never resets an existing balance. */
 export function ensureAgentWallet(db: Db, agentId: string): Promise<WalletRow> {
-  return ensureWallet(db, agentId, STARTING_TEST_CREDITS_USD);
+  return ensureWallet(db, agentId, STARTING_AGENT_CREDITS_USD);
 }
 
 export async function listWallets(db: Db): Promise<WalletRow[]> {

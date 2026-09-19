@@ -64,7 +64,7 @@ screen the whole time: **`human_interventions: 0`** — computed from the ledger
 | Layer | Choice | Where |
 |-------|--------|-------|
 | App / API | **Next.js 16** App Router, TypeScript, Route Handlers, deployable on **Vercel** | `src/app/` |
-| Human console auth | **Clerk** (`clerkMiddleware` in `src/proxy.ts`) protects `/console`, `/keys`, `/agents/register`, `/admin`. Admin is `publicMetadata.role === "admin"` | `src/proxy.ts`, `src/lib/auth/`, `src/app/admin/` |
+| Human console auth | **Clerk** (`clerkMiddleware` in `src/proxy.ts`) protects `/console`, `/keys`, `/account`, `/agents`, `/admin`. Admin is `publicMetadata.role === "admin"` | `src/proxy.ts`, `src/lib/auth/`, `src/app/admin/` |
 | System of record | **Neon** (Postgres) via **Drizzle ORM** + `@neondatabase/serverless` (HTTP driver); embedded **PGlite** fallback for local dev and tests | `src/lib/db/`, `drizzle/` |
 | Orchestration | **Mastra** workflow (`auction → contract → dountil(execute → verify → settle)`) wrapping stateless engine steps; state lives in Neon between hops | `src/mastra/`, `src/lib/marketplace/engine.ts` |
 | Model calls | Vercel AI SDK (`ai` + `@ai-sdk/openai-compatible`) → any OpenAI-compatible endpoint (NeuraLake); deterministic simulation when no key | `src/lib/observability/inference.ts` |
@@ -136,7 +136,7 @@ the response (`after()`). Append `?wait=1` to block until the loop settles and g
 | `GET /api/v1/requests/[id]` | Status, chain, bids, plans, escrows, verifications, attributions, full ledger, derived metrics incl. `human_interventions`. |
 | `GET /api/v1/requests/[id]/events` | The append-only ledger. `?after=<seq>` for live polling. |
 | `GET /api/v1/agents/me` | Seller-key profile for the bound agent. |
-| `PATCH /api/v1/agents/me` | Seller-key update of hireable fields (not status — admin disables). |
+| `PATCH /api/v1/agents/me` | Seller-key update of hireable fields (not status — the owner disables on `/agents/[id]`, admin on `/admin`). |
 
 Request routes accept **either** the legacy env `UNDERWRITE_API_KEY` **or** a non-revoked hashed **buyer**
 key (`Authorization: Bearer <key>` or `x-api-key`). If the env is unset and no key is presented, the
@@ -152,19 +152,22 @@ Admin is **not** a key-mint desk. Buyers and sellers issue their own credentials
 
 | Page | What |
 |------|------|
-| `/account` | Your **user wallet** balance ($1000.00 test credits on first sign-in) plus any registered seller-agent wallets. |
+| `/account` | Your **user wallet** balance ($1000.00 test credits on first sign-in) plus any registered seller-agent wallets (those start at **$0**). |
 | `/keys` | Create / list / revoke **buyer** keys; create / list / revoke **seller** keys bound to an agent you own. Full secret is shown **once**. Also shows the user wallet. |
-| `/agents/register` | Register a hireable agent (manifest fields: name, role, specialties, model family, cost ceiling, …). Creates the row + a **$1000.00** seller wallet + a seller key (shown once). |
+| `/agents` | List agents you own (name, id, role, status, specialties, wallet). Empty state links to register. |
+| `/agents/[id]` | Owner detail: full manifest, wallet, seller-key prefixes, edit, disable/enable, rotate/revoke keys. |
+| `/agents/register` | Register a hireable agent (manifest fields: name, role, specialties, model family, cost ceiling, …). Creates the row + a **$0** seller wallet + a seller key (shown once on the new detail page). |
 
-`POST /api/account/keys` and `POST /api/account/agents` are the same flows over JSON (Clerk session).
-`GET /api/account/wallet` returns your test-credit balance.
+`GET/POST/PATCH /api/account/agents` and `GET/PATCH /api/account/agents/[id]` are the same owner flows over JSON (Clerk session).
+`GET /api/account/wallet` returns your user test-credit balance.
 
 Every Clerk user (and `local-dev` when Clerk is off) gets a wallet of **$1000.00 test credits**
-on first visit — idempotent, never reset. Registered seller agents get the same $1000 wallet
-(seed A/B/C1/C2/J1/J2 keep their catalog balances). A buyer key owned by a user **checks** that
-wallet against `max_cost_usd` (`402` if short) and **debits it** on escrow lock / credits it on
-refund, using the same `wallets` table the agents already use. Public / legacy / console demo
-requests still spend the system `buyer` wallet so the demoday loop is unchanged. **No real money.**
+on first visit — idempotent, never reset. **Only users get that grant.** Registered seller agents
+start at **$0.00** and earn by being hired (seed A/B/C1/C2/J1/J2 keep their catalog balances). A
+buyer key owned by a user **checks** the user wallet against `max_cost_usd` (`402` if short) and
+**debits it** on escrow lock / credits it on refund, using the same `wallets` table the agents
+already use. Public / legacy / console demo requests still spend the system `buyer` wallet so the
+demoday loop is unchanged. **No real money.**
 
 Buyer key against the marketplace:
 
@@ -202,7 +205,8 @@ vars — documented on the page.
    right fit for Vercel functions).
 2. `DATABASE_URL=postgresql://…` in `.env.local`.
 3. `pnpm db:migrate` applies the committed SQL in [`drizzle/`](drizzle/) (`0000_init.sql`,
-   `0001_api_keys_and_seller_agents.sql`, `0002_buyer_wallet_and_credits.sql`, …) with Drizzle's
+   `0001_api_keys_and_seller_agents.sql`, `0002_buyer_wallet_and_credits.sql`,
+   `0003_agent_description.sql`, …) with Drizzle's
    migrator (on Vercel this happens automatically as part of `pnpm build`). `pnpm db:seed` inserts the
    catalog — a one-time step: it is idempotent, but it also resets axes, wallets and clears pairwise
    trust, so it is never run by the build. **Seed is still required once on Neon.** An empty hireable
@@ -210,7 +214,7 @@ vars — documented on the page.
 4. Changed `src/lib/db/schema.ts`? `pnpm db:generate` writes the next migration; commit it.
 
 Tables (mirroring `docs/CONTRACTS.md`): `agents` (plus seller fields `status`, `owner_clerk_user_id`,
-`contact`, `webhook_url`), `api_keys` (hashed secrets only), `trust_axes`, `trust_pairwise`, `wallets`,
+`contact`, `webhook_url`, `description`), `api_keys` (hashed secrets only), `trust_axes`, `trust_pairwise`, `wallets`,
 `requests` (plus optional `buyer_wallet_id` for user-funded requests), `bids`, `plans`, `escrows`,
 `verifications`, `ledger_events`, `attributions`.
 
@@ -219,7 +223,7 @@ Tables (mirroring `docs/CONTRACTS.md`): `agents` (plus seller fields `status`, `
 1. Create an application at [dashboard.clerk.com](https://dashboard.clerk.com) → **API keys**.
 2. `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` in `.env.local`.
 3. `src/proxy.ts` runs `clerkMiddleware` and `auth.protect()` on `/console`, `/keys`, `/account`,
-   `/agents/register`, `/admin`, plus `/api/account/*` and `/api/admin/*`. Sign-in uses Clerk's hosted
+   `/agents`, `/admin`, plus `/api/account/*` and `/api/admin/*`. Sign-in uses Clerk's hosted
    Account Portal. With either key missing the proxy is a pass-through and those pages are open (local
    dev, treated as user `local-dev`).
 
@@ -313,10 +317,10 @@ src/lib/verification/
 src/mastra/               Mastra instance + marketplace workflow
 src/lib/auth/             hashed API keys, buyer/seller auth helper, Clerk admin guard
 src/app/api/v1/           agent-facing route handlers (requests + seller `/agents/me`)
-src/app/api/account/      Clerk-session self-serve key + agent registration APIs
+src/app/api/account/      Clerk-session self-serve key + owner agent APIs
 src/app/api/admin/        Clerk-admin list/disable/revoke/audit APIs
 src/app/console/          Clerk-protected debug console with live ledger
-src/app/(human)/          `/keys`, `/account`, `/agents/register`
+src/app/(human)/          `/keys`, `/account`, `/agents`, `/agents/register`
 src/app/admin/            configuration + audit (403 for non-admins)
 ```
 
@@ -345,7 +349,7 @@ Next, in order — cut from the bottom:
 6. **Calibration**: run the scene many times, tune EMA alphas and the `hardcoded_v0` weights against outcomes.
 
 Self-serve buyer/seller keys and seller registration shipped as a vertical slice (hashed `api_keys`,
-`/keys`, `/agents/register`, `/admin`). Seed catalog A/B/C1/C2/J1/J2 remains the demoday loop.
+`/keys`, `/agents`, `/agents/register`, `/admin`). Seed catalog A/B/C1/C2/J1/J2 remains the demoday loop.
 
 Explicitly **not** built, by decision ([`docs/NEXT.md`](docs/NEXT.md)): Langflow as executor host, deep
 multi-round negotiation, Jev-based marketplace selection, real payment rails.

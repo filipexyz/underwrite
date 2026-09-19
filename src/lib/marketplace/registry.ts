@@ -6,7 +6,7 @@
 import { and, eq } from "drizzle-orm";
 import type { AgentRole, AxisVector } from "@/lib/contracts";
 import type { Db } from "@/lib/db/client";
-import { agents, axesFromRow, trustAxes, trustPairwise, type AgentRow } from "@/lib/db/schema";
+import { agents, axesFromRow, trustAxes, trustPairwise, type AgentRow, type AgentStatus } from "@/lib/db/schema";
 
 export type RegistryAgent = AgentRow & {
   axes: AxisVector;
@@ -28,6 +28,11 @@ const TRUST_WEIGHTS: Array<[keyof AxisVector, number]> = [
   ["cost_honesty", 0.1],
   ["judgment", 0.4],
 ];
+
+/** Disabled agents are not invited to auctions and cannot be hired as subs. */
+export function isHireableAgent(row: { status: AgentStatus | string }): boolean {
+  return row.status !== "disabled";
+}
 
 /** Weighted mean of the axes an agent actually has. Becomes the bid's `trust_global_snapshot`. */
 export function trustGlobal(axes: AxisVector): number {
@@ -61,7 +66,7 @@ export async function loadRegistry(db: Db, category: string): Promise<Registry> 
 
   const map = new Map<string, RegistryAgent>();
   for (const row of agentRows) {
-    if (row.status === "disabled") continue;
+    if (!isHireableAgent(row)) continue;
     const axes = axesByAgent.get(row.agentId) ?? emptyAxes;
     map.set(row.agentId, { ...row, axes, trust_global: trustGlobal(axes) });
   }
@@ -88,6 +93,7 @@ export function discover(
 ): RegistryAgent[] {
   const exclude = new Set(opts.exclude ?? []);
   return [...registry.agents.values()]
+    .filter((a) => isHireableAgent(a))
     .filter((a) => a.specialties.includes(opts.specialty))
     .filter((a) => !exclude.has(a.agentId))
     .filter((a) => (opts.roles ? opts.roles.includes(a.role as AgentRole) : a.role !== "judge"))

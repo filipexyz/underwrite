@@ -6,7 +6,7 @@
  * key; `/api/v1/agents/me` needs a seller key tied to an agent.
  */
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import type { Db } from "@/lib/db/client";
 import { apiKeys, type ApiKeyRole, type ApiKeyRow } from "@/lib/db/schema";
 import { newId } from "@/lib/ids";
@@ -128,15 +128,21 @@ export async function revokeApiKey(db: Db, id: string): Promise<ApiKeyRow | null
   return row ?? null;
 }
 
-export async function listApiKeys(db: Db, filter?: { ownerClerkUserId?: string }): Promise<ApiKeyRow[]> {
-  if (filter?.ownerClerkUserId) {
-    return db
-      .select()
-      .from(apiKeys)
-      .where(eq(apiKeys.ownerClerkUserId, filter.ownerClerkUserId))
-      .orderBy(desc(apiKeys.createdAt));
+export async function listApiKeys(
+  db: Db,
+  filter?: { ownerClerkUserId?: string; agentId?: string },
+): Promise<ApiKeyRow[]> {
+  const conditions = [];
+  if (filter?.ownerClerkUserId) conditions.push(eq(apiKeys.ownerClerkUserId, filter.ownerClerkUserId));
+  if (filter?.agentId) conditions.push(eq(apiKeys.agentId, filter.agentId));
+  if (conditions.length === 0) {
+    return db.select().from(apiKeys).orderBy(desc(apiKeys.createdAt));
   }
-  return db.select().from(apiKeys).orderBy(desc(apiKeys.createdAt));
+  return db
+    .select()
+    .from(apiKeys)
+    .where(and(...conditions))
+    .orderBy(desc(apiKeys.createdAt));
 }
 
 export function toPublicApiKey(row: ApiKeyRow): PublicApiKey {

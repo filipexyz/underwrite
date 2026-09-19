@@ -9,7 +9,7 @@ import type { Db } from "@/lib/db/client";
 import { agents, trustAxes, wallets, type AgentRow, type AgentStatus } from "@/lib/db/schema";
 import { issueApiKey, type PublicApiKey, toPublicApiKey } from "@/lib/auth/api-keys";
 import { newId } from "@/lib/ids";
-import { ensureAgentWallet } from "./credits";
+import { STARTING_AGENT_CREDITS_USD, ensureAgentWallet } from "./credits";
 import type { AgentPolicy, QuotePolicy } from "./types";
 
 const optionalText = z
@@ -31,12 +31,18 @@ export const AgentRegisterInput = z.object({
   risk_tolerance: RiskTolerance.default("mid"),
   contact: optionalText,
   webhook_url: optionalText,
+  description: optionalText,
 });
 export type AgentRegisterInput = z.input<typeof AgentRegisterInput>;
 export type AgentRegisterParsed = z.output<typeof AgentRegisterInput>;
 
 export const AgentPatchInput = AgentRegisterInput.partial();
 export type AgentPatchInput = z.infer<typeof AgentPatchInput>;
+
+export const AgentOwnerPatchInput = AgentPatchInput.extend({
+  status: z.enum(["disabled", "registered"]).optional(),
+});
+export type AgentOwnerPatchInput = z.infer<typeof AgentOwnerPatchInput>;
 
 const noSelection = {
   policy: "cheapest" as const,
@@ -133,11 +139,19 @@ export function toPublicAgent(row: AgentRow) {
     risk_tolerance: row.riskTolerance,
     contact: row.contact,
     webhook_url: row.webhookUrl,
+    description: row.description,
     policy: row.policy,
     owner_clerk_user_id: row.ownerClerkUserId,
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),
   };
+}
+
+export type PublicOwnedAgent = ReturnType<typeof toPublicAgent> & { wallet_usd: number };
+
+export async function toOwnedAgentView(db: Db, row: AgentRow): Promise<PublicOwnedAgent> {
+  const wallet = await ensureAgentWallet(db, row.agentId);
+  return { ...toPublicAgent(row), wallet_usd: wallet.capitalUsd };
 }
 
 export async function listOwnedAgents(db: Db, ownerClerkUserId: string): Promise<AgentRow[]> {
@@ -151,6 +165,17 @@ export async function listAllAgents(db: Db): Promise<AgentRow[]> {
 export async function getAgentRow(db: Db, agentId: string): Promise<AgentRow | null> {
   const [row] = await db.select().from(agents).where(eq(agents.agentId, agentId)).limit(1);
   return row ?? null;
+}
+
+export function isOwnedBy(row: AgentRow, clerkUserId: string): boolean {
+  return row.ownerClerkUserId === clerkUserId;
+}
+
+/** Owner-only fetch. Returns null when the agent is missing or belongs to someone else. */
+export async function getOwnedAgent(db: Db, agentId: string, clerkUserId: string): Promise<AgentRow | null> {
+  const row = await getAgentRow(db, agentId);
+  if (!row || !isOwnedBy(row, clerkUserId)) return null;
+  return row;
 }
 
 export async function registerSellerAgent(
@@ -179,14 +204,26 @@ export async function registerSellerAgent(
       ownerClerkUserId,
       contact: input.contact ?? null,
       webhookUrl: input.webhook_url ?? null,
+      description: input.description ?? null,
     })
     .returning();
 
-  await ensureAgentWallet(db, agentId);
-  await db
-    .update(wallets)
-    .set({ riskTolerance: input.risk_tolerance, updatedAt: new Date() })
-    .where(eq(wallets.ownerId, agentId));
+  const [createdWallet] = await db
+    .insert(wallets)
+    .values({
+      ownerId: agentId,
+      capitalUsd: STARTING_AGENT_CREDITS_USD,
+      riskTolerance: input.risk_tolerance,
+    })
+    .onConflictDoNothing()
+    .returning();
+  if (!createdWallet) {
+    await ensureAgentWallet(db, agentId);
+    await db
+      .update(wallets)
+      .set({ riskTolerance: input.risk_tolerance, updatedAt: new Date() })
+      .where(eq(wallets.ownerId, agentId));
+  }
 
   for (const specialty of input.specialties.filter((s) => !s.startsWith("judge:"))) {
     await db
@@ -243,6 +280,7 @@ export async function patchAgentProfile(
       riskTolerance: patch.risk_tolerance ?? existing.riskTolerance,
       contact: patch.contact === undefined ? existing.contact : (patch.contact ?? null),
       webhookUrl: patch.webhook_url === undefined ? existing.webhookUrl : (patch.webhook_url ?? null),
+      description: patch.description === undefined ? existing.description : (patch.description ?? null),
       policy:
         patch.role || patch.specialties || patch.baseline_confidence || patch.cost_ceiling_usd
           ? defaultRegisteredPolicy({
@@ -270,4 +308,22 @@ export async function setAgentStatus(db: Db, agentId: string, status: AgentStatu
     .where(eq(agents.agentId, agentId))
     .returning();
   return row ?? null;
+}
+
+/** Owner-only profile + enable/disable. Null when the caller does not own the agent. */
+export async function patchOwnedAgent(
+  db: Db,
+  agentId: string,
+  clerkUserId: string,
+  patch: AgentOwnerPatchInput,
+): Promise<AgentRow | null> {
+  const existing = await getOwnedAgent(db, agentId, clerkUserId);
+  if (!existing) return null;
+
+  const { status, ...profile } = patch;
+  const updated = await patchAgentProfile(db, agentId, profile);
+  const row = updated ?? existing;
+  if (status === "disabled") return setAgentStatus(db, agentId, "disabled");
+  if (status === "registered") return setAgentStatus(db, agentId, enableStatusFor(row));
+  return row;
 }

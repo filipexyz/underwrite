@@ -5,7 +5,7 @@ import { requireSignedInPage } from "@/lib/auth/session";
 export default async function HumanLayout({ children }: { children: ReactNode }) {
   await requireSignedInPage();
   return (
-    <AppShell section="account" hint="self-serve · mint your own keys">
+    <AppShell section="account" hint="self-serve · agents and keys">
       {children}
     </AppShell>
   );

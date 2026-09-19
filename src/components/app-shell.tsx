@@ -1,16 +1,7 @@
 import { UserButton } from "@clerk/nextjs";
-import Link from "next/link";
 import type { ReactNode } from "react";
+import { AppBrand, AppNav } from "@/components/app-nav";
 import { env } from "@/lib/env";
-
-const LINKS = [
-  { href: "/", label: "home" },
-  { href: "/console", label: "console" },
-  { href: "/account", label: "account" },
-  { href: "/keys", label: "keys" },
-  { href: "/agents/register", label: "register" },
-  { href: "/admin", label: "admin" },
-] as const;
 
 export function AppShell({
   section,
@@ -26,14 +17,8 @@ export function AppShell({
       <nav className="border-b border-border bg-panel/60 backdrop-blur">
         <div className="mx-auto w-full max-w-6xl px-6 h-12 flex items-center justify-between">
           <div className="flex items-center gap-6 text-sm">
-            <Link href={sectionHref(section)} className="font-semibold tracking-tight">
-              underwrite<span className="text-muted">/{section}</span>
-            </Link>
-            {LINKS.map((link) => (
-              <Link key={link.href} href={link.href} className="text-muted hover:text-foreground">
-                {link.label}
-              </Link>
-            ))}
+            <AppBrand fallback={section} />
+            <AppNav />
           </div>
           <div className="flex items-center gap-3 text-xs text-muted">
             <span className="mono">{hint}</span>
@@ -44,12 +29,4 @@ export function AppShell({
       <div className="mx-auto w-full max-w-6xl px-6 py-8 flex-1">{children}</div>
     </div>
   );
-}
-
-function sectionHref(section: string): string {
-  if (section === "console") return "/console";
-  if (section === "admin") return "/admin";
-  if (section === "register") return "/agents/register";
-  if (section === "account") return "/account";
-  return "/keys";
 }
