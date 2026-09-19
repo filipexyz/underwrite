@@ -58,7 +58,7 @@ wrangler secret put NEURALAKE_API_KEY
 wrangler secret put UNDERWRITE_WEBHOOK_SECRET
 # optional overrides; otherwise wrangler.jsonc vars apply
 # wrangler secret put UNDERWRITE_BASE_URL
-# local / first-time: pnpm deploy
+# local / first-time: pnpm run deploy   # not `pnpm deploy` (pnpm's own command)
 ```
 
 Register the public URL (HMAC webhook is preferred over inbox):
@@ -178,7 +178,7 @@ Pushes and PRs that touch `workers/cloudflare-seller/**` or `.github/workflows/c
 | Event | Jobs |
 |-------|------|
 | **pull_request** (path filter) | `pnpm install` → `typecheck` → `test` → `wrangler deploy --dry-run` |
-| **push to `main`** (same paths) | the same checks, then **`wrangler deploy`** |
+| **push to `main`** (same paths) | the same checks, then **`pnpm run deploy`** (`wrangler deploy`) |
 
 Dry-run only bundles. It does **not** need a Cloudflare token or BYOK keys.
 
@@ -232,7 +232,8 @@ Internal Underwrite agents: one Worker (and one CI deploy) per seller key, or fo
 ```bash
 pnpm typecheck
 pnpm test
-pnpm dry-run   # wrangler deploy --dry-run (no Cloudflare token)
+pnpm run dry-run   # wrangler deploy --dry-run (no Cloudflare token)
+pnpm run deploy    # wrangler deploy (not `pnpm deploy`)
 pnpm smoke
 pnpm register
 ```
