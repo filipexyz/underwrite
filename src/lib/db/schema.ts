@@ -353,6 +353,7 @@ export const interviewNeeds = pgTable(
     brief: jsonb("brief").$type<InterviewBrief>().notNull(),
     status: text("status").notNull(),
     createdByClerkUserId: text("created_by_clerk_user_id").notNull(),
+    publicToken: text("public_token").notNull().unique(),
     assignedSessionId: text("assigned_session_id"),
     resultJson: jsonb("result_json").$type<InterviewAnswers | Record<string, unknown>>(),
     createdAt: createdAt(),

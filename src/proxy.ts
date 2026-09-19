@@ -1,8 +1,9 @@
 /**
  * Clerk protects human surfaces. Agent-facing `/api/v1/*` stays out of Clerk
  * and is gated by hashed API keys (or the legacy `UNDERWRITE_API_KEY`).
- * `/interviews` is the creator pool (Clerk). `/i/[token]` is public — possession
- * of the invite token is auth. Interviewees are not Underwrite users.
+ * `/interviews` is the creator pool (Clerk). `/i/[token]` and
+ * `/api/v1/interviews/i/*` are public — possession of the invite token is auth.
+ * Interviewees are not Underwrite users.
  *
  * Without Clerk keys the proxy is a pass-through, so the loop runs locally
  * with an empty `.env`.

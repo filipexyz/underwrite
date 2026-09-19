@@ -2,8 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Badge, Empty, Panel, Td, Th } from "@/app/console/ui";
 import { getDb } from "@/lib/db/client";
-import { env } from "@/lib/env";
 import { getNeedDetail } from "@/lib/interviews/store";
+import { CopyInvite } from "../copy-invite";
 import { SetupBanner } from "../setup-banner";
 
 export const dynamic = "force-dynamic";
@@ -14,7 +14,7 @@ export default async function InterviewNeedPage({ params }: { params: Promise<{ 
   const detail = await getNeedDetail(db, id);
   if (!detail) notFound();
   const { need, sessions } = detail;
-  const canJoin = need.status === "open" || need.status === "in_progress";
+  const invitePath = `/i/${need.publicToken}`;
 
   return (
     <div className="flex flex-col gap-6">
@@ -31,18 +31,13 @@ export default async function InterviewNeedPage({ params }: { params: Promise<{ 
 
       <SetupBanner />
 
-      <div className="flex flex-wrap items-center gap-3">
-        {canJoin && env.agora.enabled ? (
-          <Link
-            href={`/interviews/${need.id}/join`}
-            className="rounded-md bg-accent text-background px-4 py-2 text-sm font-medium hover:opacity-90"
-          >
-            Join interview
-          </Link>
-        ) : canJoin ? (
-          <span className="rounded-md border border-border px-4 py-2 text-sm text-muted">Join interview (Agora not configured)</span>
-        ) : null}
-      </div>
+      <Panel title="Interviewee link">
+        <p className="text-sm text-muted mb-3">
+          Send this link. The human only sees a mic + the agent — no console, no Clerk. Possession of the token is auth.
+          After the need is completed the link is spent.
+        </p>
+        <CopyInvite path={invitePath} />
+      </Panel>
 
       <Panel title="Brief">
         <dl className="grid gap-3 text-sm md:grid-cols-2">
@@ -91,7 +86,7 @@ export default async function InterviewNeedPage({ params }: { params: Promise<{ 
             {JSON.stringify(need.resultJson, null, 2)}
           </pre>
         ) : (
-          <Empty>No answers yet. Join an interview and finalize the session.</Empty>
+          <Empty>No answers yet. Share the interviewee link; results land here after Finish.</Empty>
         )}
       </Panel>
 

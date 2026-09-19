@@ -16,8 +16,8 @@ export default async function InterviewsPage() {
       <header className="flex flex-col gap-2">
         <h1 className="text-2xl font-semibold tracking-tight">Interview pool</h1>
         <p className="text-sm text-muted max-w-2xl">
-          Register a need that requires a human. A GPT Live voice agent interviews them over Agora and writes structured
-          answers back into Underwrite — later used as marketplace context, research, or onboarding.
+          Register a need, copy the interviewee link, and send it. The human only opens that link (mic + agent).
+          Structured answers land back here.
         </p>
       </header>
 
@@ -29,7 +29,7 @@ export default async function InterviewsPage() {
 
       <Panel title={`${rows.length} need${rows.length === 1 ? "" : "s"}`}>
         {rows.length === 0 ? (
-          <Empty>Nothing yet. Register a brief above.</Empty>
+          <Empty>Nothing yet. Register a brief above, then copy the interviewee link.</Empty>
         ) : (
           <table className="w-full">
             <thead>

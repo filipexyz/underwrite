@@ -230,14 +230,12 @@ needs still works. Marketplace routes are unchanged.
 
 ### Flow
 
-1. Open `/interviews` (Clerk-protected when Clerk keys are set, same as `/console`).
-2. Register a need. `POST /api/v1/interviews/needs`.
-3. Open the need → **Join interview** → **Start conversation**. The server mints an RTC+RTM token,
-   starts `OpenAIGPTLive` with a prompt built from the brief, and returns `channel`, `token`, `uid`.
-4. The browser joins with `agora-rtc-sdk-ng` (mic) and `agora-rtm` (transcript / agent state).
-5. **End and save answers** → `POST /api/v1/interviews/sessions/[id]/finalize` stops the agent,
-   parses the agent's final JSON (or a post-call extract if a model provider is configured), and
-   writes `result_json` on the need.
+1. Open `/interviews` (Clerk-protected when Clerk keys are set). Register a need.
+2. Copy the **interviewee link** `/i/[token]` (unguessable; possession is auth — no Clerk).
+3. The human opens that page only: Start → mic + GPT Live agent. No console chrome.
+4. **Finish** → `POST /api/v1/interviews/i/[token]/finalize` stops the agent, parses the final JSON
+   (or a post-call extract), writes `result_json` on the need. The link is spent (`completed`).
+5. The creator reads answers on `/interviews/[id]`.
 
 ### APIs
 
@@ -246,11 +244,14 @@ needs still works. Marketplace routes are unchanged.
 | `POST /api/v1/interviews/needs` | Create a need (Clerk session, or open when Clerk is off). |
 | `GET /api/v1/interviews/needs` | List. Includes `{ agora: { enabled, missing } }`. |
 | `GET /api/v1/interviews/needs/[id]` | Detail + sessions + `result_json`. |
-| `POST /api/v1/interviews/needs/[id]/start` | Mint token, start GPT Live. **503** if Agora keys are missing. |
-| `POST /api/v1/interviews/sessions/[id]/finalize` | Stop agent, persist transcript + answers, mark need `completed`. |
+| `POST /api/v1/interviews/needs/[id]/start` | Creator start (Clerk). Same engine as the public start. **503** if Agora keys are missing. |
+| `POST /api/v1/interviews/sessions/[id]/finalize` | Creator finalize (Clerk). |
+| `GET /api/v1/interviews/i/[token]` | Public invite lookup. |
+| `POST /api/v1/interviews/i/[token]/start` | Interviewee start. Auth = token. **410** if already completed. |
+| `POST /api/v1/interviews/i/[token]/finalize` | Interviewee finish. Auth = token. |
 
-These routes do **not** use `UNDERWRITE_API_KEY`. Tables: `interview_needs`, `interview_sessions`
-(`drizzle/0001_interview_pool.sql`).
+`/i/[token]` is public. `/interviews` is the creator pool. These routes do **not** use
+`UNDERWRITE_API_KEY`. Tables: `interview_needs` (includes `public_token`), `interview_sessions`.
 
 ---
 
@@ -264,7 +265,7 @@ These routes do **not** use `UNDERWRITE_API_KEY`. Tables: `interview_needs`, `in
 2. `DATABASE_URL=postgresql://…` in `.env.local`.
 3. `pnpm db:migrate` applies the committed SQL in [`drizzle/`](drizzle/) (`0000_init.sql`,
    `0001_api_keys_and_seller_agents.sql`, `0002_buyer_wallet_and_credits.sql`,
-   `0003_agent_description.sql`, `0004_interview_pool.sql`, …) with Drizzle's
+   `0003_agent_description.sql`, `0004_interview_pool.sql`, `0005_interview_invite_token.sql`, …) with Drizzle's
    migrator (on Vercel this happens automatically as part of `pnpm build`). `pnpm db:seed` inserts the
    catalog — a one-time step: it is idempotent, but it also resets axes, wallets and clears pairwise
    trust, so it is never run by the build. **Seed is still required once on Neon.** An empty hireable
@@ -281,9 +282,10 @@ Tables (mirroring `docs/CONTRACTS.md`): `agents` (plus seller fields `status`, `
 1. Create an application at [dashboard.clerk.com](https://dashboard.clerk.com) → **API keys**.
 2. `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` in `.env.local`.
 3. `src/proxy.ts` runs `clerkMiddleware` and `auth.protect()` on `/console`, `/keys`, `/account`,
-   `/agents`, `/admin`, `/interviews`, plus `/api/account/*` and `/api/admin/*`. `/i/[token]` is
-   public (invite token). Sign-in uses Clerk's hosted Account Portal. With either key missing the
-   proxy is a pass-through and those pages are open (local dev, treated as user `local-dev`).
+   `/agents`, `/admin`, `/interviews`, plus `/api/account/*` and `/api/admin/*`. `/i/[token]` and
+   `/api/v1/interviews/i/*` are public (invite token). Sign-in uses Clerk's hosted Account Portal.
+   With either key missing the proxy is a pass-through and those pages are open (local dev, treated
+   as user `local-dev`).
 
 #### How Luís marks an admin
 

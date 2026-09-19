@@ -14,27 +14,28 @@ type StartPayload = {
   uid: string;
   agent_uid: string;
   app_id: string;
-  agora_agent_id?: string;
   error?: string;
   details?: unknown;
 };
 
 type Props = {
-  needId: string;
   title: string;
-  questions: string[];
-  requiredFields: string[];
+  startPath: string;
+  finalizePath: string;
   appId: string;
+  requiredFields: string[];
+  variant: "public" | "creator";
+  creatorNeedId?: string;
 };
 
-export function InterviewRoom({ needId, title, questions, requiredFields, appId }: Props) {
+export function InterviewRoom({ title, startPath, finalizePath, appId, requiredFields, variant, creatorNeedId }: Props) {
   const router = useRouter();
-  const [phase, setPhase] = useState<"idle" | "connecting" | "live" | "ending">("idle");
+  const [phase, setPhase] = useState<"idle" | "connecting" | "live" | "ending" | "thanks">("idle");
   const [error, setError] = useState<string | null>(null);
   const [agentState, setAgentState] = useState("idle");
   const [micOn, setMicOn] = useState(true);
   const [transcript, setTranscript] = useState<TranscriptTurn[]>([]);
-  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [joined, setJoined] = useState(false);
   const [agentConnected, setAgentConnected] = useState(false);
   const rtcRef = useRef<import("agora-rtc-sdk-ng").IAgoraRTCClient | null>(null);
   const micRef = useRef<import("agora-rtc-sdk-ng").IMicrophoneAudioTrack | null>(null);
@@ -64,33 +65,37 @@ export function InterviewRoom({ needId, title, questions, requiredFields, appId 
   }, []);
 
   const finalize = useCallback(
-    async (sid: string, turns: TranscriptTurn[]) => {
+    async (turns: TranscriptTurn[]) => {
       setPhase("ending");
       try {
-        await fetch(`/api/v1/interviews/sessions/${sid}/finalize`, {
+        await fetch(finalizePath, {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ transcript_json: turns }),
         });
       } finally {
         await cleanupMedia();
-        router.push(`/interviews/${needId}`);
-        router.refresh();
+        if (variant === "creator" && creatorNeedId) {
+          router.push(`/interviews/${creatorNeedId}`);
+          router.refresh();
+        } else {
+          setPhase("thanks");
+        }
       }
     },
-    [cleanupMedia, needId, router],
+    [cleanupMedia, creatorNeedId, finalizePath, router, variant],
   );
 
   const join = useCallback(async () => {
     setError(null);
     setPhase("connecting");
     try {
-      const res = await fetch(`/api/v1/interviews/needs/${needId}/start`, { method: "POST" });
+      const res = await fetch(startPath, { method: "POST" });
       const payload = (await res.json()) as StartPayload;
       if (!res.ok) {
         throw new Error(typeof payload.details === "string" ? payload.details : payload.error ?? `start failed (${res.status})`);
       }
-      setSessionId(payload.session_id);
+      setJoined(true);
 
       const AgoraRTC = (await import("agora-rtc-sdk-ng")).default;
       try {
@@ -138,7 +143,7 @@ export function InterviewRoom({ needId, title, questions, requiredFields, appId 
       setPhase("idle");
       setError(err instanceof Error ? err.message : "failed to join");
     }
-  }, [appId, cleanupMedia, needId]);
+  }, [appId, cleanupMedia, startPath]);
 
   useEffect(() => {
     return () => {
@@ -156,6 +161,16 @@ export function InterviewRoom({ needId, title, questions, requiredFields, appId 
     }
   }
 
+  if (phase === "thanks") {
+    return (
+      <section className="rounded-lg border border-border bg-panel p-8 flex flex-col gap-3 text-center">
+        <p className="text-xs uppercase tracking-wider text-accent">done</p>
+        <h2 className="text-2xl font-semibold tracking-tight">Thanks — you can close this tab</h2>
+        <p className="text-sm text-muted">Your answers were saved. Nothing else to do here.</p>
+      </section>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <Panel
@@ -170,23 +185,18 @@ export function InterviewRoom({ needId, title, questions, requiredFields, appId 
       >
         <div className="flex flex-col gap-3 text-sm">
           <p className="text-muted">
-            The agent covers these questions one at a time. When it says it is done, end the call to store answers.
+            {variant === "public"
+              ? "Allow the microphone. A voice agent will ask a few questions, one at a time. Hit Finish when it says it's done."
+              : "Preview the interviewee call. Prefer sending the public /i/ link."}
           </p>
-          <ol className="list-decimal pl-5 text-muted">
-            {questions.map((q) => (
-              <li key={q}>{q}</li>
-            ))}
-          </ol>
           {error && <p className="text-danger">{error}</p>}
           <div className="flex flex-wrap gap-2 pt-1">
             {phase === "idle" && (
               <button type="button" onClick={() => void join()} className="rounded-md bg-accent text-background px-4 py-2 text-sm font-medium hover:opacity-90">
-                Start conversation
+                Start
               </button>
             )}
-            {phase === "connecting" && (
-              <span className="mono text-xs text-muted">minting token · starting GPT Live…</span>
-            )}
+            {phase === "connecting" && <span className="mono text-xs text-muted">connecting…</span>}
             {phase === "live" && (
               <>
                 <button
@@ -194,55 +204,60 @@ export function InterviewRoom({ needId, title, questions, requiredFields, appId 
                   onClick={() => void toggleMic()}
                   className="rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-background"
                 >
-                  {micOn ? "Mute mic" : "Unmute mic"}
+                  {micOn ? "Mute" : "Unmute"}
                 </button>
                 <button
                   type="button"
-                  disabled={!sessionId}
-                  onClick={() => sessionId && void finalize(sessionId, transcript)}
+                  disabled={!joined}
+                  onClick={() => void finalize(transcript)}
                   className="rounded-md bg-accent text-background px-4 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-50"
                 >
-                  End and save answers
+                  Finish
                 </button>
               </>
             )}
-            {phase === "ending" && <span className="mono text-xs text-muted">finalizing…</span>}
+            {phase === "ending" && <span className="mono text-xs text-muted">saving…</span>}
           </div>
         </div>
       </Panel>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <Panel title="Transcript">
-          {transcript.length === 0 ? (
-            <p className="text-sm text-muted">
-              {phase === "live"
-                ? "Waiting for RTM turns. GPT Live preview may omit user ASR — agent lines still land here."
-                : "Start the conversation to see live turns."}
-            </p>
-          ) : (
-            <ul className="flex flex-col gap-2 max-h-80 overflow-y-auto">
-              {transcript.map((turn, index) => (
-                <li key={`${turn.turn_id ?? index}-${turn.role}-${index}`} className="text-sm">
-                  <span className="mono text-xs text-muted">{turn.role}</span>
-                  <p>{turn.text}</p>
-                </li>
-              ))}
-            </ul>
-          )}
+      {variant === "creator" ? (
+        <div className="grid gap-4 md:grid-cols-2">
+          <Panel title="Transcript">
+            {transcript.length === 0 ? (
+              <p className="text-sm text-muted">Live turns appear here after Start.</p>
+            ) : (
+              <ul className="flex flex-col gap-2 max-h-80 overflow-y-auto">
+                {transcript.map((turn, index) => (
+                  <li key={`${turn.turn_id ?? index}-${turn.role}-${index}`} className="text-sm">
+                    <span className="mono text-xs text-muted">{turn.role}</span>
+                    <p>{turn.text}</p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Panel>
+          <Panel title="Parsed answers">
+            {preview ? (
+              <pre className="text-xs leading-relaxed overflow-x-auto rounded bg-background p-3 border border-border">
+                {JSON.stringify(preview, null, 2)}
+              </pre>
+            ) : (
+              <p className="text-sm text-muted">Waiting for the agent&apos;s final JSON.</p>
+            )}
+          </Panel>
+        </div>
+      ) : phase === "live" && transcript.length > 0 ? (
+        <Panel title="Live">
+          <ul className="flex flex-col gap-2 max-h-56 overflow-y-auto">
+            {transcript.slice(-6).map((turn, index) => (
+              <li key={`${turn.turn_id ?? index}-${index}`} className="text-sm text-muted">
+                {turn.role === "assistant" ? turn.text : "You spoke"}
+              </li>
+            ))}
+          </ul>
         </Panel>
-        <Panel title="Parsed answers">
-          {preview ? (
-            <pre className="text-xs leading-relaxed overflow-x-auto rounded bg-background p-3 border border-border">
-              {JSON.stringify(preview, null, 2)}
-            </pre>
-          ) : (
-            <p className="text-sm text-muted">
-              The agent&apos;s final JSON (or a post-call extract) is stored on finalize. Required:{" "}
-              <span className="mono text-xs">{requiredFields.join(", ")}</span>
-            </p>
-          )}
-        </Panel>
-      </div>
+      ) : null}
     </div>
   );
 }

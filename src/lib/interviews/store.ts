@@ -6,7 +6,7 @@ import {
   type InterviewNeedRow,
   type InterviewSessionRow,
 } from "@/lib/db/schema";
-import { newId } from "@/lib/ids";
+import { newId, newInviteToken } from "@/lib/ids";
 import { extractAnswersFromTranscript, normalizeAnswers, transcriptToPrompt } from "./extract";
 import { runInference } from "@/lib/observability/inference";
 import { env } from "@/lib/env";
@@ -20,6 +20,8 @@ export function toApiNeed(row: InterviewNeedRow, sessions?: InterviewSessionRow[
     status: row.status,
     created_by_clerk_user_id: row.createdByClerkUserId,
     assigned_session_id: row.assignedSessionId,
+    public_token: row.publicToken,
+    invite_path: `/i/${row.publicToken}`,
     result_json: row.resultJson,
     created_at: row.createdAt.toISOString(),
     completed_at: row.completedAt?.toISOString() ?? null,
@@ -50,6 +52,7 @@ export async function createNeed(db: Db, input: CreateNeedInput, createdBy: stri
       brief: input.brief,
       status: "open",
       createdByClerkUserId: createdBy,
+      publicToken: newInviteToken(),
     })
     .returning();
   return row;
@@ -66,6 +69,19 @@ export async function listNeeds(db: Db, limit = 50): Promise<InterviewNeedRow[]>
 export async function getNeed(db: Db, id: string): Promise<InterviewNeedRow | undefined> {
   const [row] = await db.select().from(interviewNeeds).where(eq(interviewNeeds.id, id)).limit(1);
   return row;
+}
+
+export async function getNeedByToken(db: Db, token: string): Promise<InterviewNeedRow | undefined> {
+  const [row] = await db.select().from(interviewNeeds).where(eq(interviewNeeds.publicToken, token)).limit(1);
+  return row;
+}
+
+export function toPublicNeed(row: InterviewNeedRow) {
+  return {
+    title: row.title,
+    status: row.status,
+    completed: row.status === "completed" || row.status === "cancelled",
+  };
 }
 
 export async function listSessionsForNeed(db: Db, needId: string): Promise<InterviewSessionRow[]> {

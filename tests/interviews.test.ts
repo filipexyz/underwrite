@@ -1,13 +1,16 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { POST as startNeed } from "@/app/api/v1/interviews/needs/[id]/start/route";
 import { POST as createNeedRoute, GET as listNeedsRoute } from "@/app/api/v1/interviews/needs/route";
+import { GET as publicGet } from "@/app/api/v1/interviews/i/[token]/route";
+import { POST as publicStart } from "@/app/api/v1/interviews/i/[token]/start/route";
+import { POST as publicFinalize } from "@/app/api/v1/interviews/i/[token]/finalize/route";
 import { POST as finalizeRoute } from "@/app/api/v1/interviews/sessions/[id]/finalize/route";
 import { getDb } from "@/lib/db/client";
 import { env } from "@/lib/env";
 import { extractAnswersFromTranscript, extractLastJsonObject, normalizeAnswers } from "@/lib/interviews/extract";
 import { buildInterviewGreeting, buildInterviewPrompt } from "@/lib/interviews/prompt";
 import { parseRtmMessage, upsertTranscript } from "@/lib/interviews/rtm";
-import { createNeed, finalizeSession, getNeed, insertLiveSession, listNeeds } from "@/lib/interviews/store";
+import { createNeed, finalizeSession, getNeed, getNeedByToken, insertLiveSession, listNeeds } from "@/lib/interviews/store";
 import type { InterviewBrief } from "@/lib/interviews/types";
 
 const brief: InterviewBrief = {
@@ -99,6 +102,8 @@ describe("interview store + HTTP", () => {
     const { db } = await getDb();
     const need = await createNeed(db, { title: "Seller desk", brief }, "user_test");
     expect(need.status).toBe("open");
+    expect(need.publicToken.length).toBeGreaterThan(16);
+    expect(await getNeedByToken(db, need.publicToken)).toMatchObject({ id: need.id });
     const listed = await listNeeds(db, 10);
     expect(listed.some((row) => row.id === need.id)).toBe(true);
 
@@ -166,5 +171,47 @@ describe("interview store + HTTP", () => {
     const body = (await res.json()) as { need: { status: string; result_json: { answers: Record<string, string> } } };
     expect(body.need.status).toBe("completed");
     expect(body.need.result_json.answers.deliverable).toBe("PDF");
+  });
+
+  it("public invite: lookup works, start is 503 without Agora, finalize persists, then start is 410", async () => {
+    const { db } = await getDb();
+    const need = await createNeed(db, { title: "Public link", brief }, "local-dev");
+    const token = need.publicToken;
+
+    const lookup = await publicGet(new Request(`http://localhost/api/v1/interviews/i/${token}`), {
+      params: Promise.resolve({ token }),
+    });
+    expect(lookup.status).toBe(200);
+    const publicBody = (await lookup.json()) as { interview: { title: string; completed: boolean } };
+    expect(publicBody.interview.title).toBe("Public link");
+    expect(publicBody.interview.completed).toBe(false);
+
+    const missing = await publicGet(new Request("http://localhost/api/v1/interviews/i/nope"), {
+      params: Promise.resolve({ token: "nope" }),
+    });
+    expect(missing.status).toBe(404);
+
+    const start = await publicStart(new Request(`http://localhost/api/v1/interviews/i/${token}/start`, { method: "POST" }), {
+      params: Promise.resolve({ token }),
+    });
+    expect(start.status).toBe(503);
+
+    await insertLiveSession(db, need, "interview-public");
+    const done = await publicFinalize(
+      new Request(`http://localhost/api/v1/interviews/i/${token}/finalize`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          answers_json: { answers: { deliverable: "PDF", confidence_method: "rubric" } },
+        }),
+      }),
+      { params: Promise.resolve({ token }) },
+    );
+    expect(done.status).toBe(200);
+
+    const again = await publicStart(new Request(`http://localhost/api/v1/interviews/i/${token}/start`, { method: "POST" }), {
+      params: Promise.resolve({ token }),
+    });
+    expect(again.status).toBe(410);
   });
 });

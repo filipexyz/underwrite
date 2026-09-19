@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 
 export type IdPrefix =
   | "req"
@@ -17,6 +17,11 @@ export type IdPrefix =
 
 export function newId(prefix: IdPrefix): string {
   return `${prefix}_${randomUUID().replace(/-/g, "").slice(0, 20)}`;
+}
+
+/** Unguessable share token for `/i/[token]`. Possession of the link is auth. */
+export function newInviteToken(): string {
+  return randomBytes(18).toString("base64url");
 }
 
 /** Monotonic-enough timestamp in ms for ledger rows (ordering is by `seq`). */
