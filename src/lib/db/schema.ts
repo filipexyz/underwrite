@@ -59,7 +59,8 @@ export const agents = pgTable("agents", {
   policy: jsonb("policy").$type<AgentPolicy>().notNull(),
   /** `seed` = demo catalog; `registered` = self-serve seller; `disabled` = hidden from hire. */
   status: text("status").$type<AgentStatus>().notNull().default("seed"),
-  ownerClerkUserId: text("owner_clerk_user_id"),
+  /** Auth0 `sub` (or `local-dev`). Column name is historical (`owner_clerk_user_id`). */
+  ownerUserId: text("owner_clerk_user_id"),
   contact: text("contact"),
   webhookUrl: text("webhook_url"),
   description: text("description"),
@@ -67,7 +68,7 @@ export const agents = pgTable("agents", {
   updatedAt: updatedAt(),
 }, (t) => [
   index("agents_status_idx").on(t.status),
-  index("agents_owner_idx").on(t.ownerClerkUserId),
+  index("agents_owner_idx").on(t.ownerUserId),
 ]);
 
 /**
@@ -82,7 +83,7 @@ export const apiKeys = pgTable(
     role: text("role").$type<ApiKeyRole>().notNull(),
     keyPrefix: text("key_prefix").notNull(),
     keyHash: text("key_hash").notNull().unique(),
-    ownerClerkUserId: text("owner_clerk_user_id"),
+    ownerUserId: text("owner_clerk_user_id"),
     agentId: text("agent_id").references(() => agents.agentId),
     scopes: jsonb("scopes").$type<string[]>().notNull(),
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
@@ -90,7 +91,7 @@ export const apiKeys = pgTable(
     createdAt: createdAt(),
   },
   (t) => [
-    index("api_keys_owner_idx").on(t.ownerClerkUserId),
+    index("api_keys_owner_idx").on(t.ownerUserId),
     index("api_keys_agent_idx").on(t.agentId),
   ],
 );
@@ -159,7 +160,7 @@ export const requests = pgTable(
     failurePolicy: text("failure_policy").notNull(),
     selectionTimeoutS: doublePrecision("selection_timeout_s").notNull(),
     verification: jsonb("verification").$type<VerificationSpec>().notNull(),
-    /** Clerk user (or local-dev) wallet debited for this request. Null = system `buyer` wallet. */
+    /** Auth0 `sub` / local-dev wallet debited for this request. Null = system `buyer` wallet. */
     buyerWalletId: text("buyer_wallet_id"),
     /** `seed` = Mastra auction loop. `push` = locked marketplace (invite / one plan / best-score). */
     executionMode: text("execution_mode").notNull().default("seed"),
@@ -357,7 +358,7 @@ export const interviewNeeds = pgTable(
     title: text("title").notNull(),
     brief: jsonb("brief").$type<InterviewBrief>().notNull(),
     status: text("status").notNull(),
-    createdByClerkUserId: text("created_by_clerk_user_id").notNull(),
+    createdByUserId: text("created_by_clerk_user_id").notNull(),
     publicToken: text("public_token").notNull().unique(),
     assignedSessionId: text("assigned_session_id"),
     resultJson: jsonb("result_json").$type<InterviewAnswers | Record<string, unknown>>(),
@@ -449,8 +450,75 @@ export const jobInvites = pgTable(
   ],
 );
 
+export const AGENT_REGISTRATION_TYPES = ["anonymous", "service_auth"] as const;
+export type AgentRegistrationType = (typeof AGENT_REGISTRATION_TYPES)[number];
+
+export const AGENT_REGISTRATION_STATUSES = ["pending", "claimed", "revoked"] as const;
+export type AgentRegistrationStatus = (typeof AGENT_REGISTRATION_STATUSES)[number];
+
+/**
+ * auth.md registrations. Humans claim via `/claim`; agents exchange the
+ * service-signed identity_assertion at `/oauth2/token`.
+ */
+export const agentRegistrations = pgTable(
+  "agent_registrations",
+  {
+    registrationId: text("registration_id").primaryKey(),
+    registrationType: text("registration_type").$type<AgentRegistrationType>().notNull(),
+    status: text("status").$type<AgentRegistrationStatus>().notNull(),
+    ownerUserId: text("owner_user_id"),
+    loginHint: text("login_hint"),
+    agentId: text("agent_id").references(() => agents.agentId),
+    requestedScopes: jsonb("requested_scopes").$type<string[]>().notNull(),
+    preClaimScopes: jsonb("pre_claim_scopes").$type<string[]>().notNull(),
+    postClaimScopes: jsonb("post_claim_scopes").$type<string[]>().notNull(),
+    assertionJti: text("assertion_jti"),
+    assertionExpiresAt: timestamp("assertion_expires_at", { withTimezone: true }),
+    claimTokenHash: text("claim_token_hash"),
+    claimExpiresAt: timestamp("claim_expires_at", { withTimezone: true }),
+    /** Access tokens minted before this instant are dead (claim / registration revoke). */
+    credentialEpoch: timestamp("credential_epoch", { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index("agent_registrations_owner_idx").on(t.ownerUserId),
+    index("agent_registrations_claim_hash_idx").on(t.claimTokenHash),
+  ],
+);
+
+export const agentClaimAttempts = pgTable(
+  "agent_claim_attempts",
+  {
+    claimAttemptId: text("claim_attempt_id").primaryKey(),
+    registrationId: text("registration_id")
+      .notNull()
+      .references(() => agentRegistrations.registrationId),
+    userCode: text("user_code").notNull(),
+    claimAttemptTokenHash: text("claim_attempt_token_hash").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    intervalSeconds: integer("interval_seconds").notNull().default(5),
+    lastPollAt: timestamp("last_poll_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("agent_claim_attempts_reg_idx").on(t.registrationId),
+    index("agent_claim_attempts_code_idx").on(t.userCode),
+    index("agent_claim_attempts_token_idx").on(t.claimAttemptTokenHash),
+  ],
+);
+
+export const revokedAccessTokens = pgTable("revoked_access_tokens", {
+  jti: text("jti").primaryKey(),
+  registrationId: text("registration_id"),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export type AgentInboxRow = typeof agentInbox.$inferSelect;
 export type JobInviteRow = typeof jobInvites.$inferSelect;
+export type AgentRegistrationRow = typeof agentRegistrations.$inferSelect;
+export type AgentClaimAttemptRow = typeof agentClaimAttempts.$inferSelect;
+export type RevokedAccessTokenRow = typeof revokedAccessTokens.$inferSelect;
 
 export type AxisColumns = Pick<
   TrustAxesRow,

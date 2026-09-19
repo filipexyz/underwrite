@@ -1,7 +1,7 @@
 /**
  * Environment access with feature flags.
  *
- * Database, Clerk, and exporters still degrade to documented no-ops when unset
+ * Database, Auth0, and exporters still degrade to documented no-ops when unset
  * (PGlite on disk, open human pages, no tracing). Marketplace inference does
  * not: without MODEL_PROVIDER_API_KEY the API returns 503.
  */
@@ -27,25 +27,46 @@ export const env = {
     return read("DATABASE_URL");
   },
 
-  /** Clerk is only wired when both keys are present. */
-  get clerk() {
-    const publishableKey = read("NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY");
-    const secretKey = read("CLERK_SECRET_KEY");
+  /**
+   * Auth0 Regular Web App. All four of domain / client id / client secret /
+   * cookie secret must be set; otherwise the proxy is a pass-through and human
+   * pages treat the caller as `local-dev`.
+   */
+  get auth0() {
+    const domain = read("AUTH0_DOMAIN");
+    const clientId = read("AUTH0_CLIENT_ID");
+    const clientSecret = read("AUTH0_CLIENT_SECRET");
+    const secret = read("AUTH0_SECRET");
+    const audienceExplicit = read("AUTH0_AUDIENCE");
     return {
-      enabled: Boolean(publishableKey && secretKey),
-      publishableKey,
-      secretKey,
+      enabled: Boolean(domain && clientId && clientSecret && secret),
+      domain,
+      clientId,
+      clientSecret,
+      secret,
+      audience: audienceExplicit ?? "https://api.underwrite",
+      audienceConfigured: Boolean(audienceExplicit),
+      appBaseUrl: read("APP_BASE_URL") ?? read("AUTH0_BASE_URL"),
     };
   },
 
-  /** Optional legacy global bearer for `/api/v1/*`. Prefer hashed DB keys. */
+  /**
+   * HS256 secret for auth.md identity assertions + access tokens.
+   * Prefer `UNDERWRITE_TOKEN_SECRET`; falls back to `AUTH0_SECRET`, then a
+   * documented local stub (never use the stub in production).
+   */
+  get tokenSecret(): string {
+    return read("UNDERWRITE_TOKEN_SECRET") ?? read("AUTH0_SECRET") ?? "underwrite-dev-token-secret";
+  },
+
+  /** Optional legacy global bearer for `/api/v1/*`. Prefer hashed DB keys or JWTs. */
   get apiKey(): string | undefined {
     return read("UNDERWRITE_API_KEY");
   },
 
   /**
-   * Optional bootstrap admin allowlist (comma-separated Clerk user ids).
-   * Primary admin check is Clerk `publicMetadata.role === "admin"` (or `admin: true`).
+   * Optional bootstrap admin allowlist (comma-separated Auth0 `sub` values).
+   * Primary admin check is the `https://underwrite/roles` claim (or `app_metadata.role`).
    */
   get adminUserIds(): string | undefined {
     return read("UNDERWRITE_ADMIN_USER_IDS");

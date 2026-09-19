@@ -112,7 +112,8 @@ additional features:
 | `ARCHITECTURE.md` | human/agent boundary, A→B→C chain, per-hop escrow, judges, guardrails, registry, build order |
 | `CONTRACTS.md` | data contracts: Request, Plan, Bid, Verification, LedgerEvent, Escrow, Attribution, Axes + invariants |
 | `DEMO.md` | the literal 4-minute script + code-freeze deliverables |
-| `DECISIONS.md` | decision log (D-001 → D-024). Read before disagreeing. |
+| `DECISIONS.md` | decision log (D-001 → D-033). Read before disagreeing. |
+| `AUTH.md` | Auth0 humans + auth.md agents — short map; dashboard checklist lives in the root README |
 
 ---
 

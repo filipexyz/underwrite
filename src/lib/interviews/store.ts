@@ -24,7 +24,7 @@ export function toApiNeed(row: InterviewNeedRow, sessions?: InterviewSessionRow[
     title: row.title,
     brief: row.brief,
     status: row.status,
-    created_by_clerk_user_id: row.createdByClerkUserId,
+    created_by_user_id: row.createdByUserId,
     assigned_session_id: row.assignedSessionId,
     public_token: row.publicToken,
     invite_path: `/i/${row.publicToken}`,
@@ -57,7 +57,7 @@ export async function createNeed(db: Db, input: CreateNeedInput, createdBy: stri
       title: input.title.trim(),
       brief: input.brief,
       status: "open",
-      createdByClerkUserId: createdBy,
+      createdByUserId: createdBy,
       publicToken: newInviteToken(),
     })
     .returning();

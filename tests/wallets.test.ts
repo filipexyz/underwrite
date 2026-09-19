@@ -1,5 +1,5 @@
 /**
- * Test credits: Clerk users start at $1000. Registered agents start at $0
+ * Test credits: Auth0 users start at $1000. Registered agents start at $0
  * and earn by being hired. Buyer debit on lock.
  */
 import { eq } from "drizzle-orm";
@@ -107,7 +107,7 @@ describe("test-credit wallets", () => {
     const issued = await issueApiKey(shared, {
       name: "broke buyer",
       role: "buyer",
-      ownerClerkUserId: "user_broke",
+      ownerUserId: "user_broke",
       scopes: ["requests:write"],
     });
     const response = await postRequest(

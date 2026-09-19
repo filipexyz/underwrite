@@ -18,6 +18,7 @@ import { createRequest, getRequest, getRequestDetail, listRequests, toApiRequest
 import { PushJobError, resolveExecutionMode, selectPlansIfReady, sleep, startPushJob } from "@/lib/marketplace/push";
 import { runMarketplace } from "@/mastra";
 import { absoluteUrl, authorizeBuyerRequest, inferenceErrorResponse, jsonError, modelProviderUnavailableResponse, requireApiKey } from "@/lib/api/http";
+import { buyerWalletOwnerId } from "@/lib/auth/bearer";
 import { ensureUserWallet } from "@/lib/marketplace/credits";
 
 export const runtime = "nodejs";
@@ -49,8 +50,9 @@ export async function POST(request: Request) {
 
   const { db } = await getDb();
   let buyerWalletId: string | undefined;
-  if (auth.auth.kind === "key" && auth.auth.key.ownerClerkUserId) {
-    const wallet = await ensureUserWallet(db, auth.auth.key.ownerClerkUserId);
+  const walletOwner = buyerWalletOwnerId(auth.auth);
+  if (walletOwner) {
+    const wallet = await ensureUserWallet(db, walletOwner);
     if (wallet.capitalUsd < parsed.data.max_cost_usd) {
       return jsonError(402, "insufficient wallet balance", {
         owner_id: wallet.ownerId,

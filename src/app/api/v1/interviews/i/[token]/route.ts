@@ -1,6 +1,6 @@
 /**
  * GET /api/v1/interviews/i/[token] — public invite lookup.
- * Auth is possession of the unguessable token. No Clerk.
+ * Auth is possession of the unguessable token. No Auth0 session.
  */
 import { NextResponse } from "next/server";
 import { jsonError } from "@/lib/api/http";

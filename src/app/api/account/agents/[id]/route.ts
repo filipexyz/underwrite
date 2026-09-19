@@ -21,7 +21,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   if (!agent) return jsonError(404, `agent not found: ${id}`);
   const [wallet, keyRows] = await Promise.all([
     getWallet(db, agent.agentId),
-    listApiKeys(db, { ownerClerkUserId: auth.identity.userId, agentId: agent.agentId }),
+    listApiKeys(db, { ownerUserId: auth.identity.userId, agentId: agent.agentId }),
   ]);
   return NextResponse.json({
     agent: toPublicAgent(agent),

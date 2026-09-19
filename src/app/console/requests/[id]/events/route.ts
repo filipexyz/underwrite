@@ -1,5 +1,5 @@
 /**
- * Console-internal ledger feed (Clerk-protected like the rest of /console,
+ * Console-internal ledger feed (Auth0-protected like the rest of /console,
  * never API-key gated). Same shape as /api/v1/requests/[id]/events.
  */
 import { NextResponse } from "next/server";

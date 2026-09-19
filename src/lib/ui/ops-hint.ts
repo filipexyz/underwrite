@@ -9,5 +9,6 @@ export function opsHintForPath(pathname: string, fallback: string): string {
   if (pathname.startsWith("/agents")) return "agents · your fleet";
   if (pathname.startsWith("/keys")) return "keys · self-serve";
   if (pathname.startsWith("/account")) return "account · test credits";
+  if (pathname.startsWith("/claim")) return "claim · bind an agent";
   return fallback;
 }

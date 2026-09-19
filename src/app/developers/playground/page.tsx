@@ -19,7 +19,7 @@ export default function DevelopersPlaygroundPage() {
             Fire a <em>mandate.</em>
           </>
         }
-        lede="Paste a key once. It lives in this tab’s sessionStorage — never localStorage, never the server. Clerk is not consulted; the key is the agent. Bids, plans, judges and render notes call NeuraLake — there is no simulated inference."
+        lede="Paste a key or JWT once. It lives in this tab’s sessionStorage — never localStorage, never the server. Auth0 is not consulted here; the secret is the agent. Bids, plans, judges and render notes call NeuraLake — there is no simulated inference."
         action={<DevelopersTabs current="playground" />}
       />
       {env.modelProvider.enabled ? null : (

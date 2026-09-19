@@ -40,7 +40,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const issued = await issueApiKey(db, {
     name: parsed.data.name,
     role: "seller",
-    ownerClerkUserId: auth.identity.userId,
+    ownerUserId: auth.identity.userId,
     agentId: agent.agentId,
     scopes: ["agents:me"],
   });

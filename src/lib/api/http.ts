@@ -1,18 +1,20 @@
 /**
- * Helpers for the agent-facing API: API-key gate + JSON errors.
+ * Helpers for the agent-facing API: API-key / JWT / session gate + JSON errors.
  *
- * Buyer routes accept the legacy env `UNDERWRITE_API_KEY` or a non-revoked
- * hashed buyer / admin_service key. When neither a presented key nor the
- * legacy env is set, `/api/v1/requests*` stays public for the demoday loop.
+ * Buyer routes accept a hashed buyer / admin_service key, an Auth0 or auth.md
+ * JWT with `buyer:requests`, an Auth0 session, or the legacy env
+ * `UNDERWRITE_API_KEY`. When none of those are present, `/api/v1/requests*`
+ * stays public for the demoday loop.
  */
 import { NextResponse } from "next/server";
+import { extractPresentedKey } from "@/lib/auth/api-keys";
 import {
-  extractPresentedKey,
-  resolveBuyerAuth,
-  resolveSellerAuth,
+  attachChallenge,
+  resolveBuyerRequestAuth,
+  resolveSellerRequestAuth,
   type BuyerAuth,
-} from "@/lib/auth/api-keys";
-import { getDb } from "@/lib/db/client";
+  type SellerAuth,
+} from "@/lib/auth/bearer";
 import type { ApiKeyRow } from "@/lib/db/schema";
 import { env } from "@/lib/env";
 import {
@@ -28,13 +30,14 @@ export function jsonError(status: number, error: string, details?: unknown): Nex
 export async function authorizeBuyerRequest(
   request: Request,
 ): Promise<{ ok: true; auth: BuyerAuth } | { ok: false; response: NextResponse }> {
-  const { db } = await getDb();
-  const result = await resolveBuyerAuth({
+  const result = await resolveBuyerRequestAuth({
+    request,
     presented: extractPresentedKey(request.headers),
     legacyKey: env.apiKey,
-    db,
   });
-  if (!result.ok) return { ok: false, response: jsonError(result.status, result.error) };
+  if (!result.ok) {
+    return { ok: false, response: attachChallenge(jsonError(result.status, result.error), request) };
+  }
   return { ok: true, auth: result.auth };
 }
 
@@ -45,14 +48,20 @@ export async function requireApiKey(request: Request): Promise<NextResponse | nu
 
 export async function requireSellerKey(
   request: Request,
-): Promise<{ ok: true; key: ApiKeyRow; agentId: string } | { ok: false; response: NextResponse }> {
-  const { db } = await getDb();
-  const result = await resolveSellerAuth({
+): Promise<{ ok: true; key?: ApiKeyRow; agentId: string; auth: SellerAuth } | { ok: false; response: NextResponse }> {
+  const result = await resolveSellerRequestAuth({
+    request,
     presented: extractPresentedKey(request.headers),
-    db,
   });
-  if (!result.ok) return { ok: false, response: jsonError(result.status, result.error) };
-  return { ok: true, key: result.key, agentId: result.agentId };
+  if (!result.ok) {
+    return { ok: false, response: attachChallenge(jsonError(result.status, result.error), request) };
+  }
+  return {
+    ok: true,
+    key: result.auth.kind === "key" ? result.auth.key : undefined,
+    agentId: result.auth.agentId,
+    auth: result.auth,
+  };
 }
 
 export function absoluteUrl(request: Request, path: string): string {

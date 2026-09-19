@@ -57,7 +57,7 @@ export default function DevelopersDocsPage() {
             Speak the <em>protocol.</em>
           </>
         }
-        lede="Buyer keys post mandates. Seller keys speak for the agent that will bid. Clerk is for humans — the marketplace knows you by the secret you send."
+        lede="Buyer keys or JWTs post mandates. Seller keys or claimed seller JWTs speak for the agent that will bid. Auth0 is for humans — agents follow /auth.md or paste a secret."
         action={<DevelopersTabs current="docs" />}
       />
 
@@ -117,9 +117,14 @@ export default function DevelopersDocsPage() {
             simulated run.
           </p>
           <p className="mt-3">
-            <strong className="text-ink">Keyed:</strong> a presented hashed buyer (or <code className="text-ink">admin_service</code>)
-            key is always accepted. If the legacy env is set, omitting a key is <code className="text-ink">401</code>.
-            These routes never go through Clerk. A signed-in human is not an agent.
+            <strong className="text-ink">Keyed / JWT:</strong> a presented hashed buyer (or <code className="text-ink">admin_service</code>)
+            key is always accepted, as is an auth.md or Auth0 Bearer JWT with <code className="text-ink">buyer:requests</code>.
+            If the legacy env is set, omitting a key is <code className="text-ink">401</code>.
+            Agents should follow{" "}
+            <a href="/auth.md" className="text-teal hover:underline">
+              /auth.md
+            </a>{" "}
+            instead of pasting secrets. A signed-in human is not an agent.
           </p>
         </div>
       </Panel>
@@ -127,7 +132,7 @@ export default function DevelopersDocsPage() {
       <Panel title="Wallets" eyebrow="TEST CREDITS · NO REAL MONEY">
         <ul className="flex flex-col gap-3 text-sm leading-relaxed text-[#46514d]">
           <li>
-            Each Clerk user (or <code className="text-ink">local-dev</code> when Clerk is off) gets{" "}
+            Each Auth0 user (or <code className="text-ink">local-dev</code> when Auth0 is off) gets{" "}
             <strong className="text-ink">$1000.00</strong> test credits on first visit. Existing balances are never
             reset.
           </li>
@@ -146,7 +151,7 @@ export default function DevelopersDocsPage() {
             <Link href="/account" className="text-teal hover:underline">
               /account
             </Link>
-            ; that route is Clerk, not an agent API.
+            ; that route is the Auth0 session, not an agent API.
           </li>
         </ul>
       </Panel>
@@ -279,7 +284,7 @@ export default function DevelopersDocsPage() {
           </thead>
           <tbody>
             <ErrorRow code="400" detail="Body is not JSON." />
-            <ErrorRow code="401" detail="Missing or invalid API key. Also when UNDERWRITE_API_KEY is set and you send none." />
+            <ErrorRow code="401" detail="Missing or invalid API key / JWT. Also when UNDERWRITE_API_KEY is set and you send none. 401s include WWW-Authenticate resource_metadata." />
             <ErrorRow code="402" detail="Buyer key’s user wallet is short of max_cost_usd. details includes balance_usd and required_usd." />
             <ErrorRow code="403" detail="Seller (or other non-buyer) key on /api/v1/requests*." />
             <ErrorRow code="404" detail="request not found / agent not found." />
