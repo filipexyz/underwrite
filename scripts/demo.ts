@@ -7,7 +7,10 @@
  *   pnpm demo --base https://underwrite.vercel.app
  *   pnpm demo --wait                          # single blocking call (?wait=1), no polling
  *
+ * The target server must have NeuraLake configured. Missing keys → HTTP 503.
+ *
  * Honours `UNDERWRITE_BASE_URL` and `UNDERWRITE_API_KEY` from `.env.local`.
+ * The server must have MODEL_PROVIDER_API_KEY (NeuraLake); otherwise POST is 503.
  */
 import "./load-env";
 import type { LedgerEvent } from "@/lib/contracts";

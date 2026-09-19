@@ -18,8 +18,9 @@ import { newId } from "@/lib/ids";
 import { deriveMetrics } from "@/lib/ledger/ledger";
 import { runInference } from "@/lib/observability/inference";
 import { round6 } from "@/lib/observability/pricing";
+import { inspectArtifact } from "@/lib/verification/inspect";
 import { verifyArtifact } from "@/lib/verification/verify";
-import { DEMO_INPUT_HTML, parseSource, renderSimulated, type SourceDocument } from "./artifact";
+import { DEMO_INPUT_HTML, parseSource, renderDeliverable, type SourceDocument } from "./artifact";
 import { emitAttribution } from "./attribution";
 import { costHonestySample, latencySample, underwritingSample, updateAxes, updatePairwiseTrust } from "./axes";
 import { buildContext, pace, RULES, setRequestStatus, settleInferenceCost, type EngineContext } from "./context";
@@ -142,13 +143,11 @@ export async function runAuction(db: Db, requestId: string): Promise<StepResult>
       `${agent.name} executes the whole task itself (${quote.subtask}); promises ${quote.promised_confidence} on a track record of ${agent.trust_global}.`;
     const inference = await runInference({
       agent_id: agent.agentId,
-      model: agent.model,
       purpose: "bid",
       system: "You are an agent bidding on a marketplace task. Justify your bid in two sentences: confidence, price, and why your declared chain can sustain it.",
-      prompt: `Task: ${req.requirement}\nBuyer constraints: max $${req.maxCostUsd}, max ${req.maxLatencyS}s, min confidence ${req.minConfidence}.\nYour bid: $${price} to the buyer, confidence ${quote.promised_confidence}, ${quote.latency_s}s, chain ${chainLabel(quote)}.`,
-      simulated: agent.policy.planning_tokens,
-      fallbackText: fallback,
+      prompt: `Task: ${req.requirement}\nBuyer constraints: max $${req.maxCostUsd}, max ${req.maxLatencyS}s, min confidence ${req.minConfidence}.\nYour bid: $${price} to the buyer, confidence ${quote.promised_confidence}, ${quote.latency_s}s, chain ${chainLabel(quote)}.\nIf you have nothing to add, repeat this structural rationale: ${fallback}`,
     });
+    const rationale = inference.text || fallback;
 
     const [row] = await ctx.db
       .insert(bids)
@@ -161,7 +160,7 @@ export async function runAuction(db: Db, requestId: string): Promise<StepResult>
         latencyS: quote.latency_s,
         chain: flattenChain(quote),
         quote,
-        rationale: inference.text,
+        rationale,
         trustGlobalSnapshot: agent.trust_global,
         counterOf: null,
         strategyChosen: quote.strategy,
@@ -186,11 +185,10 @@ export async function runAuction(db: Db, requestId: string): Promise<StepResult>
         chain: row.chain,
         strategy_considered: quote.strategy_considered,
         strategy_chosen: quote.strategy,
-        rationale: inference.text,
+        rationale,
         trust_global_snapshot: agent.trust_global,
         compliant: row.compliant,
         rejection_reason: row.rejectionReason,
-        simulated_inference: inference.simulated,
       },
     });
     await settleInferenceCost(ctx, agent.agentId, inference, event.event_id, "bid_planning");
@@ -270,12 +268,9 @@ async function contractSubtree(ctx: EngineContext, args: ContractArgs): Promise<
   const inference = charged
     ? await runInference({
         agent_id: agent.agentId,
-        model: agent.model,
         purpose: "plan",
         system: "You are an agent publishing a plan before executing. State deliverable, promised confidence, cost, deadline and the chain you declare.",
-        prompt: `Subtask: ${quote.subtask}\nConstraints: max $${args.constraints.max_cost_usd}, max ${args.constraints.max_latency_s}s, floor ${args.constraints.min_confidence}.\nDeclared chain: ${chainLabel(quote)}.`,
-        simulated: agent.policy.planning_tokens,
-        fallbackText: fallbackRationale,
+        prompt: `Subtask: ${quote.subtask}\nConstraints: max $${args.constraints.max_cost_usd}, max ${args.constraints.max_latency_s}s, floor ${args.constraints.min_confidence}.\nDeclared chain: ${chainLabel(quote)}.\nIf you have nothing to add, repeat this structural rationale: ${fallbackRationale}`,
       })
     : null;
 
@@ -493,16 +488,13 @@ export async function executeLeaf(db: Db, requestId: string): Promise<StepResult
   if (!exec) return failHonestly(ctx, state, `${agent.agentId} was contracted to execute but has no execution capability`);
 
   const source = sourceFor(ctx);
-  const artifact = renderSimulated(source, agent.agentId, exec);
+  const artifact = await renderDeliverable(source, agent.agentId, exec);
+  const facts = await inspectArtifact(artifact);
   const inference = await runInference({
     agent_id: agent.agentId,
-    model: agent.model,
     purpose: "render",
     system: "You are a rendering agent. Report what you produced in one sentence.",
-    prompt: `Render ${source.text.length} characters of HTML (${source.links.length} links) to an ${source.page_size} PDF with ${source.margins_cm}cm margins.`,
-    simulated: exec.tokens,
-    fallbackText: `Rendered ${artifact.pages} page(s), ${artifact.bytes} bytes; self-assessed confidence ${artifact.self_report}.`,
-    simulatedLatencyMs: artifact.observed_latency_ms,
+    prompt: `Render ${source.text.length} characters of HTML (${source.links.length} links) to an ${source.page_size} PDF with ${source.margins_cm}cm margins. Observed: ${facts.pages} page(s), ${facts.bytes} bytes, ${facts.links.length} link(s).`,
   });
 
   const event = await ctx.ledger.append({
@@ -516,19 +508,18 @@ export async function executeLeaf(db: Db, requestId: string): Promise<StepResult
     payload: {
       artifact_ref: artifact.artifact_ref,
       kind: artifact.kind,
-      simulated: artifact.simulated,
       plan_id: leaf.plan_id,
       hop_index: leaf.hop_index,
       attempt: state.attempt,
-      pages: artifact.pages,
-      bytes: artifact.bytes,
-      text_chars: artifact.text.length,
-      links: artifact.links.length,
+      pages: facts.pages,
+      bytes: facts.bytes,
+      text_chars: facts.text.length,
+      links: facts.links.length,
       declared_latency_ms: artifact.declared_latency_ms,
       observed_latency_ms: artifact.observed_latency_ms,
       /** Displayed as suspect, never trusted (D-005). */
       self_report: artifact.self_report,
-      producer_note: inference.text,
+      producer_note: inference.text || `PDF ${facts.pages}p ${facts.bytes}B`,
     },
   });
   await settleInferenceCost(ctx, agent.agentId, inference, event.event_id, "render_inference");

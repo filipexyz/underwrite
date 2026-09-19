@@ -28,7 +28,7 @@ export type JudgingResult = {
 
 /**
  * What a blind judge concludes from the facts. Deterministic on purpose:
- * model text is rationale, never control flow (see observability/inference.ts).
+ * NeuraLake text is rationale, never control flow.
  * J2 is the stricter reader (fonts), which is where disagreement can appear.
  */
 function judgeFacts(judge: RegistryAgent, facts: ArtifactFacts, source: SourceDocument): { verdict: Verdict; reasons: string[] } {
@@ -68,17 +68,15 @@ export async function runJudges(
 
     const { verdict, reasons } = judgeFacts(judge, args.facts, args.source);
     const rubric = args.spec.checks.map((c) => `- ${c.check_id} (w=${c.weight}): ${c.description}`).join("\n");
+    const structural =
+      verdict === "pass"
+        ? "PASS — the artifact satisfies every rubric item I can observe."
+        : `${verdict.toUpperCase()} — ${reasons.join("; ")}.`;
     const inference = await runInference({
       agent_id: judge.agentId,
-      model: judge.model,
       purpose: "judge",
       system: `You are an independent verification judge (rubric ${args.spec.rubric_version}). You see only the artifact facts and the rubric. Answer with a verdict and one sentence.`,
-      prompt: `Rubric:\n${rubric}\n\nArtifact facts: pages=${args.facts.pages}, overflow_regions=${args.facts.overflow_regions}, fonts_embedded=${args.facts.fonts_embedded}, links=${args.facts.links.length}, text_chars=${args.facts.text.length}, source_chars=${args.source.text.length}.`,
-      simulated: judge.policy.judge?.tokens ?? { in: 2000, out: 150 },
-      fallbackText:
-        verdict === "pass"
-          ? "PASS — the artifact satisfies every rubric item I can observe."
-          : `${verdict.toUpperCase()} — ${reasons.join("; ")}.`,
+      prompt: `Rubric:\n${rubric}\n\nArtifact facts: pages=${args.facts.pages}, overflow_regions=${args.facts.overflow_regions}, fonts_embedded=${args.facts.fonts_embedded}, links=${args.facts.links.length}, text_chars=${args.facts.text.length}, source_chars=${args.source.text.length}.\nStructural verdict (decisions stay rule-based): ${structural}`,
       maxOutputTokens: 120,
     });
 
@@ -99,8 +97,7 @@ export async function runJudges(
         verdict,
         reasons,
         rubric_version: args.spec.rubric_version,
-        rationale: inference.text,
-        simulated: inference.simulated,
+        rationale: inference.text || structural,
         paid_by: WALLET.marketplace,
       },
     });

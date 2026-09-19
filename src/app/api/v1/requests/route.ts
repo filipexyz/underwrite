@@ -15,7 +15,7 @@ import { RequestInput } from "@/lib/contracts";
 import { getDb } from "@/lib/db/client";
 import { createRequest, getRequestDetail, listRequests, toApiRequest } from "@/lib/marketplace/requests";
 import { runMarketplace } from "@/mastra";
-import { absoluteUrl, authorizeBuyerRequest, jsonError, requireApiKey } from "@/lib/api/http";
+import { absoluteUrl, authorizeBuyerRequest, inferenceErrorResponse, jsonError, modelProviderUnavailableResponse, requireApiKey } from "@/lib/api/http";
 import { ensureUserWallet } from "@/lib/marketplace/credits";
 
 export const runtime = "nodejs";
@@ -48,11 +48,25 @@ export async function POST(request: Request) {
     }
     buyerWalletId = wallet.ownerId;
   }
+
+  const providerDenied = modelProviderUnavailableResponse();
+  if (providerDenied) return providerDenied;
+
   const row = await createRequest(db, parsed.data, { actor: "agent", source: "api", buyerWalletId });
   const wait = new URL(request.url).searchParams.get("wait") === "1";
 
   if (wait) {
-    await runMarketplace(row.requestId);
+    try {
+      const outcome = await runMarketplace(row.requestId);
+      if (outcome.status === "failed") {
+        const mapped = inferenceErrorResponse(outcome.error);
+        if (mapped) return mapped;
+      }
+    } catch (error) {
+      const mapped = inferenceErrorResponse(error);
+      if (mapped) return mapped;
+      throw error;
+    }
     const detail = await getRequestDetail(db, row.requestId);
     return NextResponse.json(detail ? toApiRequest(detail) : { request_id: row.requestId }, { status: 200 });
   }

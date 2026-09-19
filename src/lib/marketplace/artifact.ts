@@ -1,15 +1,14 @@
 /**
  * Artifacts for the HTML → PDF vertical.
  *
- * v0 renders a *simulated* PDF: a structured description of what a real
- * renderer would have produced (pages, extractable text, overflow regions,
- * embedded fonts, links). The checks inspect those observable properties, not
- * the producer's self-report. Swapping in a real renderer means producing
- * `bytes` and teaching `verification/inspect.ts` to read them — the checks
- * and the confidence machinery do not change.
+ * The leaf hop produces real PDF bytes (`pdf-lib`). Checks inspect those
+ * bytes — never the producer's self-report. C1's `layout_overflow` policy
+ * writes real defects into the file (clipped text, unembedded fonts, two
+ * runs outside the page box).
  */
 import { newId } from "@/lib/ids";
 import type { ExecutionPolicy } from "./types";
+import { renderHtmlToPdf } from "./pdf/render";
 
 export type SourceDocument = {
   html: string;
@@ -24,18 +23,9 @@ export type SourceDocument = {
 export type PdfArtifact = {
   artifact_ref: string;
   kind: "pdf";
-  simulated: true;
   producer_agent_id: string;
-  page_size: "A4";
-  margins_cm: number;
-  pages: number;
-  /** Text a PDF text extractor would recover. */
-  text: string;
-  overflow_regions: number;
-  fonts_embedded: boolean;
-  links: string[];
-  valid: boolean;
-  bytes: number;
+  /** Real PDF, base64 — facts are read from these bytes. */
+  pdf_base64: string;
   /** The producer's own claim — displayed as suspect, never trusted (D-005). */
   self_report: number;
   observed_latency_ms: number;
@@ -79,32 +69,21 @@ export function parseSource(html: string, requirement: string): SourceDocument {
   };
 }
 
-/**
- * Deterministic render. `layout_overflow` clips the tail of the last section
- * and skips font embedding — exactly the kind of defect that "looks fine" to a
- * producer and fails an objective check.
- */
-export function renderSimulated(source: SourceDocument, producerAgentId: string, policy: ExecutionPolicy): PdfArtifact {
-  const overflow = policy.quality === "layout_overflow";
-  const keep = overflow ? Math.floor(source.text.length * 0.93) : source.text.length;
-  const declared = Math.round(policy.latency_s * 1000);
+export async function renderDeliverable(
+  source: SourceDocument,
+  producerAgentId: string,
+  policy: ExecutionPolicy,
+): Promise<PdfArtifact> {
+  const started = performance.now();
+  const { bytes } = await renderHtmlToPdf(source, policy);
   return {
     artifact_ref: newId("art"),
     kind: "pdf",
-    simulated: true,
     producer_agent_id: producerAgentId,
-    page_size: source.page_size,
-    margins_cm: source.margins_cm,
-    pages: source.expected_pages,
-    text: source.text.slice(0, keep),
-    overflow_regions: overflow ? 2 : 0,
-    fonts_embedded: !overflow,
-    links: [...source.links],
-    valid: true,
-    bytes: 18_000 + source.text.length * 4,
+    pdf_base64: Buffer.from(bytes).toString("base64"),
     self_report: policy.self_report,
-    observed_latency_ms: Math.round(declared * (1 + policy.latency_jitter)),
-    declared_latency_ms: declared,
+    observed_latency_ms: Math.round(performance.now() - started),
+    declared_latency_ms: Math.round(policy.latency_s * 1000),
   };
 }
 

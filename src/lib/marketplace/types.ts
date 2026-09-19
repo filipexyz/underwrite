@@ -11,7 +11,8 @@ import type { Selection } from "./quotes";
 
 export type SelectionPolicy = "cheapest" | "cheapest_trusted";
 
-export type SimulatedTokens = { in: number; out: number };
+/** Declared token profile on an agent policy (quoting / cost honesty), not a simulation switch. */
+export type TokenEstimate = { in: number; out: number };
 
 export type QuotePolicy = {
   strategy: Strategy;
@@ -29,13 +30,13 @@ export type QuotePolicy = {
 export type ExecutionPolicy = {
   /** Deterministic artifact outcome — the injected failure lives here (D-014). */
   quality: "clean" | "layout_overflow";
-  /** Simulated wall time of the render. */
+  /** Quoted render time the producer declared (SLA / cost honesty). */
   latency_s: number;
-  /** Observed = latency_s × (1 + jitter). Positive = late. */
+  /** Declared slack vs `latency_s`. Observed latency comes from the real render. */
   latency_jitter: number;
   /** What the producer claims after delivering. Capped, low weight, suspect. */
   self_report: number;
-  tokens: SimulatedTokens;
+  tokens: TokenEstimate;
 };
 
 export type AgentPolicy = {
@@ -57,8 +58,8 @@ export type AgentPolicy = {
   };
   execution: ExecutionPolicy | null;
   /** Tokens burned when acting as a judge. `null` = not a judge. */
-  judge: { tokens: SimulatedTokens } | null;
-  planning_tokens: SimulatedTokens;
+  judge: { tokens: TokenEstimate } | null;
+  planning_tokens: TokenEstimate;
 };
 
 /** Per-model list price used to turn token usage into dollars. */
@@ -108,7 +109,7 @@ export type EngineState = {
   bid_id: string | null;
   attempt: number;
   escalations: number;
-  /** Simulated wall time consumed so far, against `max_latency_s`. */
+  /** Quoted coordination time plus observed render time, against `max_latency_s`. */
   elapsed_s: number;
   /** Coordination time of hops contracted but not yet executed. */
   pending_latency_s: number;

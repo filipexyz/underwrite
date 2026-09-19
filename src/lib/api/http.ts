@@ -15,6 +15,11 @@ import {
 import { getDb } from "@/lib/db/client";
 import type { ApiKeyRow } from "@/lib/db/schema";
 import { env } from "@/lib/env";
+import {
+  findInferenceError,
+  InferenceNotConfiguredError,
+  MODEL_PROVIDER_REQUIRED_MESSAGE,
+} from "@/lib/observability/inference";
 
 export function jsonError(status: number, error: string, details?: unknown): NextResponse {
   return NextResponse.json({ error, ...(details === undefined ? {} : { details }) }, { status });
@@ -55,4 +60,16 @@ export function absoluteUrl(request: Request, path: string): string {
   const proto = request.headers.get("x-forwarded-proto") ?? url.protocol.replace(":", "");
   const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? url.host;
   return `${proto}://${host}${path}`;
+}
+
+/** 503 when NeuraLake is not configured. Marketplace requests must not simulate. */
+export function modelProviderUnavailableResponse(): NextResponse | null {
+  if (env.modelProvider.enabled) return null;
+  return jsonError(503, MODEL_PROVIDER_REQUIRED_MESSAGE, new InferenceNotConfiguredError().details);
+}
+
+export function inferenceErrorResponse(error: unknown): NextResponse | null {
+  const found = findInferenceError(error);
+  if (!found) return null;
+  return jsonError(found.httpStatus, found.message, found.details);
 }

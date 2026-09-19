@@ -235,7 +235,7 @@ function BuyerPanel({ keyValue, onKeyChange }: { keyValue: string; onKeyChange: 
             value={keyValue}
             onChange={onKeyChange}
             placeholder="uw_buyer_…"
-            hint="Stored in sessionStorage only. Leave empty for demoday (no legacy env)."
+            hint="Stored in sessionStorage only. Optional if UNDERWRITE_API_KEY is unset. Server still needs NeuraLake."
           />
           <label htmlFor="buyer-body" className="flex flex-col gap-1 text-sm">
             <span className="eyebrow !mb-0">JSON body</span>

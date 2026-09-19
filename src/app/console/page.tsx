@@ -6,12 +6,21 @@ import { Badge, Empty, Money, PageIntro, Panel, Pct, Td, Th } from "./ui";
 
 export const dynamic = "force-dynamic";
 
-export default async function ConsolePage() {
+export default async function ConsolePage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+  const { error } = await searchParams;
   const { db } = await getDb();
   const rows = await listRequests(db);
 
   return (
     <div className="flex flex-col gap-8">
+      {error === "model_provider" ? (
+        <p className="border border-danger bg-panel px-4 py-3 text-sm text-danger">
+          Marketplace inference requires <code>MODEL_PROVIDER_API_KEY</code> (aliases{" "}
+          <code>NEURALAKE_API_KEY</code> / <code>OPENAI_API_KEY</code>). Point{" "}
+          <code>MODEL_PROVIDER_BASE_URL</code> at <code>https://api.neuralake.cloud/v1</code>. There is no
+          simulated fallback.
+        </p>
+      ) : null}
       <PageIntro
         eyebrow="INTERNAL / AGENT WORKFLOW OBSERVABILITY"
         title={

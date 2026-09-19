@@ -56,6 +56,14 @@ export default async function AdminPage() {
             <b className="text-teal">Clerk public metadata</b>
             <span className="text-right text-[#5c6862]">{`{ "role": "admin" }`} or {`{ "admin": true }`}</span>
           </li>
+          <li className="flex justify-between gap-4 border-t border-line py-2.5 font-mono text-[10px] tracking-wide">
+            <b className="text-teal">MODEL_PROVIDER_API_KEY</b>
+            <span className="text-right text-[#5c6862]">
+              {env.modelProvider.enabled
+                ? `${env.modelProvider.name} · ${env.modelProvider.model} · ${env.modelProvider.baseUrl}`
+                : "unset — POST /api/v1/requests returns 503 (no simulated inference)"}
+            </span>
+          </li>
         </ul>
       </Panel>
 

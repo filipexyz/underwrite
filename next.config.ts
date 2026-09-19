@@ -10,6 +10,8 @@ const nextConfig: NextConfig = {
     "@electric-sql/pglite",
     "agora-agents",
     "agora-token",
+    "pdf-lib",
+    "@pdf-lib/fontkit",
   ],
   // Enables `forbidden()` / `unauthorized()` so `/admin` can return 403.
   experimental: {
