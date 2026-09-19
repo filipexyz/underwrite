@@ -1,0 +1,7 @@
+{
+  "type": "rejected",
+  "job_id": "req_smokeplanrequest01",
+  "request_id": "req_smokeplanrequest01",
+  "plan_id": "plan_smokeother000001",
+  "reason": "not selected (best-score)"
+}

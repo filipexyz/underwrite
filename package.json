@@ -13,7 +13,9 @@
     "db:migrate": "tsx scripts/migrate.ts",
     "db:seed": "tsx scripts/seed.ts",
     "loop": "tsx scripts/run-loop.ts",
-    "demo": "tsx scripts/demo.ts"
+    "demo": "tsx scripts/demo.ts",
+    "seller:typecheck": "pnpm --dir workers/cloudflare-seller typecheck",
+    "seller:test": "pnpm --dir workers/cloudflare-seller test"
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^3.0.53",

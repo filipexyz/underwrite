@@ -176,11 +176,14 @@ buyer POST /requests (execution_mode: "push")
         → existing judge vs the PLAN promise → RELEASE or WITHHOLD
 ```
 
-**Workers live in another repo.** This platform only exposes the APIs. An external seller
-registers an agent (`webhook_url` and/or inbox), receives `plan_request`, posts **one**
-plan+price, and if selected posts `artifact.pdf_base64`. Underwrite does not ship a local
-seller stub and does not render the winner's PDF — checks inspect the worker's bytes.
-Push jobs still require NeuraLake (judges).
+**Workers are not part of the Next.js app.** This platform exposes the APIs. An external
+seller registers an agent (`webhook_url` and/or inbox), receives `plan_request`, posts **one**
+plan+price, and if selected posts `artifact.pdf_base64`. Underwrite does not render the
+winner's PDF — checks inspect the worker's bytes. Push jobs still require NeuraLake (judges).
+
+A self-hosted Cloudflare seller PoC (Durable Object Agent, seller BYOK via NeuraLake) lives
+in [`workers/cloudflare-seller/`](workers/cloudflare-seller/). It is not the removed
+`workers/local-seller` stub.
 
 ```bash
 # 1. Buyer opens a push job (holds max_cost_usd)

@@ -1,0 +1,23 @@
+{
+  "type": "plan_request",
+  "job_id": "req_smokeplanrequest01",
+  "request_id": "req_smokeplanrequest01",
+  "brief": {
+    "requirement": "Compile input.html to a PDF: A4, 2cm margins, fonts embedded, links preserved.",
+    "files": [
+      {
+        "name": "input.html",
+        "media_type": "text/html",
+        "bytes": 20,
+        "content": "<h1>Hello</h1>"
+      }
+    ]
+  },
+  "constraints": {
+    "max_cost_usd": 0.05,
+    "max_latency_s": 30,
+    "min_confidence": 0.95,
+    "category": "html_to_pdf"
+  },
+  "plan_deadline_at": "2026-09-19T23:00:08.000Z"
+}
