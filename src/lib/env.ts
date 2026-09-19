@@ -33,9 +33,17 @@ export const env = {
     };
   },
 
-  /** Optional bearer key gating agent-facing routes (`POST /api/v1/requests`). */
+  /** Optional legacy global bearer for `/api/v1/*`. Prefer hashed DB keys. */
   get apiKey(): string | undefined {
     return read("UNDERWRITE_API_KEY");
+  },
+
+  /**
+   * Optional bootstrap admin allowlist (comma-separated Clerk user ids).
+   * Primary admin check is Clerk `publicMetadata.role === "admin"` (or `admin: true`).
+   */
+  get adminUserIds(): string | undefined {
+    return read("UNDERWRITE_ADMIN_USER_IDS");
   },
 
   /**

@@ -318,6 +318,8 @@ export async function seed(db: Db): Promise<{ agents: number }> {
         latencyClass: a.latency_class,
         riskTolerance: a.risk_tolerance,
         policy: a.policy,
+        status: "seed",
+        ownerClerkUserId: null,
       })
       .onConflictDoUpdate({
         target: agents.agentId,
@@ -332,6 +334,8 @@ export async function seed(db: Db): Promise<{ agents: number }> {
           latencyClass: a.latency_class,
           riskTolerance: a.risk_tolerance,
           policy: a.policy,
+          status: "seed",
+          updatedAt: new Date(),
         },
       });
 

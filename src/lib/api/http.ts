@@ -1,25 +1,53 @@
 /**
- * Helpers for the agent-facing API: optional API-key gate + JSON errors.
+ * Helpers for the agent-facing API: API-key gate + JSON errors.
+ *
+ * Buyer routes accept the legacy env `UNDERWRITE_API_KEY` or a non-revoked
+ * hashed buyer / admin_service key. When neither a presented key nor the
+ * legacy env is set, `/api/v1/requests*` stays public for the demoday loop.
  */
 import { NextResponse } from "next/server";
+import {
+  extractPresentedKey,
+  resolveBuyerAuth,
+  resolveSellerAuth,
+  type BuyerAuth,
+} from "@/lib/auth/api-keys";
+import { getDb } from "@/lib/db/client";
+import type { ApiKeyRow } from "@/lib/db/schema";
 import { env } from "@/lib/env";
 
 export function jsonError(status: number, error: string, details?: unknown): NextResponse {
   return NextResponse.json({ error, ...(details === undefined ? {} : { details }) }, { status });
 }
 
-/**
- * When `UNDERWRITE_API_KEY` is set, every `/api/v1` call must carry it as
- * `Authorization: Bearer <key>` or `x-api-key: <key>`. Unset → public.
- */
-export function requireApiKey(request: Request): NextResponse | null {
-  const expected = env.apiKey;
-  if (!expected) return null;
-  const header = request.headers.get("authorization") ?? "";
-  const bearer = header.toLowerCase().startsWith("bearer ") ? header.slice(7).trim() : null;
-  const provided = bearer ?? request.headers.get("x-api-key");
-  if (provided === expected) return null;
-  return jsonError(401, "missing or invalid API key");
+export async function authorizeBuyerRequest(
+  request: Request,
+): Promise<{ ok: true; auth: BuyerAuth } | { ok: false; response: NextResponse }> {
+  const { db } = await getDb();
+  const result = await resolveBuyerAuth({
+    presented: extractPresentedKey(request.headers),
+    legacyKey: env.apiKey,
+    db,
+  });
+  if (!result.ok) return { ok: false, response: jsonError(result.status, result.error) };
+  return { ok: true, auth: result.auth };
+}
+
+export async function requireApiKey(request: Request): Promise<NextResponse | null> {
+  const auth = await authorizeBuyerRequest(request);
+  return auth.ok ? null : auth.response;
+}
+
+export async function requireSellerKey(
+  request: Request,
+): Promise<{ ok: true; key: ApiKeyRow; agentId: string } | { ok: false; response: NextResponse }> {
+  const { db } = await getDb();
+  const result = await resolveSellerAuth({
+    presented: extractPresentedKey(request.headers),
+    db,
+  });
+  if (!result.ok) return { ok: false, response: jsonError(result.status, result.error) };
+  return { ok: true, key: result.key, agentId: result.agentId };
 }
 
 export function absoluteUrl(request: Request, path: string): string {

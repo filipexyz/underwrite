@@ -34,6 +34,12 @@ import type { AgentPolicy, EngineState } from "../marketplace/types";
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
 const updatedAt = () => timestamp("updated_at", { withTimezone: true }).notNull().defaultNow();
 
+export const AGENT_STATUSES = ["seed", "registered", "disabled"] as const;
+export type AgentStatus = (typeof AGENT_STATUSES)[number];
+
+export const API_KEY_ROLES = ["buyer", "seller", "admin_service"] as const;
+export type ApiKeyRole = (typeof API_KEY_ROLES)[number];
+
 // ---------------------------------------------------------------------------
 // Registry
 // ---------------------------------------------------------------------------
@@ -50,8 +56,42 @@ export const agents = pgTable("agents", {
   latencyClass: text("latency_class").notNull(),
   riskTolerance: text("risk_tolerance").notNull(),
   policy: jsonb("policy").$type<AgentPolicy>().notNull(),
+  /** `seed` = demo catalog; `registered` = self-serve seller; `disabled` = hidden from hire. */
+  status: text("status").$type<AgentStatus>().notNull().default("seed"),
+  ownerClerkUserId: text("owner_clerk_user_id"),
+  contact: text("contact"),
+  webhookUrl: text("webhook_url"),
   createdAt: createdAt(),
-});
+  updatedAt: updatedAt(),
+}, (t) => [
+  index("agents_status_idx").on(t.status),
+  index("agents_owner_idx").on(t.ownerClerkUserId),
+]);
+
+/**
+ * Hashed API secrets. The plaintext is shown once at create time and never stored.
+ * `UNDERWRITE_API_KEY` remains a legacy global bearer for demoday.
+ */
+export const apiKeys = pgTable(
+  "api_keys",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    role: text("role").$type<ApiKeyRole>().notNull(),
+    keyPrefix: text("key_prefix").notNull(),
+    keyHash: text("key_hash").notNull().unique(),
+    ownerClerkUserId: text("owner_clerk_user_id"),
+    agentId: text("agent_id").references(() => agents.agentId),
+    scopes: jsonb("scopes").$type<string[]>().notNull(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("api_keys_owner_idx").on(t.ownerClerkUserId),
+    index("api_keys_agent_idx").on(t.agentId),
+  ],
+);
 
 /** `trust_global`: per agent, per task category. Observed history, EMA-updated. */
 export const trustAxes = pgTable(
@@ -117,6 +157,8 @@ export const requests = pgTable(
     failurePolicy: text("failure_policy").notNull(),
     selectionTimeoutS: doublePrecision("selection_timeout_s").notNull(),
     verification: jsonb("verification").$type<VerificationSpec>().notNull(),
+    /** Clerk user (or local-dev) wallet debited for this request. Null = system `buyer` wallet. */
+    buyerWalletId: text("buyer_wallet_id"),
     /** Engine cursor between workflow steps (active chain, escalations, elapsed time). */
     state: jsonb("state").$type<EngineState>(),
     /** Final certificate / failure summary once the loop settles. */
@@ -277,6 +319,7 @@ export const attributions = pgTable(
 );
 
 export type AgentRow = typeof agents.$inferSelect;
+export type ApiKeyRow = typeof apiKeys.$inferSelect;
 export type TrustAxesRow = typeof trustAxes.$inferSelect;
 export type TrustPairwiseRow = typeof trustPairwise.$inferSelect;
 export type WalletRow = typeof wallets.$inferSelect;

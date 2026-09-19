@@ -14,7 +14,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const denied = requireApiKey(request);
+  const denied = await requireApiKey(request);
   if (denied) return denied;
   const { id } = await params;
   const { db } = await getDb();

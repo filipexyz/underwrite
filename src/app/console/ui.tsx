@@ -22,6 +22,17 @@ const STATUS_STYLE: Record<string, string> = {
   pass: "bg-accent/15 text-accent",
   fail: "bg-danger/15 text-danger",
   inconclusive: "bg-warn/15 text-warn",
+  seed: "bg-border text-foreground",
+  registered: "bg-accent/15 text-accent",
+  disabled: "bg-danger/15 text-danger",
+  buyer: "bg-accent/15 text-accent",
+  seller: "bg-warn/15 text-warn",
+  admin_service: "bg-border text-foreground",
+  revoked: "bg-danger/15 text-danger",
+  active: "bg-accent/15 text-accent",
+  user: "bg-accent/15 text-accent",
+  agent: "bg-warn/15 text-warn",
+  system: "bg-border text-foreground",
 };
 
 export const TERMINAL_STATUSES = new Set(["completed", "failed", "no_eligible_bid"]);
@@ -58,7 +69,7 @@ export function Empty({ children }: { children: ReactNode }) {
   return <p className="text-sm text-muted">{children}</p>;
 }
 
-export function Th({ children, right }: { children: ReactNode; right?: boolean }) {
+export function Th({ children, right }: { children?: ReactNode; right?: boolean }) {
   return <th className={`text-xs font-medium text-muted uppercase tracking-wider py-1.5 ${right ? "text-right" : "text-left"} pr-3`}>{children}</th>;
 }
 

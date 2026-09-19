@@ -40,7 +40,11 @@ export const DEMO_REQUEST: RequestInput = {
   selection_timeout_s: 5,
 };
 
-export async function createRequest(db: Db, input: RequestInput, meta: { actor?: string; source?: string } = {}): Promise<RequestRow> {
+export async function createRequest(
+  db: Db,
+  input: RequestInput,
+  meta: { actor?: string; source?: string; buyerWalletId?: string } = {},
+): Promise<RequestRow> {
   const requestId = newId("req");
   const verification = input.verification ?? defaultRubricFor(DEFAULT_CATEGORY);
   const [row] = await db
@@ -57,6 +61,7 @@ export async function createRequest(db: Db, input: RequestInput, meta: { actor?:
       failurePolicy: input.failure_policy,
       selectionTimeoutS: input.selection_timeout_s,
       verification,
+      buyerWalletId: meta.buyerWalletId,
     })
     .returning();
 
@@ -76,6 +81,7 @@ export async function createRequest(db: Db, input: RequestInput, meta: { actor?:
       failure_policy: input.failure_policy,
       selection_timeout_s: input.selection_timeout_s,
       rubric_version: verification.rubric_version,
+      buyer_wallet_id: meta.buyerWalletId ?? null,
     },
   });
   return row;
@@ -165,6 +171,7 @@ export function toApiRequest(detail: RequestDetail) {
     max_latency_s: r.maxLatencyS,
     min_confidence: r.minConfidence,
     failure_policy: r.failurePolicy,
+    buyer_wallet_id: r.buyerWalletId,
     selection_timeout_s: r.selectionTimeoutS,
     verification_spec: r.verification,
     outcome: r.outcome,

@@ -15,15 +15,16 @@ import { RequestInput } from "@/lib/contracts";
 import { getDb } from "@/lib/db/client";
 import { createRequest, getRequestDetail, listRequests, toApiRequest } from "@/lib/marketplace/requests";
 import { runMarketplace } from "@/mastra";
-import { absoluteUrl, jsonError, requireApiKey } from "@/lib/api/http";
+import { absoluteUrl, authorizeBuyerRequest, jsonError, requireApiKey } from "@/lib/api/http";
+import { ensureUserWallet } from "@/lib/marketplace/credits";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export async function POST(request: Request) {
-  const denied = requireApiKey(request);
-  if (denied) return denied;
+  const auth = await authorizeBuyerRequest(request);
+  if (!auth.ok) return auth.response;
 
   let body: unknown;
   try {
@@ -35,7 +36,19 @@ export async function POST(request: Request) {
   if (!parsed.success) return jsonError(422, "invalid request", parsed.error.flatten());
 
   const { db } = await getDb();
-  const row = await createRequest(db, parsed.data, { actor: "agent", source: "api" });
+  let buyerWalletId: string | undefined;
+  if (auth.auth.kind === "key" && auth.auth.key.ownerClerkUserId) {
+    const wallet = await ensureUserWallet(db, auth.auth.key.ownerClerkUserId);
+    if (wallet.capitalUsd < parsed.data.max_cost_usd) {
+      return jsonError(402, "insufficient wallet balance", {
+        owner_id: wallet.ownerId,
+        balance_usd: wallet.capitalUsd,
+        required_usd: parsed.data.max_cost_usd,
+      });
+    }
+    buyerWalletId = wallet.ownerId;
+  }
+  const row = await createRequest(db, parsed.data, { actor: "agent", source: "api", buyerWalletId });
   const wait = new URL(request.url).searchParams.get("wait") === "1";
 
   if (wait) {
@@ -68,7 +81,7 @@ export async function POST(request: Request) {
 }
 
 export async function GET(request: Request) {
-  const denied = requireApiKey(request);
+  const denied = await requireApiKey(request);
   if (denied) return denied;
   const { db } = await getDb();
   const limit = Math.min(Number(new URL(request.url).searchParams.get("limit") ?? 50) || 50, 200);
