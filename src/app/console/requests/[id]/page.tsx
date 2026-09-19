@@ -82,7 +82,7 @@ export default async function RequestPage({ params }: { params: Promise<{ id: st
           eyebrow="RUN EXPLAINER / THE MARKET DECISION"
           title={
             <>
-              What happened to <em>this</em> task?
+              What happened to this <em>task?</em>
             </>
           }
           lede={request.requirement}

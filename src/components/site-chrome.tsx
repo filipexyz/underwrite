@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { UserButton } from "@clerk/nextjs";
-import { AppNav } from "@/components/app-nav";
+import { AppNav, OpsHint } from "@/components/app-nav";
 import { env } from "@/lib/env";
 
 export function Brand({ href = "/" }: { href?: string }) {
@@ -48,7 +48,7 @@ export function SiteHeader({
         ) : null}
       </div>
       <div className="flex items-center gap-3 shrink-0">
-        {variant === "ops" && hint ? <span className="hidden lg:inline eyebrow !m-0 text-muted">{hint}</span> : null}
+        {variant === "ops" && hint ? <OpsHint fallback={hint} /> : null}
         {variant === "ops" ? (
           env.clerk.enabled ? (
             <UserButton />
