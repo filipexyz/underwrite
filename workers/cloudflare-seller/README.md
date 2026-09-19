@@ -48,7 +48,9 @@ Local:
 pnpm dev                         # http://127.0.0.1:8787
 ```
 
-Production secrets (do **not** put keys in `wrangler.jsonc`):
+Production secrets (do **not** put keys in `wrangler.jsonc` or GitHub Actions YAML).
+On `main`, GitHub Actions runs `wrangler deploy` (see [§8](#8-github-actions-ci--deploy)).
+After the Worker exists, set runtime secrets once:
 
 ```bash
 wrangler secret put UNDERWRITE_SELLER_API_KEY
@@ -56,7 +58,7 @@ wrangler secret put NEURALAKE_API_KEY
 wrangler secret put UNDERWRITE_WEBHOOK_SECRET
 # optional overrides; otherwise wrangler.jsonc vars apply
 # wrangler secret put UNDERWRITE_BASE_URL
-pnpm deploy
+# local / first-time: pnpm deploy
 ```
 
 Register the public URL (HMAC webhook is preferred over inbox):
@@ -169,11 +171,69 @@ curl -s -X POST "$UNDERWRITE_BASE_URL/api/v1/requests" \
 
 Docs/playground: `/developers` and `/developers/playground`.
 
+## 8. GitHub Actions (CI + deploy)
+
+Pushes and PRs that touch `workers/cloudflare-seller/**` or `.github/workflows/cloudflare-seller.yml` run [`.github/workflows/cloudflare-seller.yml`](../../.github/workflows/cloudflare-seller.yml).
+
+| Event | Jobs |
+|-------|------|
+| **pull_request** (path filter) | `pnpm install` → `typecheck` → `test` → `wrangler deploy --dry-run` |
+| **push to `main`** (same paths) | the same checks, then **`wrangler deploy`** |
+
+Dry-run only bundles. It does **not** need a Cloudflare token or BYOK keys.
+
+### GitHub repo secrets (deploy only)
+
+Settings → Secrets and variables → Actions:
+
+| Secret | Required for | What |
+|--------|--------------|------|
+| `CLOUDFLARE_API_TOKEN` | deploy on `main` | API token. Create one in Cloudflare → My Profile → API Tokens → template **Edit Cloudflare Workers** (Workers Scripts Edit + Account Settings Read). Scope it to this account. |
+| `CLOUDFLARE_ACCOUNT_ID` | deploy on `main` | Account ID from the Workers overview sidebar. |
+
+CI reads these as `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` (wrangler’s standard env). They are **not** written into the workflow file.
+
+Until both secrets exist, the PR check still goes green (dry-run). The **deploy** job on `main` fails with a clear error.
+
+### Worker runtime secrets (not in GitHub Actions)
+
+Do **not** put seller / NeuraLake / HMAC keys in the workflow or in GitHub Actions if you can avoid it. BYOK stays on the Worker:
+
+1. Merge so CI creates/updates `underwrite-cloudflare-seller`.
+2. Set secrets **once** (later deploys keep them; `wrangler deploy` does not wipe secrets):
+
+```bash
+cd workers/cloudflare-seller
+npx wrangler secret put UNDERWRITE_SELLER_API_KEY
+npx wrangler secret put NEURALAKE_API_KEY
+npx wrangler secret put UNDERWRITE_WEBHOOK_SECRET
+# production platform origin (wrangler.jsonc defaults to localhost)
+npx wrangler secret put UNDERWRITE_BASE_URL
+```
+
+Or Cloudflare dashboard → Workers & Pages → **underwrite-cloudflare-seller** → Settings → Variables and Secrets.
+
+| Worker secret | Why |
+|---------------|-----|
+| `UNDERWRITE_SELLER_API_KEY` | `uw_seller_…` for plans / deliverables / inbox |
+| `NEURALAKE_API_KEY` | seller BYOK for chat completions |
+| `UNDERWRITE_WEBHOOK_SECRET` | HMAC of `timestamp.body` (must match the platform) |
+| `UNDERWRITE_BASE_URL` | production Underwrite origin (override the localhost var) |
+
+Optional: `wrangler secret bulk` from a **local** JSON file you never commit. Wiring that file through a GitHub secret works but is easy to leak — prefer dashboard / `wrangler secret put` for BYOK.
+
+3. `GET https://underwrite-cloudflare-seller.<account>.workers.dev/health`
+4. `PATCH /api/v1/agents/me` `{ "webhook_url": "https://…/webhook" }` (`pnpm register`)
+
+Internal Underwrite agents: one Worker (and one CI deploy) per seller key, or fork the env mapping.
+
 ## Scripts
 
 ```bash
 pnpm typecheck
 pnpm test
+pnpm dry-run   # wrangler deploy --dry-run (no Cloudflare token)
 pnpm smoke
 pnpm register
 ```
+

@@ -183,7 +183,8 @@ winner's PDF — checks inspect the worker's bytes. Push jobs still require Neur
 
 A self-hosted Cloudflare seller PoC (Durable Object Agent, seller BYOK via NeuraLake) lives
 in [`workers/cloudflare-seller/`](workers/cloudflare-seller/). It is not the removed
-`workers/local-seller` stub.
+`workers/local-seller` stub. PRs that touch the worker run typecheck/test/`wrangler deploy --dry-run`;
+pushes to `main` deploy with [`.github/workflows/cloudflare-seller.yml`](.github/workflows/cloudflare-seller.yml).
 
 ```bash
 # 1. Buyer opens a push job (holds max_cost_usd)
