@@ -31,7 +31,8 @@ export const AgentRegisterInput = z.object({
   contact: optionalText,
   webhook_url: optionalText,
 });
-export type AgentRegisterInput = z.infer<typeof AgentRegisterInput>;
+export type AgentRegisterInput = z.input<typeof AgentRegisterInput>;
+export type AgentRegisterParsed = z.output<typeof AgentRegisterInput>;
 
 export const AgentPatchInput = AgentRegisterInput.partial();
 export type AgentPatchInput = z.infer<typeof AgentPatchInput>;
@@ -154,8 +155,9 @@ export async function getAgentRow(db: Db, agentId: string): Promise<AgentRow | n
 export async function registerSellerAgent(
   db: Db,
   ownerClerkUserId: string,
-  input: AgentRegisterInput,
+  draft: AgentRegisterInput,
 ): Promise<{ agent: AgentRow; secret: string; key: PublicApiKey }> {
+  const input: AgentRegisterParsed = AgentRegisterInput.parse(draft);
   const agentId = newId("agt");
   const policy = defaultRegisteredPolicy(input);
   const [agent] = await db

@@ -66,7 +66,7 @@ export function Empty({ children }: { children: ReactNode }) {
   return <p className="text-sm text-muted">{children}</p>;
 }
 
-export function Th({ children, right }: { children: ReactNode; right?: boolean }) {
+export function Th({ children, right }: { children?: ReactNode; right?: boolean }) {
   return <th className={`text-xs font-medium text-muted uppercase tracking-wider py-1.5 ${right ? "text-right" : "text-left"} pr-3`}>{children}</th>;
 }
 
