@@ -89,7 +89,7 @@ export default async function InterviewNeedPage({ params }: { params: Promise<{ 
         {need.resultJson ? (
           <pre className="text-xs leading-relaxed overflow-x-auto bg-[#d8dfd8] p-3.5 font-mono">{JSON.stringify(need.resultJson, null, 2)}</pre>
         ) : (
-          <Empty>No answers yet. Share the interviewee link; results land here after Finish.</Empty>
+          <Empty>No answers yet. Share the interviewee link; results land here after the interviewer ends the call.</Empty>
         )}
       </Panel>
 

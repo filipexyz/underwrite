@@ -232,9 +232,13 @@ needs still works. Marketplace routes are unchanged.
 
 1. Open `/interviews` (Clerk-protected when Clerk keys are set). Register a need.
 2. Copy the **interviewee link** `/i/[token]` (unguessable; possession is auth — no Clerk).
-3. The human opens that page only: Start → mic + GPT Live agent. No console chrome.
-4. **Finish** → `POST /api/v1/interviews/i/[token]/finalize` stops the agent, parses the final JSON
-   (or a post-call extract), writes `result_json` on the need. The link is spent (`completed`).
+3. The human opens that page only: the call auto-joins (Connecting → Live). Mic + GPT Live agent.
+   No console chrome, no Finish/Conclude button. Copy on the call: *The interviewer will end the
+   call when everything is answered.*
+4. The agent covers every required field, then emits completion JSON. The client posts
+   `POST /api/v1/interviews/i/[token]/finalize` (creator path is the same rule). The server parses
+   the agent JSON or runs a post-call extract. **Incomplete briefs are rejected (409)** and the
+   agent stays on the call. Complete answers write `result_json` and spend the link (`completed`).
 5. The creator reads answers on `/interviews/[id]`.
 
 ### APIs
@@ -245,10 +249,10 @@ needs still works. Marketplace routes are unchanged.
 | `GET /api/v1/interviews/needs` | List. Includes `{ agora: { enabled, missing } }`. |
 | `GET /api/v1/interviews/needs/[id]` | Detail + sessions + `result_json`. |
 | `POST /api/v1/interviews/needs/[id]/start` | Creator start (Clerk). Same engine as the public start. **503** if Agora keys are missing. |
-| `POST /api/v1/interviews/sessions/[id]/finalize` | Creator finalize (Clerk). |
+| `POST /api/v1/interviews/sessions/[id]/finalize` | Creator finalize (Clerk). **409** if required fields are incomplete. |
 | `GET /api/v1/interviews/i/[token]` | Public invite lookup. |
 | `POST /api/v1/interviews/i/[token]/start` | Interviewee start. Auth = token. **410** if already completed. |
-| `POST /api/v1/interviews/i/[token]/finalize` | Interviewee finish. Auth = token. |
+| `POST /api/v1/interviews/i/[token]/finalize` | Agent-only completion. Auth = token. **409** if the brief is incomplete. |
 
 `/i/[token]` is public. `/interviews` is the creator pool. These routes do **not** use
 `UNDERWRITE_API_KEY`. Tables: `interview_needs` (includes `public_token`), `interview_sessions`.
