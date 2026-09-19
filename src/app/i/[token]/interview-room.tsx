@@ -1,14 +1,11 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Badge, Panel } from "@/app/console/ui";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { extractAnswersFromTranscript } from "@/lib/interviews/extract";
 import { parseRtmMessage, upsertTranscript } from "@/lib/interviews/rtm";
 import type { TranscriptTurn } from "@/lib/interviews/types";
 
 type StartPayload = {
-  session_id: string;
   channel: string;
   token: string;
   uid: string;
@@ -18,18 +15,29 @@ type StartPayload = {
   details?: unknown;
 };
 
-type Props = {
-  title: string;
+function statusLabel(phase: string, agentState: string, agentConnected: boolean): string {
+  if (phase === "connecting") return "connecting";
+  if (phase === "ending") return "saving";
+  if (phase === "thanks") return "done";
+  if (phase !== "live") return "ready";
+  if (!agentConnected) return "waiting";
+  if (agentState === "listening" || agentState === "idle" || agentState === "silent") return "listening";
+  if (agentState === "thinking") return "thinking";
+  if (agentState === "speaking") return "speaking";
+  return agentState || "listening";
+}
+
+export function InterviewRoom({
+  startPath,
+  finalizePath,
+  appId,
+  requiredFields,
+}: {
   startPath: string;
   finalizePath: string;
   appId: string;
   requiredFields: string[];
-  variant: "public" | "creator";
-  creatorNeedId?: string;
-};
-
-export function InterviewRoom({ title, startPath, finalizePath, appId, requiredFields, variant, creatorNeedId }: Props) {
-  const router = useRouter();
+}) {
   const [phase, setPhase] = useState<"idle" | "connecting" | "live" | "ending" | "thanks">("idle");
   const [error, setError] = useState<string | null>(null);
   const [agentState, setAgentState] = useState("idle");
@@ -40,7 +48,7 @@ export function InterviewRoom({ title, startPath, finalizePath, appId, requiredF
   const rtcRef = useRef<import("agora-rtc-sdk-ng").IAgoraRTCClient | null>(null);
   const micRef = useRef<import("agora-rtc-sdk-ng").IMicrophoneAudioTrack | null>(null);
   const rtmRef = useRef<import("agora-rtm").RTMClient | null>(null);
-  const preview = useMemo(() => extractAnswersFromTranscript(transcript, requiredFields), [transcript, requiredFields]);
+  const finishing = useRef(false);
 
   const cleanupMedia = useCallback(async () => {
     try {
@@ -66,6 +74,8 @@ export function InterviewRoom({ title, startPath, finalizePath, appId, requiredF
 
   const finalize = useCallback(
     async (turns: TranscriptTurn[]) => {
+      if (finishing.current) return;
+      finishing.current = true;
       setPhase("ending");
       try {
         await fetch(finalizePath, {
@@ -75,15 +85,10 @@ export function InterviewRoom({ title, startPath, finalizePath, appId, requiredF
         });
       } finally {
         await cleanupMedia();
-        if (variant === "creator" && creatorNeedId) {
-          router.push(`/interviews/${creatorNeedId}`);
-          router.refresh();
-        } else {
-          setPhase("thanks");
-        }
+        setPhase("thanks");
       }
     },
-    [cleanupMedia, creatorNeedId, finalizePath, router, variant],
+    [cleanupMedia, finalizePath],
   );
 
   const join = useCallback(async () => {
@@ -131,7 +136,16 @@ export function InterviewRoom({ title, startPath, finalizePath, appId, requiredF
         if (parsed.kind === "state") setAgentState(parsed.state);
         if (parsed.kind === "error") setError(parsed.message);
         if (parsed.kind === "transcript") {
-          setTranscript((prev) => upsertTranscript(prev, parsed.turn, parsed.inProgress));
+          setTranscript((prev) => {
+            const next = upsertTranscript(prev, parsed.turn, parsed.inProgress);
+            if (!parsed.inProgress && parsed.turn.role === "assistant") {
+              const answers = extractAnswersFromTranscript(next, requiredFields);
+              if (answers?.source === "agent_json") {
+                queueMicrotask(() => void finalize(next));
+              }
+            }
+            return next;
+          });
         }
       });
       await rtm.login({ token: payload.token });
@@ -141,9 +155,10 @@ export function InterviewRoom({ title, startPath, finalizePath, appId, requiredF
     } catch (err) {
       await cleanupMedia();
       setPhase("idle");
+      finishing.current = false;
       setError(err instanceof Error ? err.message : "failed to join");
     }
-  }, [appId, cleanupMedia, startPath]);
+  }, [appId, cleanupMedia, finalize, requiredFields, startPath]);
 
   useEffect(() => {
     return () => {
@@ -164,100 +179,53 @@ export function InterviewRoom({ title, startPath, finalizePath, appId, requiredF
   if (phase === "thanks") {
     return (
       <section className="rounded-lg border border-border bg-panel p-8 flex flex-col gap-3 text-center">
-        <p className="text-xs uppercase tracking-wider text-accent">done</p>
+        <p className="mono text-xs uppercase tracking-wider text-accent">done</p>
         <h2 className="text-2xl font-semibold tracking-tight">Thanks — you can close this tab</h2>
-        <p className="text-sm text-muted">Your answers were saved. Nothing else to do here.</p>
+        <p className="text-sm text-muted">Your answers were saved.</p>
       </section>
     );
   }
 
-  return (
-    <div className="flex flex-col gap-4">
-      <Panel
-        title={title}
-        aside={
-          <div className="flex items-center gap-2">
-            <Badge value={phase} />
-            <Badge value={agentState} />
-            {agentConnected ? <Badge value="agent" /> : null}
-          </div>
-        }
-      >
-        <div className="flex flex-col gap-3 text-sm">
-          <p className="text-muted">
-            {variant === "public"
-              ? "Allow the microphone. A voice agent will ask a few questions, one at a time. Hit Finish when it says it's done."
-              : "Preview the interviewee call. Prefer sending the public /i/ link."}
-          </p>
-          {error && <p className="text-danger">{error}</p>}
-          <div className="flex flex-wrap gap-2 pt-1">
-            {phase === "idle" && (
-              <button type="button" onClick={() => void join()} className="rounded-md bg-accent text-background px-4 py-2 text-sm font-medium hover:opacity-90">
-                Start
-              </button>
-            )}
-            {phase === "connecting" && <span className="mono text-xs text-muted">connecting…</span>}
-            {phase === "live" && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => void toggleMic()}
-                  className="rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-background"
-                >
-                  {micOn ? "Mute" : "Unmute"}
-                </button>
-                <button
-                  type="button"
-                  disabled={!joined}
-                  onClick={() => void finalize(transcript)}
-                  className="rounded-md bg-accent text-background px-4 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-50"
-                >
-                  Finish
-                </button>
-              </>
-            )}
-            {phase === "ending" && <span className="mono text-xs text-muted">saving…</span>}
-          </div>
-        </div>
-      </Panel>
+  const status = statusLabel(phase, agentState, agentConnected);
 
-      {variant === "creator" ? (
-        <div className="grid gap-4 md:grid-cols-2">
-          <Panel title="Transcript">
-            {transcript.length === 0 ? (
-              <p className="text-sm text-muted">Live turns appear here after Start.</p>
-            ) : (
-              <ul className="flex flex-col gap-2 max-h-80 overflow-y-auto">
-                {transcript.map((turn, index) => (
-                  <li key={`${turn.turn_id ?? index}-${turn.role}-${index}`} className="text-sm">
-                    <span className="mono text-xs text-muted">{turn.role}</span>
-                    <p>{turn.text}</p>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Panel>
-          <Panel title="Parsed answers">
-            {preview ? (
-              <pre className="text-xs leading-relaxed overflow-x-auto rounded bg-background p-3 border border-border">
-                {JSON.stringify(preview, null, 2)}
-              </pre>
-            ) : (
-              <p className="text-sm text-muted">Waiting for the agent&apos;s final JSON.</p>
-            )}
-          </Panel>
-        </div>
-      ) : phase === "live" && transcript.length > 0 ? (
-        <Panel title="Live">
-          <ul className="flex flex-col gap-2 max-h-56 overflow-y-auto">
-            {transcript.slice(-6).map((turn, index) => (
-              <li key={`${turn.turn_id ?? index}-${index}`} className="text-sm text-muted">
-                {turn.role === "assistant" ? turn.text : "You spoke"}
-              </li>
-            ))}
-          </ul>
-        </Panel>
-      ) : null}
-    </div>
+  return (
+    <section className="rounded-lg border border-border bg-panel p-6 flex flex-col gap-5 items-center text-center">
+      <p className={`mono text-xs uppercase tracking-wider ${status === "listening" || status === "speaking" ? "text-accent" : "text-muted"}`}>
+        {status}
+      </p>
+      <p className="text-sm text-muted max-w-sm">
+        Allow the microphone. A voice agent will ask a few questions, one at a time. You can hit Finish when it says it is
+        done — or it will wrap up on its own.
+      </p>
+      {error && <p className="text-sm text-danger">{error}</p>}
+      <div className="flex flex-wrap justify-center gap-2">
+        {phase === "idle" && (
+          <button type="button" onClick={() => void join()} className="rounded-md bg-accent text-background px-5 py-2 text-sm font-medium hover:opacity-90">
+            Start
+          </button>
+        )}
+        {phase === "connecting" && <span className="mono text-xs text-muted">joining…</span>}
+        {phase === "live" && (
+          <>
+            <button
+              type="button"
+              onClick={() => void toggleMic()}
+              className="rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-background"
+            >
+              {micOn ? "Mute" : "Unmute"}
+            </button>
+            <button
+              type="button"
+              disabled={!joined}
+              onClick={() => void finalize(transcript)}
+              className="rounded-md bg-accent text-background px-4 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-50"
+            >
+              Finish
+            </button>
+          </>
+        )}
+        {phase === "ending" && <span className="mono text-xs text-muted">saving…</span>}
+      </div>
+    </section>
   );
 }

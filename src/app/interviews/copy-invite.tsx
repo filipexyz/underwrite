@@ -4,10 +4,9 @@ import { useState } from "react";
 
 export function CopyInvite({ path }: { path: string }) {
   const [copied, setCopied] = useState(false);
-  const url = path.startsWith("http") ? path : path;
 
   async function copy() {
-    const absolute = `${window.location.origin}${url}`;
+    const absolute = `${window.location.origin}${path}`;
     await navigator.clipboard.writeText(absolute);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
@@ -15,7 +14,7 @@ export function CopyInvite({ path }: { path: string }) {
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <code className="mono text-xs rounded bg-background border border-border px-2 py-1.5">{url}</code>
+      <code className="mono text-xs rounded bg-background border border-border px-2 py-1.5">{path}</code>
       <button
         type="button"
         onClick={() => void copy()}
@@ -23,7 +22,7 @@ export function CopyInvite({ path }: { path: string }) {
       >
         {copied ? "Copied" : "Copy interviewee link"}
       </button>
-      <a href={url} className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-background">
+      <a href={path} className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-background">
         Open
       </a>
     </div>

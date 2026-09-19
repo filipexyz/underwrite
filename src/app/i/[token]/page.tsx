@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { getDb } from "@/lib/db/client";
 import { env } from "@/lib/env";
 import { getNeedByToken } from "@/lib/interviews/store";
-import { InterviewRoom } from "@/app/interviews/[id]/join/interview-room";
+import { InterviewRoom } from "./interview-room";
 
 export const dynamic = "force-dynamic";
 
@@ -30,12 +30,10 @@ export default async function PublicInterviewPage({ params }: { params: Promise<
           </section>
         ) : env.agora.enabled ? (
           <InterviewRoom
-            title={need.title}
             startPath={`/api/v1/interviews/i/${token}/start`}
             finalizePath={`/api/v1/interviews/i/${token}/finalize`}
             appId={env.agora.appId ?? ""}
             requiredFields={need.brief.required_fields}
-            variant="public"
           />
         ) : (
           <section className="rounded-lg border border-border bg-panel p-6 text-sm text-muted text-center">
