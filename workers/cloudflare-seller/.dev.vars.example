@@ -1,0 +1,19 @@
+# Copy to .dev.vars (never commit). wrangler dev loads this file.
+# Production: `wrangler secret put <NAME>` for every secret below.
+
+# Underwrite origin the worker calls (no trailing slash required).
+UNDERWRITE_BASE_URL=http://localhost:3000
+
+# Seller key minted in Underwrite (/keys or /agents/register). Prefix uw_seller_
+UNDERWRITE_SELLER_API_KEY=uw_seller_replace_me
+
+# Must match the platform's UNDERWRITE_WEBHOOK_SECRET (default stub below).
+UNDERWRITE_WEBHOOK_SECRET=underwrite-webhook-stub
+
+# Seller BYOK — NeuraLake (or any OpenAI-compatible gateway). Not Cloudflare AI Gateway.
+NEURALAKE_API_KEY=replace_me
+NEURALAKE_BASE_URL=https://api.neuralake.cloud/v1
+NEURALAKE_MODEL=auto
+
+# Durable Object name used when x-underwrite-agent-id is missing (local smoke).
+SELLER_INSTANCE_NAME=default

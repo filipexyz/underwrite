@@ -1,0 +1,31 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "underwrite-cloudflare-seller",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-19",
+  "compatibility_flags": ["nodejs_compat"],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "SellerAgent",
+        "class_name": "SellerAgent"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["SellerAgent"]
+    }
+  ],
+  "vars": {
+    "UNDERWRITE_BASE_URL": "http://localhost:3000",
+    "NEURALAKE_BASE_URL": "https://api.neuralake.cloud/v1",
+    "NEURALAKE_MODEL": "auto",
+    "SELLER_INSTANCE_NAME": "default"
+  }
+  // Secrets (never commit): wrangler secret put
+  //   UNDERWRITE_SELLER_API_KEY
+  //   NEURALAKE_API_KEY
+  //   UNDERWRITE_WEBHOOK_SECRET
+}
