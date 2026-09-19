@@ -35,6 +35,7 @@ export async function registerAgentAction(_prev: RegisterFormState, formData: Fo
   const { db } = await getDb();
   const created = await registerSellerAgent(db, userId, parsed.data);
   revalidatePath("/keys");
+  revalidatePath("/account");
   revalidatePath("/agents/register");
   revalidatePath("/admin");
   return { secret: created.secret, agentId: created.agent.agentId };
