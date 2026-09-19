@@ -13,6 +13,7 @@ import {
   doublePrecision,
   index,
   integer,
+  uniqueIndex,
   jsonb,
   pgTable,
   primaryKey,
@@ -160,6 +161,10 @@ export const requests = pgTable(
     verification: jsonb("verification").$type<VerificationSpec>().notNull(),
     /** Clerk user (or local-dev) wallet debited for this request. Null = system `buyer` wallet. */
     buyerWalletId: text("buyer_wallet_id"),
+    /** `seed` = Mastra auction loop. `push` = locked marketplace (invite / one plan / best-score). */
+    executionMode: text("execution_mode").notNull().default("seed"),
+    /** Push path: when the plan window closes (select even if some invitees are silent). */
+    planDeadlineAt: timestamp("plan_deadline_at", { withTimezone: true }),
     /** Engine cursor between workflow steps (active chain, escalations, elapsed time). */
     state: jsonb("state").$type<EngineState>(),
     /** Final certificate / failure summary once the loop settles. */
@@ -394,6 +399,58 @@ export type LedgerEventRow = typeof ledgerEvents.$inferSelect;
 export type AttributionRow = typeof attributions.$inferSelect;
 export type InterviewNeedRow = typeof interviewNeeds.$inferSelect;
 export type InterviewSessionRow = typeof interviewSessions.$inferSelect;
+
+// ---------------------------------------------------------------------------
+// Locked marketplace PoC — inbox fallback + invite set
+// ---------------------------------------------------------------------------
+
+export const INBOX_MESSAGE_TYPES = ["plan_request", "accepted", "rejected"] as const;
+export type InboxMessageType = (typeof INBOX_MESSAGE_TYPES)[number];
+
+export const agentInbox = pgTable(
+  "agent_inbox",
+  {
+    inboxId: text("inbox_id").primaryKey(),
+    agentId: text("agent_id")
+      .notNull()
+      .references(() => agents.agentId),
+    requestId: text("request_id")
+      .notNull()
+      .references(() => requests.requestId),
+    type: text("type").$type<InboxMessageType>().notNull(),
+    payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
+    deliveredVia: text("delivered_via").notNull(),
+    readAt: timestamp("read_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("agent_inbox_agent_idx").on(t.agentId, t.createdAt),
+    index("agent_inbox_request_idx").on(t.requestId),
+  ],
+);
+
+export const jobInvites = pgTable(
+  "job_invites",
+  {
+    inviteId: text("invite_id").primaryKey(),
+    requestId: text("request_id")
+      .notNull()
+      .references(() => requests.requestId),
+    agentId: text("agent_id")
+      .notNull()
+      .references(() => agents.agentId),
+    channel: text("channel").notNull(),
+    status: text("status").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("job_invites_request_idx").on(t.requestId),
+    uniqueIndex("job_invites_request_agent_idx").on(t.requestId, t.agentId),
+  ],
+);
+
+export type AgentInboxRow = typeof agentInbox.$inferSelect;
+export type JobInviteRow = typeof jobInvites.$inferSelect;
 
 export type AxisColumns = Pick<
   TrustAxesRow,

@@ -4,6 +4,7 @@
  */
 import { asc, desc, eq } from "drizzle-orm";
 import { type LedgerMetrics, type RequestInput, type RequestStatus } from "@/lib/contracts";
+import { resolveExecutionMode } from "./push";
 import type { Db } from "@/lib/db/client";
 import {
   attributions,
@@ -43,10 +44,11 @@ export const DEMO_REQUEST: RequestInput = {
 export async function createRequest(
   db: Db,
   input: RequestInput,
-  meta: { actor?: string; source?: string; buyerWalletId?: string } = {},
+  meta: { actor?: string; source?: string; buyerWalletId?: string; executionMode?: "seed" | "push" } = {},
 ): Promise<RequestRow> {
   const requestId = newId("req");
   const verification = input.verification ?? defaultRubricFor(DEFAULT_CATEGORY);
+  const executionMode = resolveExecutionMode(input.execution_mode, meta.executionMode);
   const [row] = await db
     .insert(requests)
     .values({
@@ -62,6 +64,7 @@ export async function createRequest(
       selectionTimeoutS: input.selection_timeout_s,
       verification,
       buyerWalletId: meta.buyerWalletId,
+      executionMode,
     })
     .returning();
 
@@ -82,6 +85,7 @@ export async function createRequest(
       selection_timeout_s: input.selection_timeout_s,
       rubric_version: verification.rubric_version,
       buyer_wallet_id: meta.buyerWalletId ?? null,
+      execution_mode: executionMode,
     },
   });
   return row;
@@ -95,6 +99,7 @@ export async function getRequest(db: Db, requestId: string): Promise<RequestRow 
 export type RequestSummary = {
   request_id: string;
   status: RequestStatus;
+  execution_mode: string;
   requirement: string;
   max_cost_usd: number;
   max_latency_s: number;
@@ -113,6 +118,7 @@ export async function listRequests(db: Db, limit = 50): Promise<RequestSummary[]
     return {
       request_id: r.requestId,
       status: r.status as RequestStatus,
+      execution_mode: r.executionMode,
       requirement: r.requirement,
       max_cost_usd: r.maxCostUsd,
       max_latency_s: r.maxLatencyS,
@@ -166,6 +172,9 @@ export function toApiRequest(detail: RequestDetail) {
   return {
     request_id: r.requestId,
     status: r.status,
+    execution_mode: r.executionMode,
+    plan_deadline_at: r.planDeadlineAt?.toISOString() ?? r.state?.plan_deadline_at ?? null,
+    invited_agent_ids: r.state?.invited_agent_ids ?? [],
     task: { requirement: r.requirement, files: r.files.map((f) => ({ name: f.name, media_type: f.media_type, bytes: f.content.length })) },
     max_cost_usd: r.maxCostUsd,
     max_latency_s: r.maxLatencyS,

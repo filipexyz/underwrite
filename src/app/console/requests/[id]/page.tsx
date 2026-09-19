@@ -35,8 +35,8 @@ function settlementSteps(input: {
   });
   return [
     step("01", "Contract posted", "4 fields + failure policy", true, false),
-    step("02", "Plans ranked", "conf · cost · latency · chain", planCount > 0, status === "auctioning" || status === "received"),
-    step("03", "Escrow locked", "winning plan staked", escrowCount > 0, status === "contracting"),
+    step("02", "Plans ranked", "conf · cost · latency · hist", planCount > 0, status === "auctioning" || status === "received" || status === "planning"),
+    step("03", "Escrow locked", "winning plan staked", escrowCount > 0, status === "contracting" || (status === "planning" && planCount > 0)),
     step(
       "04",
       "Dispatch",
@@ -90,6 +90,7 @@ export default async function RequestPage({ params }: { params: Promise<{ id: st
             <div className="flex flex-col items-end gap-2 text-right">
               <span className="mono text-xs text-muted">{request.requestId}</span>
               <Badge value={request.status} />
+              {request.executionMode === "push" ? <Badge value="push · no reprice" /> : null}
               <span className="mono text-xs">
                 human_interventions:{" "}
                 <span className={metrics.human_interventions === 0 ? "text-teal" : "text-danger"}>{metrics.human_interventions}</span>

@@ -19,7 +19,7 @@ export async function fireDemoRequest(): Promise<void> {
     redirect("/console?error=model_provider");
   }
   const { db } = await getDb();
-  const row = await createRequest(db, DEMO_REQUEST, { actor: "human", source: "console" });
+  const row = await createRequest(db, DEMO_REQUEST, { actor: "human", source: "console", executionMode: "seed" });
   after(async () => {
     try {
       await runMarketplace(row.requestId);
