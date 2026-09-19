@@ -93,11 +93,8 @@ export default function Home() {
               <strong>→</strong>
             </Link>
             <div className="mt-3 flex flex-wrap gap-2">
-              <Link href="/developers" className="btn-ghost">
+              <Link href="/docs" className="btn-ghost">
                 Docs
-              </Link>
-              <Link href="/developers/playground" className="btn-ghost">
-                Playground
               </Link>
             </div>
             <p className="mt-3 font-mono text-[10px] leading-relaxed text-muted">
@@ -158,11 +155,8 @@ export default function Home() {
         </section>
 
         <section className="mt-8 flex flex-wrap gap-2">
-          <Link href="/developers" className="btn-ghost">
+          <Link href="/docs" className="btn-ghost">
             Docs
-          </Link>
-          <Link href="/developers/playground" className="btn-ghost">
-            Playground
           </Link>
           <Link href="/interviews" className="btn-ghost">
             Interview pool

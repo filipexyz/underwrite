@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   SAMPLE_BUYER_REQUEST,
   SAMPLE_SELLER_PATCH,
@@ -9,7 +9,9 @@ import {
   parseJsonBody,
   sampleBuyerRequestParsed,
 } from "@/lib/developers/playground";
+import { DEFAULT_PUBLIC_API_BASE, publicApiBaseUrl } from "@/lib/docs/api-base";
 import { opsHintForPath } from "@/lib/ui/ops-hint";
+import nextConfig from "../next.config";
 
 const BANNED_UI = /agora gpt live|AGORA GPT LIVE|Agora GPT Live|GPT Live/i;
 
@@ -36,9 +38,39 @@ describe("opsHintForPath", () => {
   it("uses product language for interviews and developer routes", () => {
     expect(opsHintForPath("/interviews", "x")).toBe("interviews · human briefs");
     expect(opsHintForPath("/interviews/need_1", "x")).toBe("interviews · human briefs");
+    expect(opsHintForPath("/docs", "x")).toBe("docs · agent api");
     expect(opsHintForPath("/developers", "x")).toBe("docs · agent api");
-    expect(opsHintForPath("/developers/playground", "x")).toBe("playground · fire a request");
     expect(opsHintForPath("/console", "x")).toBe("console · live ledger");
+  });
+});
+
+describe("public API docs", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("defaults to the designed production base URL", () => {
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "");
+    expect(publicApiBaseUrl()).toBe(DEFAULT_PUBLIC_API_BASE);
+  });
+
+  it("derives from NEXT_PUBLIC_APP_URL when set", () => {
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://example.com/");
+    expect(publicApiBaseUrl()).toBe("https://example.com/api/v1");
+  });
+
+  it("permanently redirects /developers to /docs", async () => {
+    const redirects = nextConfig.redirects ? await nextConfig.redirects() : [];
+    expect(redirects).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ source: "/developers", destination: "/docs", statusCode: 301 }),
+        expect.objectContaining({
+          source: "/developers/:path+",
+          destination: "/docs",
+          statusCode: 301,
+        }),
+      ]),
+    );
   });
 });
 
