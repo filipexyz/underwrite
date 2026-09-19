@@ -212,7 +212,7 @@ describe("push marketplace HTTP", () => {
         body: JSON.stringify({
           approach: "careful render",
           price_usd: 0.04,
-          promised_confidence: 0.99,
+          promised_confidence: 0.96,
           max_latency_s: 8,
         }),
       }),
@@ -265,7 +265,7 @@ describe("push marketplace HTTP", () => {
     const delivered = await postDeliverable(
       sellerReq(strongSecret, `/api/v1/jobs/${jobId}/deliverables`, {
         method: "POST",
-        body: JSON.stringify({ stub: true, self_confidence: 0.99 }),
+        body: JSON.stringify({ stub: true, self_confidence: 0.96 }),
       }),
       params(jobId),
     );
