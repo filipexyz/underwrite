@@ -6,7 +6,12 @@
  * legacy env is set, `/api/v1/requests*` stays public for the demoday loop.
  */
 import { NextResponse } from "next/server";
-import { extractPresentedKey, resolveBuyerAuth, resolveSellerAuth } from "@/lib/auth/api-keys";
+import {
+  extractPresentedKey,
+  resolveBuyerAuth,
+  resolveSellerAuth,
+  type BuyerAuth,
+} from "@/lib/auth/api-keys";
 import { getDb } from "@/lib/db/client";
 import type { ApiKeyRow } from "@/lib/db/schema";
 import { env } from "@/lib/env";
@@ -15,15 +20,22 @@ export function jsonError(status: number, error: string, details?: unknown): Nex
   return NextResponse.json({ error, ...(details === undefined ? {} : { details }) }, { status });
 }
 
-export async function requireApiKey(request: Request): Promise<NextResponse | null> {
+export async function authorizeBuyerRequest(
+  request: Request,
+): Promise<{ ok: true; auth: BuyerAuth } | { ok: false; response: NextResponse }> {
   const { db } = await getDb();
   const result = await resolveBuyerAuth({
     presented: extractPresentedKey(request.headers),
     legacyKey: env.apiKey,
     db,
   });
-  if (!result.ok) return jsonError(result.status, result.error);
-  return null;
+  if (!result.ok) return { ok: false, response: jsonError(result.status, result.error) };
+  return { ok: true, auth: result.auth };
+}
+
+export async function requireApiKey(request: Request): Promise<NextResponse | null> {
+  const auth = await authorizeBuyerRequest(request);
+  return auth.ok ? null : auth.response;
 }
 
 export async function requireSellerKey(

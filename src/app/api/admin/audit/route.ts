@@ -19,11 +19,14 @@ export async function GET() {
   ]);
   return NextResponse.json({
     requests,
-    wallets: walletRows.map((w) => ({
-      owner_id: w.ownerId,
-      capital_usd: w.capitalUsd,
-      risk_tolerance: w.riskTolerance,
-    })),
+    wallets: walletRows
+      .slice()
+      .sort((a, b) => b.capitalUsd - a.capitalUsd || a.ownerId.localeCompare(b.ownerId))
+      .map((w) => ({
+        owner_id: w.ownerId,
+        capital_usd: w.capitalUsd,
+        risk_tolerance: w.riskTolerance,
+      })),
     ledger_head: events.map((e) => ({
       seq: e.seq,
       type: e.type,

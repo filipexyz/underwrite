@@ -15,6 +15,13 @@
       "when": 1789847370464,
       "tag": "0001_api_keys_and_seller_agents",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789848575047,
+      "tag": "0002_buyer_wallet_and_credits",
+      "breakpoints": true
     }
   ]
 }

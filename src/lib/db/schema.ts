@@ -157,6 +157,8 @@ export const requests = pgTable(
     failurePolicy: text("failure_policy").notNull(),
     selectionTimeoutS: doublePrecision("selection_timeout_s").notNull(),
     verification: jsonb("verification").$type<VerificationSpec>().notNull(),
+    /** Clerk user (or local-dev) wallet debited for this request. Null = system `buyer` wallet. */
+    buyerWalletId: text("buyer_wallet_id"),
     /** Engine cursor between workflow steps (active chain, escalations, elapsed time). */
     state: jsonb("state").$type<EngineState>(),
     /** Final certificate / failure summary once the loop settles. */

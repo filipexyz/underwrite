@@ -3,7 +3,8 @@ import { listApiKeys, toPublicApiKey } from "@/lib/auth/api-keys";
 import { requireSignedInPage } from "@/lib/auth/session";
 import { getDb } from "@/lib/db/client";
 import { listOwnedAgents } from "@/lib/marketplace/sellers";
-import { Badge, Empty, Panel, Td, Th } from "@/app/console/ui";
+import { Badge, Empty, Money, Panel, Td, Th } from "@/app/console/ui";
+import { STARTING_TEST_CREDITS_USD, ensureWallet } from "@/lib/marketplace/credits";
 import { revokeOwnKey } from "./actions";
 import { CreateBuyerKeyForm, CreateSellerKeyForm } from "./forms";
 
@@ -12,9 +13,10 @@ export const dynamic = "force-dynamic";
 export default async function KeysPage() {
   const { userId } = await requireSignedInPage();
   const { db } = await getDb();
-  const [keyRows, agents] = await Promise.all([
+  const [keyRows, agents, wallet] = await Promise.all([
     listApiKeys(db, { ownerClerkUserId: userId }),
     listOwnedAgents(db, userId),
+    ensureWallet(db, userId, STARTING_TEST_CREDITS_USD),
   ]);
   const keys = keyRows.map(toPublicApiKey);
   const buyer = keys.filter((k) => k.role === "buyer");
@@ -28,7 +30,9 @@ export default async function KeysPage() {
           Mint your own credentials. Buyer keys call <code>POST /api/v1/requests</code>. Seller keys call{" "}
           <code>GET/PATCH /api/v1/agents/me</code>. The full secret is shown once.
         </p>
-        <p className="mono text-xs text-muted">owner {userId}</p>
+        <p className="mono text-xs text-muted">
+          owner {userId} · wallet <Money value={wallet.capitalUsd} digits={2} /> test credits
+        </p>
       </header>
 
       <div className="grid gap-6 md:grid-cols-2">

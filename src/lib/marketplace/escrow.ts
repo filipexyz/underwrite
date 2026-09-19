@@ -9,6 +9,7 @@ import { eq } from "drizzle-orm";
 import { ESCROW_TRANSITIONS, type EscrowStatus, type Verdict } from "@/lib/contracts";
 import { escrows, type EscrowRow } from "@/lib/db/schema";
 import { newId } from "@/lib/ids";
+import { buyerWalletId } from "./credits";
 import { moveMoney, WALLET, type EngineContext } from "./context";
 
 export class EscrowTransitionError extends Error {
@@ -17,8 +18,8 @@ export class EscrowTransitionError extends Error {
   }
 }
 
-function payerWallet(escrow: EscrowRow): string {
-  return escrow.payerAgentId ?? WALLET.buyer;
+function payerWallet(ctx: EngineContext, escrow: EscrowRow): string {
+  return escrow.payerAgentId ?? buyerWalletId(ctx.request);
 }
 
 async function persistStatus(ctx: EngineContext, escrow: EscrowRow, to: EscrowStatus): Promise<EscrowRow> {
@@ -70,7 +71,7 @@ export async function createAndLockEscrow(
       escrow_id: locked.escrowId,
       plan_id: args.plan_id,
       hop_index: args.hop_index,
-      payer: args.payer_agent_id ?? WALLET.buyer,
+      payer: args.payer_agent_id ?? buyerWalletId(ctx.request),
       payee: args.payee_agent_id,
       amount_usd: args.amount_usd,
       min_confidence: args.min_confidence,
@@ -78,7 +79,7 @@ export async function createAndLockEscrow(
     },
   });
   await moveMoney(ctx, {
-    from: payerWallet(locked),
+    from: payerWallet(ctx, locked),
     to: WALLET.escrow,
     amount_usd: args.amount_usd,
     reason: `escrow_lock:${locked.escrowId}`,
@@ -128,7 +129,7 @@ export async function releaseEscrow(
     payload: {
       escrow_id: escrow.escrowId,
       hop_index: escrow.hopIndex,
-      payer: payerWallet(escrow),
+      payer: payerWallet(ctx, escrow),
       payee: escrow.payeeAgentId,
       amount_usd: escrow.amountUsd,
       min_confidence: escrow.minConfidence,
@@ -158,7 +159,7 @@ export async function withholdEscrow(
     payload: {
       escrow_id: escrow.escrowId,
       hop_index: escrow.hopIndex,
-      payer: payerWallet(escrow),
+      payer: payerWallet(ctx, escrow),
       payee: escrow.payeeAgentId,
       amount_usd: escrow.amountUsd,
       min_confidence: escrow.minConfidence,
@@ -176,7 +177,7 @@ export async function markEscalated(ctx: EngineContext, escrow: EscrowRow, refEv
   const row = await persistStatus(ctx, escrow, "ESCALATED");
   await moveMoney(ctx, {
     from: WALLET.escrow,
-    to: payerWallet(escrow),
+    to: payerWallet(ctx, escrow),
     amount_usd: escrow.amountUsd,
     reason: `escrow_unlock_for_escalation:${escrow.escrowId}`,
     ref_event_id: refEventId,
@@ -189,7 +190,7 @@ export async function refundEscrow(ctx: EngineContext, escrow: EscrowRow, refEve
   const row = await persistStatus(ctx, escrow, "REFUNDED");
   await moveMoney(ctx, {
     from: WALLET.escrow,
-    to: payerWallet(escrow),
+    to: payerWallet(ctx, escrow),
     amount_usd: escrow.amountUsd,
     reason: `escrow_refund:${escrow.escrowId}`,
     ref_event_id: refEventId,

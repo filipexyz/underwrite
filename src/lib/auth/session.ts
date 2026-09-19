@@ -7,7 +7,9 @@ import { forbidden, unauthorized } from "next/navigation";
 import { NextResponse } from "next/server";
 import { isAdminUser, metadataFromSessionClaims, publicMetadataRecord } from "@/lib/auth/admin";
 import { jsonError } from "@/lib/api/http";
+import { getDb } from "@/lib/db/client";
 import { env } from "@/lib/env";
+import { ensureWallet } from "@/lib/marketplace/credits";
 
 export const LOCAL_DEV_USER_ID = "local-dev";
 
@@ -29,10 +31,14 @@ async function readClerkIdentity(): Promise<{ userId: string | null; publicMetad
 
 export async function resolveSessionIdentity(): Promise<SessionIdentity | null> {
   if (!env.clerk.enabled) {
+    const { db } = await getDb();
+    await ensureWallet(db, LOCAL_DEV_USER_ID);
     return { userId: LOCAL_DEV_USER_ID, admin: true, publicMetadata: { role: "admin" } };
   }
   const { userId, publicMetadata } = await readClerkIdentity();
   if (!userId) return null;
+  const { db } = await getDb();
+  await ensureWallet(db, userId);
   return {
     userId,
     admin: isAdminUser({ userId, publicMetadata }),

@@ -25,6 +25,7 @@ export default async function AdminPage() {
   const agents = agentRows.map(toPublicAgent);
   const keys = keyRows.map(toPublicApiKey);
   const capital = walletRows.reduce((sum, row) => sum + row.capitalUsd, 0);
+  const walletsSorted = [...walletRows].sort((a, b) => b.capitalUsd - a.capitalUsd || a.ownerId.localeCompare(b.ownerId));
 
   return (
     <div className="flex flex-col gap-6">
@@ -168,7 +169,29 @@ export default async function AdminPage() {
       </Panel>
 
       <div className="grid gap-6 md:grid-cols-2">
-        <Panel title="Ledger summary" aside={<span className="mono text-xs text-muted">Σ wallets ${capital.toFixed(4)}</span>}>
+        <Panel title="Wallets" aside={<span className="mono text-xs text-muted">Σ <Money value={capital} digits={2} /></span>}>
+          <table className="w-full">
+            <thead>
+              <tr>
+                <Th>owner</Th>
+                <Th right>balance</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {walletsSorted.map((wallet) => (
+                <tr key={wallet.ownerId} className="border-t border-border">
+                  <Td>
+                    <span className="mono text-xs">{wallet.ownerId}</span>
+                  </Td>
+                  <Td right>
+                    <Money value={wallet.capitalUsd} digits={2} />
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Panel>
+        <Panel title="Ledger summary" aside={<span className="mono text-xs text-muted">{events.length} recent rows</span>}>
           <p className="text-sm text-muted mb-3">{walletRows.length} wallets · {events.length} recent ledger rows</p>
           {events.length === 0 ? (
             <Empty>No ledger events yet.</Empty>

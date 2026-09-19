@@ -22,7 +22,8 @@ import { verifyArtifact } from "@/lib/verification/verify";
 import { DEMO_INPUT_HTML, parseSource, renderSimulated, type SourceDocument } from "./artifact";
 import { emitAttribution } from "./attribution";
 import { costHonestySample, latencySample, underwritingSample, updateAxes, updatePairwiseTrust } from "./axes";
-import { buildContext, pace, RULES, setRequestStatus, settleInferenceCost, WALLET, type EngineContext } from "./context";
+import { buildContext, pace, RULES, setRequestStatus, settleInferenceCost, type EngineContext } from "./context";
+import { buyerWalletId } from "./credits";
 import {
   chargeCommission,
   createAndLockEscrow,
@@ -219,7 +220,7 @@ export async function runAuction(db: Db, requestId: string): Promise<StepResult>
     type: "agent_hired",
     agent_id: winner.agent.agentId,
     payload: {
-      hirer: WALLET.buyer,
+      hirer: buyerWalletId(ctx.request),
       bid_id: winner.row.bidId,
       rule: "cheapest compliant bid; ties → higher confidence → higher trust_global",
       selected_by: "buyer_policy",
@@ -373,7 +374,7 @@ async function contractSubtree(ctx: EngineContext, args: ContractArgs): Promise<
       agent_id: args.hirerId ?? null,
       parent_event_id: generated.event_id,
       payload: {
-        from: args.hirerId ?? WALLET.buyer,
+        from: args.hirerId ?? buyerWalletId(ctx.request),
         to: agent.agentId,
         hop_index: args.hopIndex,
         subtask: quote.subtask,

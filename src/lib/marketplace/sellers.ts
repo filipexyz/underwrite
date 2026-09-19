@@ -9,6 +9,7 @@ import type { Db } from "@/lib/db/client";
 import { agents, trustAxes, wallets, type AgentRow, type AgentStatus } from "@/lib/db/schema";
 import { issueApiKey, type PublicApiKey, toPublicApiKey } from "@/lib/auth/api-keys";
 import { newId } from "@/lib/ids";
+import { STARTING_TEST_CREDITS_USD, ensureWallet } from "./credits";
 import type { AgentPolicy, QuotePolicy } from "./types";
 
 const optionalText = z
@@ -181,10 +182,11 @@ export async function registerSellerAgent(
     })
     .returning();
 
+  await ensureWallet(db, agentId, STARTING_TEST_CREDITS_USD);
   await db
-    .insert(wallets)
-    .values({ ownerId: agentId, capitalUsd: 0.5, riskTolerance: input.risk_tolerance })
-    .onConflictDoNothing();
+    .update(wallets)
+    .set({ riskTolerance: input.risk_tolerance, updatedAt: new Date() })
+    .where(eq(wallets.ownerId, agentId));
 
   for (const specialty of input.specialties.filter((s) => !s.startsWith("judge:"))) {
     await db

@@ -156,6 +156,14 @@ Admin is **not** a key-mint desk. Buyers and sellers issue their own credentials
 | `/agents/register` | Register a hireable agent (manifest fields: name, role, specialties, model family, cost ceiling, …). Creates the row + returns a seller key once. |
 
 `POST /api/account/keys` and `POST /api/account/agents` are the same flows over JSON (Clerk session).
+`GET /api/account/wallet` returns your test-credit balance.
+
+Every Clerk user (and `local-dev` when Clerk is off) gets a wallet of **$1000.00 test credits**
+on first visit — idempotent, never reset. Registered seller agents get the same $1000 wallet
+(seed A/B/C1/C2/J1/J2 keep their catalog balances). A buyer key owned by a user **checks** that
+wallet against `max_cost_usd` (`402` if short) and **debits it** on escrow lock / credits it on
+refund, using the same `wallets` table the agents already use. Public / legacy / console demo
+requests still spend the system `buyer` wallet so the demoday loop is unchanged. **No real money.**
 
 Buyer key against the marketplace:
 
@@ -179,7 +187,7 @@ a separate, narrower surface at `/admin`.
 
 Clerk-authenticated users with an admin flag. Non-admins get **403**. List seed + registered agents,
 enable/disable (disabled agents drop out of hire), list API keys by prefix/role/owner (never plaintext),
-revoke any key, and a short audit (recent requests, wallet sum, ledger head). Safe knobs stay as env
+revoke any key, and a short audit (recent requests, **wallet balances**, ledger head). Safe knobs stay as env
 vars — documented on the page.
 
 ---
@@ -193,15 +201,17 @@ vars — documented on the page.
    right fit for Vercel functions).
 2. `DATABASE_URL=postgresql://…` in `.env.local`.
 3. `pnpm db:migrate` applies the committed SQL in [`drizzle/`](drizzle/) (`0000_init.sql`,
-   `0001_api_keys_and_seller_agents.sql`, …) with Drizzle's migrator (on Vercel this happens
-   automatically as part of `pnpm build`). `pnpm db:seed` inserts the catalog — a one-time step: it is
-   idempotent, but it also resets axes, wallets and clears pairwise trust, so it is never run by the
-   build. **Seed is still required once on Neon.** An empty hireable registry settles as `no_eligible_bid`.
+   `0001_api_keys_and_seller_agents.sql`, `0002_buyer_wallet_and_credits.sql`, …) with Drizzle's
+   migrator (on Vercel this happens automatically as part of `pnpm build`). `pnpm db:seed` inserts the
+   catalog — a one-time step: it is idempotent, but it also resets axes, wallets and clears pairwise
+   trust, so it is never run by the build. **Seed is still required once on Neon.** An empty hireable
+   registry settles as `no_eligible_bid`.
 4. Changed `src/lib/db/schema.ts`? `pnpm db:generate` writes the next migration; commit it.
 
 Tables (mirroring `docs/CONTRACTS.md`): `agents` (plus seller fields `status`, `owner_clerk_user_id`,
 `contact`, `webhook_url`), `api_keys` (hashed secrets only), `trust_axes`, `trust_pairwise`, `wallets`,
-`requests`, `bids`, `plans`, `escrows`, `verifications`, `ledger_events`, `attributions`.
+`requests` (plus optional `buyer_wallet_id` for user-funded requests), `bids`, `plans`, `escrows`,
+`verifications`, `ledger_events`, `attributions`.
 
 ### Clerk
 
