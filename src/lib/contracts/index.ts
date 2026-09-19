@@ -186,13 +186,33 @@ export const JobPlanInput = z.object({
 });
 export type JobPlanInput = z.infer<typeof JobPlanInput>;
 
-/** Winner deliverable. `stub: true` renders a clean simulated PDF from the request. */
+/**
+ * Observable PDF facts posted by an external worker. The platform judges these
+ * fields as-is — it does not render or invent a simulated artifact.
+ */
+export const JobDeliverableArtifact = z.object({
+  artifact_ref: z.string().min(1).optional(),
+  kind: z.literal("pdf").optional(),
+  simulated: z.boolean().optional(),
+  pages: z.number().int().positive(),
+  text: z.string(),
+  overflow_regions: z.number().int().nonnegative(),
+  fonts_embedded: z.boolean(),
+  links: z.array(z.string()),
+  valid: z.boolean(),
+  bytes: z.number().int().nonnegative(),
+  page_size: z.literal("A4").optional(),
+  margins_cm: z.number().positive().optional(),
+  observed_latency_ms: z.number().nonnegative().optional(),
+  declared_latency_ms: z.number().nonnegative().optional(),
+  self_report: unit.optional(),
+});
+export type JobDeliverableArtifact = z.infer<typeof JobDeliverableArtifact>;
+
+/** Winner deliverable. `artifact` is required; workers supply the facts they produced. */
 export const JobDeliverableInput = z.object({
-  artifact: z.record(z.string(), z.unknown()).optional(),
-  artifact_ref: z.string().optional(),
+  artifact: JobDeliverableArtifact,
   self_confidence: unit.optional(),
-  stub: z.boolean().optional(),
-  content: z.string().optional(),
 });
 export type JobDeliverableInput = z.infer<typeof JobDeliverableInput>;
 

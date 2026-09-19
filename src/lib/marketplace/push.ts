@@ -22,7 +22,7 @@ import {
 } from "@/lib/db/schema";
 import { env } from "@/lib/env";
 import { newId } from "@/lib/ids";
-import { DEMO_INPUT_HTML, parseSource, renderSimulated, type PdfArtifact, type SourceDocument } from "./artifact";
+import type { PdfArtifact } from "./artifact";
 import { buildContext, RULES, setRequestStatus, type EngineContext } from "./context";
 import { finalizeRequest, verifyDelivery, settleChain } from "./engine";
 import {
@@ -59,11 +59,6 @@ async function saveState(ctx: EngineContext, state: EngineState): Promise<void> 
     .set({ state, updatedAt: new Date() })
     .where(eq(requests.requestId, ctx.request.requestId));
   ctx.request = { ...ctx.request, state };
-}
-
-function sourceFor(ctx: EngineContext): SourceDocument {
-  const html = ctx.request.files.find((f) => f.media_type.includes("html"))?.content ?? DEMO_INPUT_HTML;
-  return parseSource(html, ctx.request.requirement);
 }
 
 function constraintsOf(ctx: EngineContext): ScoreConstraints {
@@ -642,34 +637,28 @@ export async function selectPlansIfReady(
   return { selected: true, winner_agent_id: win.agentId };
 }
 
-function artifactFromInput(ctx: EngineContext, agent: RegistryAgent, input: JobDeliverableInput): PdfArtifact {
-  const source = sourceFor(ctx);
-  const self = input.self_confidence ?? agent.policy.execution?.self_report ?? agent.baselineConfidence;
-  const basePolicy = agent.policy.execution ?? {
-    quality: "clean" as const,
-    latency_s: 8,
-    latency_jitter: 0,
-    self_report: self,
-    tokens: { in: 0, out: 0 },
-  };
-  const stub = input.stub === true || !input.artifact;
-  if (stub) {
-    return renderSimulated(source, agent.agentId, { ...basePolicy, self_report: self, quality: "clean" });
-  }
-
-  const raw = input.artifact ?? {};
-  const rendered = renderSimulated(source, agent.agentId, { ...basePolicy, self_report: self, quality: "clean" });
+function artifactFromInput(agent: RegistryAgent, input: JobDeliverableInput): PdfArtifact {
+  const raw = input.artifact;
+  const self =
+    input.self_confidence ?? raw.self_report ?? agent.policy.execution?.self_report ?? agent.baselineConfidence;
+  const declared = raw.declared_latency_ms ?? 0;
   return {
-    ...rendered,
-    artifact_ref: typeof raw.artifact_ref === "string" ? raw.artifact_ref : (input.artifact_ref ?? rendered.artifact_ref),
-    text: typeof raw.text === "string" ? raw.text : typeof input.content === "string" ? input.content : rendered.text,
-    pages: typeof raw.pages === "number" ? raw.pages : rendered.pages,
-    overflow_regions: typeof raw.overflow_regions === "number" ? raw.overflow_regions : rendered.overflow_regions,
-    fonts_embedded: typeof raw.fonts_embedded === "boolean" ? raw.fonts_embedded : rendered.fonts_embedded,
-    links: Array.isArray(raw.links) ? (raw.links as string[]) : rendered.links,
-    valid: typeof raw.valid === "boolean" ? raw.valid : true,
-    bytes: typeof raw.bytes === "number" ? raw.bytes : rendered.bytes,
+    artifact_ref: raw.artifact_ref?.trim() || newId("art"),
+    kind: "pdf",
+    simulated: raw.simulated ?? false,
+    producer_agent_id: agent.agentId,
+    page_size: raw.page_size ?? "A4",
+    margins_cm: raw.margins_cm ?? 2,
+    pages: raw.pages,
+    text: raw.text,
+    overflow_regions: raw.overflow_regions,
+    fonts_embedded: raw.fonts_embedded,
+    links: raw.links,
+    valid: raw.valid,
+    bytes: raw.bytes,
     self_report: self,
+    observed_latency_ms: raw.observed_latency_ms ?? declared,
+    declared_latency_ms: declared,
   };
 }
 
@@ -697,7 +686,7 @@ export async function submitDeliverable(
   }
 
   const agent = getAgent(ctx.registry, agentId);
-  const artifact = artifactFromInput(ctx, agent, input);
+  const artifact = artifactFromInput(agent, input);
   const event = await ctx.ledger.append({
     type: "artifact_produced",
     agent_id: agentId,
@@ -710,7 +699,6 @@ export async function submitDeliverable(
       pages: artifact.pages,
       bytes: artifact.bytes,
       self_report: artifact.self_report,
-      stub: input.stub === true || !input.artifact,
     },
   });
 

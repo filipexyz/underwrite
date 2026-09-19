@@ -1,5 +1,6 @@
 /**
  * POST /api/v1/jobs/[requestId]/deliverables — seller key, winner only.
+ * Body must include worker-produced artifact facts (no platform render).
  * Runs existing verification against the plan promise, then RELEASE or WITHHOLD.
  */
 import { NextResponse } from "next/server";

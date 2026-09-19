@@ -13,6 +13,7 @@ import { POST as postRequest } from "@/app/api/v1/requests/route";
 import { getDb, type Db } from "@/lib/db/client";
 import { trustAxes } from "@/lib/db/schema";
 import { TASK_CATEGORY } from "@/lib/db/seed";
+import { DEMO_INPUT_HTML, parseSource } from "@/lib/marketplace/artifact";
 import { createRequest, DEMO_REQUEST, getRequestDetail } from "@/lib/marketplace/requests";
 import { registerSellerAgent } from "@/lib/marketplace/sellers";
 import { SCORE_WEIGHT_SUM, SCORE_WEIGHTS, rankPlans, scorePlan } from "@/lib/marketplace/score";
@@ -41,6 +42,23 @@ function sellerReq(secret: string, path: string, init: RequestInit = {}) {
 
 function params(requestId: string) {
   return { params: Promise.resolve({ requestId }) };
+}
+
+/** Worker-shaped facts that pass html_to_pdf checks against the demo source. */
+function workerDeliverable(selfConfidence: number) {
+  const source = parseSource(DEMO_INPUT_HTML, DEMO_REQUEST.task.requirement);
+  return {
+    self_confidence: selfConfidence,
+    artifact: {
+      pages: source.expected_pages,
+      text: source.text,
+      overflow_regions: 0,
+      fonts_embedded: true,
+      links: source.links,
+      valid: true,
+      bytes: 18_000 + source.text.length * 4,
+    },
+  };
 }
 
 beforeAll(async () => {
@@ -248,11 +266,22 @@ describe("push marketplace HTTP", () => {
     expect(loserBody.messages.some((m) => m.type === "rejected" && m.job_id === jobId)).toBe(true);
   });
 
+  it("rejects a deliverable that omits worker artifact facts", async () => {
+    const denied = await postDeliverable(
+      sellerReq(strongSecret, `/api/v1/jobs/${jobId}/deliverables`, {
+        method: "POST",
+        body: JSON.stringify({ stub: true, self_confidence: 0.96 }),
+      }),
+      params(jobId),
+    );
+    expect(denied.status).toBe(422);
+  });
+
   it("rejects a deliverable from the non-winner", async () => {
     const denied = await postDeliverable(
       sellerReq(cheapSecret, `/api/v1/jobs/${jobId}/deliverables`, {
         method: "POST",
-        body: JSON.stringify({ stub: true, self_confidence: 0.95 }),
+        body: JSON.stringify(workerDeliverable(0.95)),
       }),
       params(jobId),
     );
@@ -265,7 +294,7 @@ describe("push marketplace HTTP", () => {
     const delivered = await postDeliverable(
       sellerReq(strongSecret, `/api/v1/jobs/${jobId}/deliverables`, {
         method: "POST",
-        body: JSON.stringify({ stub: true, self_confidence: 0.96 }),
+        body: JSON.stringify(workerDeliverable(0.96)),
       }),
       params(jobId),
     );
@@ -291,5 +320,9 @@ describe("seed path is unchanged", () => {
   it("does not ship a reprice API", () => {
     expect(existsSync(join(process.cwd(), "src/app/api/v1/jobs/[requestId]/reprice/route.ts"))).toBe(false);
     expect(existsSync(join(process.cwd(), "src/app/api/v1/jobs/[requestId]/counter/route.ts"))).toBe(false);
+  });
+
+  it("does not ship an in-repo seller worker", () => {
+    expect(existsSync(join(process.cwd(), "workers/local-seller"))).toBe(false);
   });
 });

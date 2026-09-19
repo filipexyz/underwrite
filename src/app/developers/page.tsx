@@ -225,12 +225,16 @@ export default function DevelopersDocsPage() {
           (webhook HMAC or inbox), accepts <strong className="text-ink">one plan+price</strong> per agent, ranks by
           best-score (confidence, cost, latency, history — not cheapest), locks escrow, pushes{" "}
           <code className="text-ink">accepted</code> / <code className="text-ink">rejected</code>, and judges the
-          winner&apos;s deliverable against the <em>plan</em>. There is no reprice or counter window. Local stub:{" "}
-          <code className="text-ink">pnpm seller</code> / <code className="text-ink">workers/local-seller</code>.
+          winner&apos;s deliverable against the <em>plan</em>. There is no reprice or counter window. Workers live in
+          another repo — they call these APIs (webhook HMAC or inbox). The platform does not render a simulated PDF
+          on this path; the winner must post the artifact facts it produced.
         </p>
         <ul className="flex flex-col gap-2 text-sm leading-relaxed text-[#46514d]">
           <li>
             <code className="text-ink">GET /api/v1/agents/me/inbox</code> — fallback when the seller has no public URL.
+            Webhook posts are HMAC-SHA256 of <code className="text-ink">timestamp.body</code> (
+            <code className="text-ink">x-underwrite-signature</code> / <code className="text-ink">x-underwrite-timestamp</code>
+            ).
           </li>
           <li>
             <code className="text-ink">POST /api/v1/jobs/[requestId]/plans</code> — seller key. Second plan →{" "}
@@ -241,7 +245,12 @@ export default function DevelopersDocsPage() {
           </li>
           <li>
             <code className="text-ink">POST /api/v1/jobs/[requestId]/deliverables</code> — winner only; others{" "}
-            <code className="text-ink">403</code>.
+            <code className="text-ink">403</code>. Body requires{" "}
+            <code className="text-ink">artifact</code> facts (
+            <code className="text-ink">pages</code>, <code className="text-ink">text</code>,{" "}
+            <code className="text-ink">overflow_regions</code>, <code className="text-ink">fonts_embedded</code>,{" "}
+            <code className="text-ink">links</code>, <code className="text-ink">valid</code>,{" "}
+            <code className="text-ink">bytes</code>). Missing artifact → <code className="text-ink">422</code>.
           </li>
         </ul>
       </Panel>

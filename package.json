@@ -13,8 +13,7 @@
     "db:migrate": "tsx scripts/migrate.ts",
     "db:seed": "tsx scripts/seed.ts",
     "loop": "tsx scripts/run-loop.ts",
-    "demo": "tsx scripts/demo.ts",
-    "seller": "node workers/local-seller/index.mjs"
+    "demo": "tsx scripts/demo.ts"
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^3.0.53",
