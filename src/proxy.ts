@@ -1,40 +1,58 @@
 /**
- * Clerk protects human surfaces. Agent-facing `/api/v1/*` stays out of Clerk
- * and is gated by hashed API keys (or the legacy `UNDERWRITE_API_KEY`).
- * `/interviews` is the creator pool (Clerk). `/i/[token]` and
- * `/api/v1/interviews/i/*` are public — possession of the invite token is auth.
- * Interviewees are not Underwrite users. `/developers` is public: agent identity
- * is the pasted API key, not Clerk.
+ * Auth0 protects human surfaces. Agent-facing `/api/v1/*` stays out of the
+ * session gate and is authorized by hashed API keys, Auth0/auth.md JWTs, or
+ * the legacy `UNDERWRITE_API_KEY`. `/interviews` is the creator pool (Auth0).
+ * `/i/[token]` and `/api/v1/interviews/i/*` are public — possession of the
+ * invite token is auth. `/docs` is public (agent API docs; `/developers` 301s
+ * there). `/auth.md`, `/.well-known/*`, `/agent/*`, and `/oauth2/*` are the
+ * open auth.md surface.
  *
- * Without Clerk keys the proxy is a pass-through, so the loop runs locally
+ * Without Auth0 keys the proxy is a pass-through, so the loop runs locally
  * with an empty `.env`.
  */
-import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
-import { NextResponse } from "next/server";
-import { env } from "@/lib/env";
+import { NextRequest, NextResponse } from "next/server";
+import { getAuth0 } from "@/lib/auth0";
 
-const isProtected = createRouteMatcher([
-  "/console(.*)",
-  "/admin(.*)",
-  "/keys(.*)",
-  "/account(.*)",
-  "/agents(.*)",
-  "/interviews(.*)",
-  "/api/account(.*)",
-  "/api/admin(.*)",
-]);
+const PROTECTED_PREFIXES = [
+  "/console",
+  "/admin",
+  "/keys",
+  "/account",
+  "/agents",
+  "/interviews",
+  "/claim",
+  "/api/account",
+  "/api/admin",
+];
 
-const handler = env.clerk.enabled
-  ? clerkMiddleware(async (auth, request) => {
-      if (isProtected(request)) await auth.protect();
-    })
-  : () => NextResponse.next();
+function isProtectedPath(pathname: string): boolean {
+  return PROTECTED_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+}
 
-export default handler;
+export async function proxy(request: Request) {
+  const client = getAuth0();
+  if (!client) return NextResponse.next();
+
+  const authRes = await client.middleware(request);
+  const url = new URL(request.url);
+  if (url.pathname.startsWith("/auth/")) return authRes;
+  if (!isProtectedPath(url.pathname)) return authRes;
+
+  const session = await client.getSession(request as NextRequest);
+  if (!session) {
+    const login = new URL("/auth/login", url.origin);
+    login.searchParams.set("returnTo", `${url.pathname}${url.search}`);
+    const redirect = NextResponse.redirect(login);
+    authRes.cookies.getAll().forEach((cookie) => {
+      redirect.cookies.set(cookie.name, cookie.value);
+    });
+    return redirect;
+  }
+  return authRes;
+}
 
 export const config = {
   matcher: [
-    "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
-    "/(api|trpc)(.*)",
+    "/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt).*)",
   ],
 };

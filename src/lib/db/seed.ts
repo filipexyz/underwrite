@@ -319,7 +319,7 @@ export async function seed(db: Db): Promise<{ agents: number }> {
         riskTolerance: a.risk_tolerance,
         policy: a.policy,
         status: "seed",
-        ownerClerkUserId: null,
+        ownerUserId: null,
       })
       .onConflictDoUpdate({
         target: agents.agentId,

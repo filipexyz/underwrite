@@ -22,7 +22,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   if (!agent) return jsonError(404, `agent not found: ${id}`);
   const [wallet, keyRows, runtime] = await Promise.all([
     getWallet(db, agent.agentId),
-    listApiKeys(db, { ownerClerkUserId: auth.identity.userId, agentId: agent.agentId }),
+    listApiKeys(db, { ownerUserId: auth.identity.userId, agentId: agent.agentId }),
     getPublicAgentRuntime(db, agent.agentId, agent.webhookUrl),
   ]);
   return NextResponse.json({

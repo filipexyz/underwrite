@@ -1,6 +1,5 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { UserButton } from "@clerk/nextjs";
 import { AppNav, OpsHint } from "@/components/app-nav";
 import { env } from "@/lib/env";
 
@@ -30,6 +29,17 @@ export function SiteFooter() {
   );
 }
 
+function AuthStatus() {
+  if (!env.auth0.enabled) {
+    return <span className="live-link">auth0 off</span>;
+  }
+  return (
+    <a href="/auth/logout" className="live-link">
+      sign out
+    </a>
+  );
+}
+
 export function SiteHeader({
   variant,
   hint,
@@ -49,13 +59,7 @@ export function SiteHeader({
       </div>
       <div className="flex items-center gap-3 shrink-0">
         {variant === "ops" && hint ? <OpsHint fallback={hint} /> : null}
-        {variant === "ops" ? (
-          env.clerk.enabled ? (
-            <UserButton />
-          ) : (
-            <span className="live-link">clerk off</span>
-          )
-        ) : null}
+        {variant === "ops" ? <AuthStatus /> : null}
         <LiveLink href="/console">{variant === "market" ? "OPEN OPS CONSOLE →" : "LIVE LEDGER →"}</LiveLink>
       </div>
     </header>

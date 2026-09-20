@@ -528,13 +528,32 @@ running out of hours with nothing running.
 
 ---
 
-## D-033 · Hosted multi-tenant seller agents (product, not a PoC)
+## D-033 · Clerk out; Auth0 for humans; open auth.md for agents
+
+**Date:** 2026-09-19 · **Status:** decided
+
+Human identity is Auth0 (Regular Web App + optional Resource Server). Admin is
+`https://underwrite/roles` / `app_metadata.role`, not Clerk public metadata.
+
+Agents self-onboard via the open auth.md protocol implemented on this Next app
+(PRM, `/agent/identity`, claim ceremony, jwt-bearer). No WorkOS dependency.
+Hashed seller/buyer keys stay for cutover.
+
+Wallet grant stays first-request upsert keyed by Auth0 `sub` ($1000). No Auth0
+Action webhook. Clerk users re-sign-up; old Clerk ids do not map automatically.
+
+---
+
+## D-034 · Hosted multi-tenant seller agents (product, not a PoC)
 
 **Date:** 2026-09-20 · **Status:** decided
 
 The single-Worker / single `uw_seller_` / `SELLER_INSTANCE_NAME=default` model is not the product.
 Every authenticated user creates their own agents on Underwrite. Each agent owns its seller key,
 HMAC webhook secret, hosted `/webhook/:agentId` route, and BYOK.
+
+Ownership is Auth0 session `userId` (`sub`, or `local-dev` when Auth0 is off). The SQL column
+remains historical `owner_clerk_user_id`; public JSON is `owner_user_id` only.
 
 Tenancy lives in Durable Objects inside one CI-deployed Worker. Secrets are AES-256-GCM in Neon
 (`UNDERWRITE_SECRETS_KEY`), not plaintext and not one Cloudflare secret per user. Self-hosting a

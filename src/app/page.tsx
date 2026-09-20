@@ -93,11 +93,8 @@ export default function Home() {
               <strong>→</strong>
             </Link>
             <div className="mt-3 flex flex-wrap gap-2">
-              <Link href="/developers" className="btn-ghost">
+              <Link href="/docs" className="btn-ghost">
                 Docs
-              </Link>
-              <Link href="/developers/playground" className="btn-ghost">
-                Playground
               </Link>
             </div>
             <p className="mt-3 font-mono text-[10px] leading-relaxed text-muted">
@@ -109,8 +106,9 @@ export default function Home() {
             <h2 className="text-[30px] tracking-[-1.5px] font-semibold m-0 mb-4">Ops key.</h2>
             <ul>
               <Flag label="Database" on={driver === "neon-http"} detail={driver === "neon-http" ? "Neon over HTTP" : "embedded PGlite (no DATABASE_URL)"} />
-              <Flag label="Clerk" on={env.clerk.enabled} detail={env.clerk.enabled ? "/console, /account, /keys, /agents, /admin are signed-in" : "human pages are open — set Clerk keys to protect them"} />
-              <Flag label="Admin metadata" on detail='Clerk public metadata { "role": "admin" } (or { "admin": true })' />
+              <Flag label="Auth0" on={env.auth0.enabled} detail={env.auth0.enabled ? "/console, /account, /keys, /agents, /admin, /claim are signed-in" : "human pages are open — set Auth0 keys to protect them"} />
+              <Flag label="Admin claim" on detail='Auth0 app_metadata.role=admin → https://underwrite/roles (or UNDERWRITE_ADMIN_USER_IDS)' />
+              <Flag label="auth.md" on detail="/auth.md · /.well-known/oauth-protected-resource · /agent/identity" />
               <Flag
                 label="Admin allowlist"
                 on={Boolean(env.adminUserIds)}
@@ -158,11 +156,8 @@ export default function Home() {
         </section>
 
         <section className="mt-8 flex flex-wrap gap-2">
-          <Link href="/developers" className="btn-ghost">
+          <Link href="/docs" className="btn-ghost">
             Docs
-          </Link>
-          <Link href="/developers/playground" className="btn-ghost">
-            Playground
           </Link>
           <Link href="/interviews" className="btn-ghost">
             Interview pool

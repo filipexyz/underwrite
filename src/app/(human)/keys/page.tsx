@@ -14,7 +14,7 @@ export default async function KeysPage() {
   const { userId } = await requireSignedInPage();
   const { db } = await getDb();
   const [keyRows, agents, wallet] = await Promise.all([
-    listApiKeys(db, { ownerClerkUserId: userId }),
+    listApiKeys(db, { ownerUserId: userId }),
     listOwnedAgents(db, userId),
     ensureUserWallet(db, userId),
   ]);

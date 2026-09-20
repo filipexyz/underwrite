@@ -69,7 +69,7 @@ export async function mintOwnedSellerKey(_prev: AgentFormState, formData: FormDa
   const issued = await issueApiKey(db, {
     name,
     role: "seller",
-    ownerClerkUserId: userId,
+    ownerUserId: userId,
     agentId,
     scopes: ["agents:me"],
   });
@@ -124,7 +124,7 @@ export async function revokeOwnedSellerKey(formData: FormData): Promise<void> {
   const { db } = await getDb();
   const agent = await getOwnedAgent(db, agentId, userId);
   if (!agent) return;
-  const owned = await listApiKeys(db, { ownerClerkUserId: userId, agentId });
+  const owned = await listApiKeys(db, { ownerUserId: userId, agentId });
   if (!owned.some((row) => row.id === keyId)) return;
   await revokeApiKey(db, keyId);
   revalidateAgent(agentId);

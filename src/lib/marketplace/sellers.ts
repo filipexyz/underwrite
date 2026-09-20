@@ -167,9 +167,7 @@ export function toPublicAgent(row: AgentRow) {
     webhook_url: row.webhookUrl,
     description: row.description,
     policy: row.policy,
-    /** Auth0-ready alias. Same value as `owner_clerk_user_id` on main (Clerk). */
-    owner_user_id: row.ownerClerkUserId,
-    owner_clerk_user_id: row.ownerClerkUserId,
+    owner_user_id: row.ownerUserId,
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),
   };
@@ -189,7 +187,7 @@ export async function toOwnedAgentView(db: Db, row: AgentRow): Promise<PublicOwn
 }
 
 export async function listOwnedAgents(db: Db, ownerUserId: string): Promise<AgentRow[]> {
-  return db.select().from(agents).where(eq(agents.ownerClerkUserId, ownerUserId)).orderBy(desc(agents.createdAt));
+  return db.select().from(agents).where(eq(agents.ownerUserId, ownerUserId)).orderBy(desc(agents.createdAt));
 }
 
 export async function listAllAgents(db: Db): Promise<AgentRow[]> {
@@ -202,7 +200,7 @@ export async function getAgentRow(db: Db, agentId: string): Promise<AgentRow | n
 }
 
 export function isOwnedBy(row: AgentRow, ownerUserId: string): boolean {
-  return row.ownerClerkUserId === ownerUserId;
+  return row.ownerUserId === ownerUserId;
 }
 
 /** Owner-only fetch. Returns null when the agent is missing or belongs to someone else. */
@@ -243,7 +241,7 @@ export async function registerSellerAgent(
       riskTolerance: input.risk_tolerance,
       policy,
       status: "registered",
-      ownerClerkUserId: ownerUserId,
+      ownerUserId,
       contact: input.contact ?? null,
       webhookUrl,
       description: input.description ?? null,
@@ -287,7 +285,7 @@ export async function registerSellerAgent(
   const issued = await issueApiKey(db, {
     name: `${input.name} seller key`,
     role: "seller",
-    ownerClerkUserId: ownerUserId,
+    ownerUserId,
     agentId,
     scopes: ["agents:me"],
   });
@@ -361,7 +359,7 @@ export async function patchAgentProfile(
 }
 
 export function enableStatusFor(row: AgentRow): Exclude<AgentStatus, "disabled"> {
-  return row.ownerClerkUserId ? "registered" : "seed";
+  return row.ownerUserId ? "registered" : "seed";
 }
 
 export async function setAgentStatus(db: Db, agentId: string, status: AgentStatus): Promise<AgentRow | null> {

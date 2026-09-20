@@ -23,7 +23,7 @@ export default async function AgentDetailPage({ params }: { params: Promise<{ id
 
   const [wallet, keyRows, issued, runtime] = await Promise.all([
     ensureAgentWallet(db, row.agentId),
-    listApiKeys(db, { ownerClerkUserId: userId, agentId: row.agentId }),
+    listApiKeys(db, { ownerUserId: userId, agentId: row.agentId }),
     peekIssuedAgentSecrets(row.agentId),
     getPublicAgentRuntime(db, row.agentId, row.webhookUrl),
   ]);

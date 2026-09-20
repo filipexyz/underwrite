@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { SiteChrome } from "@/components/site-chrome";
+import { env } from "@/lib/env";
 
 export default function UnauthorizedPage() {
   return (
@@ -10,11 +11,17 @@ export default function UnauthorizedPage() {
           Sign in <em>required.</em>
         </h1>
         <p className="text-[#53605a] text-sm leading-relaxed">
-          Self-serve keys, seller registration, and the admin area need a Clerk session.
+          Self-serve keys, seller registration, and the admin area need an Auth0 session.
         </p>
-        <Link href="/" className="btn-ghost w-fit">
-          ← home
-        </Link>
+        {env.auth0.enabled ? (
+          <a href="/auth/login" className="btn-ink w-fit">
+            Sign in
+          </a>
+        ) : (
+          <Link href="/" className="btn-ghost w-fit">
+            ← home
+          </Link>
+        )}
       </main>
     </SiteChrome>
   );

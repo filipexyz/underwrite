@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   description: "Live voice interview. The interviewer ends the call when everything is answered.",
 };
 
-/** No console nav, no marketplace chrome, no Clerk. */
+/** No console nav, no marketplace chrome, no Auth0 chrome. */
 export default function PublicInterviewLayout({ children }: { children: ReactNode }) {
   return children;
 }

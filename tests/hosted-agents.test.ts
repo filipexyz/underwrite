@@ -73,7 +73,7 @@ describe("create hosted agent", () => {
     );
     expect(created.secret.startsWith("uw_seller_")).toBe(true);
     expect(created.webhook_secret.startsWith("whsec_")).toBe(true);
-    expect(created.agent.ownerClerkUserId).toBe("user_alice");
+    expect(created.agent.ownerUserId).toBe("user_alice");
     expect(created.agent.webhookUrl).toBe(
       `https://underwrite-cloudflare-seller.test/webhook/${created.agent.agentId}`,
     );

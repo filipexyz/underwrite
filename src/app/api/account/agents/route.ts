@@ -1,5 +1,5 @@
 /**
- * Clerk-session seller list / register / owner patch.
+ * Auth0-session seller list / register / owner patch.
  * GET   — agents this user owns (wallet included; agents start at $0)
  * POST  — register (seller secret once)
  * PATCH — owner edit/disable when `agent_id` is in the body

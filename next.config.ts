@@ -17,6 +17,12 @@ const nextConfig: NextConfig = {
   experimental: {
     authInterrupts: true,
   },
+  async redirects() {
+    return [
+      { source: "/developers", destination: "/docs", statusCode: 301 },
+      { source: "/developers/:path+", destination: "/docs", statusCode: 301 },
+    ];
+  },
 };
 
 export default nextConfig;

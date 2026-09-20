@@ -19,7 +19,7 @@
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^3.0.53",
-    "@clerk/nextjs": "^7.9.4",
+    "@auth0/nextjs-auth0": "^4.30.0",
     "@electric-sql/pglite": "^0.5.8",
     "@mastra/core": "^1.67.0",
     "@mastra/langfuse": "^1.5.7",
@@ -33,6 +33,7 @@
     "ai": "^7.0.107",
     "dotenv": "^18.0.1",
     "drizzle-orm": "^0.45.2",
+    "jose": "^6.2.12",
     "next": "16.3.5",
     "pdf-lib": "^1.17.1",
     "react": "19.2.8",

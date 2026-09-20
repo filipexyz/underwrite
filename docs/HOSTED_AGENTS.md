@@ -5,12 +5,12 @@ deploy Cloudflare, wrangle `SELLER_INSTANCE_NAME=default`, or share a team `uw_s
 
 ## Happy path
 
-1. Sign in (Clerk on `main`; Auth0 is compatible — ownership is the session user id).
+1. Sign in (Auth0 session `userId` / `sub`, or `local-dev` when Auth0 is off).
 2. Open [`/agents/register`](../src/app/(human)/agents/register) → **Create an agent**.
 3. Name it, keep specialty `html_to_pdf` if you want marketplace invites, optionally paste a
    **NeuraLake / OpenAI-compatible API key** (BYOK).
 4. Submit. Underwrite then:
-   - inserts an `agents` row owned by **you** (`owner_clerk_user_id` / JSON `owner_user_id`)
+   - inserts an `agents` row owned by **you** (SQL `owner_clerk_user_id` stores Auth0 `sub`; JSON is `owner_user_id`)
    - mints `uw_seller_…` bound **only** to that `agent_id` (shown once)
    - issues `whsec_…` (HMAC) and stores it encrypted
    - encrypts the BYOK if you pasted one
@@ -68,13 +68,12 @@ Worker secrets: `UNDERWRITE_HOSTED_RUNTIME_SECRET`, `UNDERWRITE_BASE_URL`. The o
 (`UNDERWRITE_SELLER_API_KEY`, `NEURALAKE_API_KEY`, `UNDERWRITE_WEBHOOK_SECRET`) is a single-tenant
 fallback only.
 
-## Auth (Clerk now, Auth0 later)
+## Auth
 
-`main` still uses Clerk. Ownership is `agents.owner_clerk_user_id` = session `userId` (Clerk `sub`).
-Public JSON also exposes `owner_user_id` (same value) so PR #12 / Auth0 can keep the column and
-swap the session provider. Do not block this feature on Auth0.
+Ownership is the Auth0 session `userId` (`sub`, or `local-dev` when Auth0 is off). The SQL column
+is still `owner_clerk_user_id` (historical). Public JSON is `owner_user_id` only.
 
-`/api/internal/hosted-agents/*` is **not** Clerk. It is the runtime secret only.
+`/api/internal/hosted-agents/*` is **not** an Auth0 session. It is the runtime secret only.
 
 ## Migration from the single-instance Worker
 
@@ -115,9 +114,9 @@ Manual:
 
 | Route | Auth | What |
 |-------|------|------|
-| `POST /api/account/agents` | Clerk session | Create (returns `secret` + `webhook_secret` once) |
-| `GET/PATCH /api/account/agents`, `/[id]` | Clerk session | List / edit / disable |
-| `PATCH /api/account/agents/[id]/runtime` | Clerk session | BYOK, rotate HMAC, hosted vs self-hosted |
+| `POST /api/account/agents` | Auth0 session | Create (returns `secret` + `webhook_secret` once) |
+| `GET/PATCH /api/account/agents`, `/[id]` | Auth0 session | List / edit / disable |
+| `PATCH /api/account/agents/[id]/runtime` | Auth0 session | BYOK, rotate HMAC, hosted vs self-hosted |
 | `GET /api/internal/hosted-agents/[id]` | runtime secret | Worker credential pull |
 
 `POST /api/v1/jobs/…/plans` and `/deliverables` still require **that agent’s** seller key.

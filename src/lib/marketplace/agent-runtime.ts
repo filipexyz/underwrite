@@ -216,7 +216,7 @@ export async function loadHostedAgentBundle(db: Db, agentId: string): Promise<Ho
   return {
     agent_id: agent.agentId,
     status: agent.status,
-    owner_user_id: agent.ownerClerkUserId,
+    owner_user_id: agent.ownerUserId,
     webhook_url: agent.webhookUrl,
     underwrite_base_url: env.publicBaseUrl,
     seller_api_key: decrypted.sellerApiKey,

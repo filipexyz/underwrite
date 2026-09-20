@@ -1,6 +1,6 @@
 /**
  * Worker-trusted credential pull. Auth is `UNDERWRITE_HOSTED_RUNTIME_SECRET`,
- * not Clerk and not a user `uw_seller_` key.
+ * not an Auth0 session and not a user `uw_seller_` key.
  */
 import { NextResponse } from "next/server";
 import { jsonError } from "@/lib/api/http";

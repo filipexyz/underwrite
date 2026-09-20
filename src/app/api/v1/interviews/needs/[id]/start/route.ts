@@ -1,5 +1,5 @@
 /**
- * POST /api/v1/interviews/needs/[id]/start — creator/admin start (Clerk).
+ * POST /api/v1/interviews/needs/[id]/start — creator/admin start (Auth0).
  * Interviewees use POST /api/v1/interviews/i/[token]/start instead.
  */
 import { NextResponse } from "next/server";

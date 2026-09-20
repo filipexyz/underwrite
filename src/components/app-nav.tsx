@@ -11,8 +11,7 @@ export function OpsHint({ fallback }: { fallback: string }) {
 
 const LINKS = [
   { href: "/", label: "home", match: (path: string) => path === "/" },
-  { href: "/developers", label: "docs", match: (path: string) => path === "/developers" },
-  { href: "/developers/playground", label: "playground", match: (path: string) => path.startsWith("/developers/playground") },
+  { href: "/docs", label: "docs", match: (path: string) => path === "/docs" || path.startsWith("/docs/") },
   { href: "/console", label: "console", match: (path: string) => path.startsWith("/console") },
   { href: "/interviews", label: "interviews", match: (path: string) => path.startsWith("/interviews") },
   { href: "/account", label: "account", match: (path: string) => path.startsWith("/account") },

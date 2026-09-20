@@ -1,6 +1,6 @@
 /**
  * POST /api/v1/interviews/i/[token]/start — interviewee start.
- * Auth = possession of the invite token. No Clerk.
+ * Auth = possession of the invite token. No Auth0 session.
  */
 import { NextResponse } from "next/server";
 import { jsonError } from "@/lib/api/http";

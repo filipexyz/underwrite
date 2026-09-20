@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { listApiKeys, revokeApiKey } from "@/lib/auth/api-keys";
+import { revokeRegistration } from "@/lib/auth/auth-md";
 import { requireAdminPage } from "@/lib/auth/session";
 import { getDb } from "@/lib/db/client";
 import { enableStatusFor, getAgentRow, setAgentStatus } from "@/lib/marketplace/sellers";
@@ -40,4 +41,14 @@ export async function revokeAnyKey(formData: FormData): Promise<void> {
   await revokeApiKey(db, id);
   revalidatePath("/admin");
   revalidatePath("/keys");
+}
+
+export async function revokeAnyRegistration(formData: FormData): Promise<void> {
+  await requireAdminPage();
+  const id = String(formData.get("id") ?? "").trim();
+  if (!id) return;
+  const { db } = await getDb();
+  await revokeRegistration(db, id);
+  revalidatePath("/admin");
+  revalidatePath("/account");
 }

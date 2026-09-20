@@ -61,7 +61,7 @@ describe("ownership checks", () => {
   });
 
   it("account APIs 404 when the session user does not own the agent", async () => {
-    // Route handlers use the process-wide getDb() handle (Clerk off → local-dev).
+    // Route handlers use the process-wide getDb() handle (Auth0 off → local-dev).
     const { db: shared } = await getDb();
     const foreign = await registerSellerAgent(shared, "user_foreign", { ...draft, name: "Foreign" });
     const mine = await registerSellerAgent(shared, LOCAL_DEV_USER_ID, { ...draft, name: "Local" });
