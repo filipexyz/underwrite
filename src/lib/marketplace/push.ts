@@ -78,12 +78,16 @@ export function resolveExecutionMode(input?: "seed" | "push" | null, forced?: "s
   return env.marketplacePush ? "push" : "seed";
 }
 
+export type DiscoverOpts = { requireWebhook?: boolean };
+
 export function discoverTopK(
   registry: EngineContext["registry"],
   specialty: string,
   k = env.marketplaceTopK,
+  opts: DiscoverOpts = {},
 ): RegistryAgent[] {
   return discover(registry, { specialty })
+    .filter((a) => (opts.requireWebhook ? Boolean(a.webhookUrl) : true))
     .sort((a, b) => {
       const aw = a.webhookUrl ? 1 : 0;
       const bw = b.webhookUrl ? 1 : 0;
@@ -111,10 +115,11 @@ export function resolveInvitees(
   specialty: string,
   requested?: string[] | null,
   k = env.marketplaceTopK,
+  opts: DiscoverOpts = {},
 ): { agents: RegistryAgent[]; skipped: InviteSkip[] } {
   const ids = [...new Set((requested ?? []).map((id) => id.trim()).filter(Boolean))];
   if (ids.length === 0) {
-    return { agents: discoverTopK(registry, specialty, k), skipped: [] };
+    return { agents: discoverTopK(registry, specialty, k, opts), skipped: [] };
   }
 
   const agents: RegistryAgent[] = [];
@@ -131,6 +136,10 @@ export function resolveInvitees(
     }
     if (!agent.specialties.includes(specialty)) {
       skipped.push({ agent_id: agentId, reason: `specialty_mismatch:${specialty}` });
+      continue;
+    }
+    if (opts.requireWebhook && !agent.webhookUrl) {
+      skipped.push({ agent_id: agentId, reason: "not_connected" });
       continue;
     }
     agents.push(agent);
@@ -205,6 +214,7 @@ async function notifyAgent(
 export async function startPushJob(
   db: Db,
   requestId: string,
+  opts: DiscoverOpts = {},
 ): Promise<{ invited: string[]; plan_deadline_at: string; deliveries: InviteDelivery[]; skipped: InviteSkip[] }> {
   const ctx = await buildContext(db, requestId);
   if (ctx.request.executionMode !== "push") {
@@ -242,14 +252,16 @@ export async function startPushJob(
   }
 
   const requested = getState(ctx).requested_invite_agent_ids;
-  const resolved = resolveInvitees(ctx.registry, ctx.request.category, requested);
+  const resolved = resolveInvitees(ctx.registry, ctx.request.category, requested, env.marketplaceTopK, opts);
   const invited = resolved.agents;
   const deadline = new Date(Date.now() + env.planWindowMs);
 
   if (invited.length === 0) {
     const reason = requested?.length
       ? "requested invitees were not hireable for this specialty"
-      : "no hireable agents matched the specialty";
+      : opts.requireWebhook
+        ? "no connected agents with a webhook matched the specialty"
+        : "no hireable agents matched the specialty";
     await refundBuyerHold(ctx, ctx.request.maxCostUsd, `escrow_hold_refund:${requestId}:no_invitees`);
     await ctx.ledger.append({
       type: "plan_selected",

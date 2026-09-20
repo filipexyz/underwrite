@@ -360,7 +360,9 @@ describe("voice finalize starts push, not the seed PDF loop", () => {
 
     expect(runSpy).not.toHaveBeenCalled();
     expect(startSpy).toHaveBeenCalled();
-    expect(startSpy.mock.calls.some((call) => call[1] === body.request_id)).toBe(true);
+    expect(startSpy.mock.calls.some((call) => call[1] === body.request_id && call[2]?.requireWebhook === true)).toBe(
+      true,
+    );
 
     const request = await getRequest(db, body.request_id);
     expect(request?.executionMode).toBe("push");
@@ -368,10 +370,10 @@ describe("voice finalize starts push, not the seed PDF loop", () => {
     expect(request?.status).toBe("planning");
     expect(request?.state?.requested_invite_agent_ids ?? []).toEqual([]);
     const invited = request?.state?.invited_agent_ids ?? [];
-    expect(invited).toEqual(expect.arrayContaining([hosted.agent.agentId, inbox.agent.agentId]));
+    expect(invited).toEqual([hosted.agent.agentId]);
+    expect(invited).not.toContain(inbox.agent.agentId);
     expect(invited).not.toContain(PINNED_AGENT_ID);
     expect(invited).not.toContain("a-delegator");
-    expect(invited[0]).toBe(hosted.agent.agentId);
 
     const events = await listEvents(db, body.request_id);
     expect(events.some((e) => e.type === "plan_request")).toBe(true);
@@ -379,6 +381,45 @@ describe("voice finalize starts push, not the seed PDF loop", () => {
 
     runSpy.mockRestore();
     startSpy.mockRestore();
+  });
+
+  it("does not invite seed catalog agents without a webhook", async () => {
+    const marketplace = await import("@/mastra");
+    const runSpy = vi.spyOn(marketplace, "runMarketplace");
+    const { db } = await getDb();
+    await ensureUserWallet(db, USER);
+    const connected = await registerSellerAgent(
+      db,
+      "user_voice_push_html",
+      sellerDraft(
+        "Voice connected pdf",
+        "html_to_pdf",
+        "https://underwrite-cloudflare-seller.example.workers.dev/webhook/voice-pdf",
+      ),
+    );
+
+    const session = await insertVoiceSession(db, { userId: USER, channel: "voice-push-seed" });
+    const res = await finalizeRoute(
+      jsonRequest({
+        brief: { ...brief, category: "html_to_pdf", requirement: "Compile the brief to a PDF" },
+        transcript_json: [{ role: "assistant", text: "Posted." }],
+      }) as never,
+      { params: Promise.resolve({ id: session.id }) },
+    );
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { request_id: string };
+    await flushScheduledVoicePushJobs();
+
+    expect(runSpy).not.toHaveBeenCalled();
+    const request = await getRequest(db, body.request_id);
+    expect(request?.executionMode).toBe("push");
+    expect(request?.status).toBe("planning");
+    expect(request?.state?.invited_agent_ids).toEqual([connected.agent.agentId]);
+    expect(request?.state?.invited_agent_ids).not.toEqual(
+      expect.arrayContaining(["a-delegator", "b-mid", "c1-cheap", "c2-honest"]),
+    );
+
+    runSpy.mockRestore();
   });
 
   it("fails loudly when no hireable agent matches the specialty", async () => {
@@ -406,13 +447,13 @@ describe("voice finalize starts push, not the seed PDF loop", () => {
     const request = await getRequest(db, body.request_id);
     expect(request?.executionMode).toBe("push");
     expect(request?.status).toBe("no_eligible_plan");
-    expect(request?.error).toMatch(/no hireable agents/i);
+    expect(request?.error).toMatch(/no connected agents/i);
     const outcome = (request?.outcome ?? {}) as { reason?: string };
-    expect(outcome.reason).toMatch(/no hireable agents/i);
+    expect(outcome.reason).toMatch(/no connected agents/i);
 
     const events = await listEvents(db, body.request_id);
     const selected = events.find((e) => e.type === "plan_selected");
-    expect(selected?.payload.reason).toMatch(/no hireable agents/i);
+    expect(selected?.payload.reason).toMatch(/no connected agents/i);
 
     runSpy.mockRestore();
   });

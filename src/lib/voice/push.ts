@@ -7,7 +7,8 @@
  * run the same push job as `POST /api/v1/requests` with `execution_mode: "push"`.
  *
  * No `invite_agent_ids` unless a test pins them. Default = discover Top-K for
- * `request.category` (webhook/hosted preferred).
+ * `request.category`, **connected only** (hosted Cloudflare or self-hosted
+ * webhook). Seed catalog agents without a webhook are not invited.
  */
 import { after } from "next/server";
 import { getDb } from "@/lib/db/client";
@@ -25,10 +26,10 @@ const testJobs: Promise<void>[] = [];
  */
 export async function runVoicePushJob(requestId: string): Promise<void> {
   const { db } = await getDb();
-  const started = await startPushJob(db, requestId);
+  const started = await startPushJob(db, requestId, { requireWebhook: true });
   if (started.invited.length === 0) {
     console.error(
-      `[voice] no hireable agents for ${requestId}`,
+      `[voice] no connected agents for ${requestId}`,
       JSON.stringify({ skipped: started.skipped }),
     );
     return;
