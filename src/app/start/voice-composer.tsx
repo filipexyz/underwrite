@@ -25,6 +25,12 @@ type StartPayload = {
 type FinalizePayload = { request_id?: string; summary?: string; created?: boolean; error?: string };
 
 /**
+ * How long the agent may be silent, after having spoken, before the task is posted with what exists.
+ * Long enough for a genuine thinking pause; short enough that nobody is left talking to a frozen call.
+ */
+const AGENT_STALL_MS = 30_000;
+
+/**
  * The signed-in voice composer.
  *
  * Own component, not the interview room: the two share Agora primitives and the visual language, but a
@@ -67,6 +73,8 @@ export function VoiceComposer({ startPath }: { startPath: string }) {
   const pushedRef = useRef(0);
   /** `user-left` fires outside React's render cycle; the handler needs the current phase. */
   const phaseRef = useRef<Phase>("idle");
+  /** When the agent last finished a turn, so a freeze is detected instead of waited on forever. */
+  const lastAgentTurnAt = useRef<number | null>(null);
 
   useEffect(() => {
     phaseRef.current = phase;
@@ -147,6 +155,11 @@ export function VoiceComposer({ startPath }: { startPath: string }) {
           finishing.current = false;
           setPhase("live");
           setError(body.error ?? `could not post the task (${res.status})`);
+          /*
+           * A rejected finalize means the brief was not complete. Restart the stall clock, otherwise the
+           * detector below fires again immediately and loops against a conversation that has not moved.
+           */
+          lastAgentTurnAt.current = Date.now();
           return;
         }
         await cleanup();
@@ -192,6 +205,29 @@ export function VoiceComposer({ startPath }: { startPath: string }) {
     },
     [finish],
   );
+
+  /**
+   * Stall recovery: post what was agreed when the agent stops answering.
+   *
+   * Reported live: *"it freezes and never answers anymore, but still transcribing input audio"*. GPT Live
+   * can sit in `thinking` indefinitely — its `idleTimeout` never fires because it is not idle — so neither
+   * the closing sentence nor `user-left` ever arrives and the person is left talking to nothing.
+   *
+   * A quiet agent, after it has already spoken, is treated as finished. The server decides whether the
+   * brief is complete; a 409 names what is missing and restarts the clock, so this cannot loop and cannot
+   * invent a task.
+   */
+  useEffect(() => {
+    if (phase !== "live") return;
+    const timer = window.setInterval(() => {
+      const last = lastAgentTurnAt.current;
+      if (!last || finishing.current) return;
+      if (!transcriptRef.current.some((t) => t.role === "assistant")) return;
+      if (Date.now() - last < AGENT_STALL_MS) return;
+      void finish(transcriptRef.current);
+    }, 5_000);
+    return () => window.clearInterval(timer);
+  }, [finish, phase]);
 
   const start = useCallback(async () => {
     if (starting.current) return;
@@ -276,7 +312,10 @@ export function VoiceComposer({ startPath }: { startPath: string }) {
           // questions with no answers, which reads as a frozen call.
           setTranscript((prev) => {
             const next = upsertTranscript(prev, parsed.turn, parsed.inProgress);
-            if (!parsed.inProgress && parsed.turn.role === "assistant") maybeFinish(next);
+            if (!parsed.inProgress && parsed.turn.role === "assistant") {
+              lastAgentTurnAt.current = Date.now();
+              maybeFinish(next);
+            }
             return next;
           });
         }
