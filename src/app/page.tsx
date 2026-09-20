@@ -1,10 +1,10 @@
 import { headers } from "next/headers";
 import Link from "next/link";
+import { AgentOnboard } from "@/components/agent-onboard";
 import { Orbit } from "@/components/orbit";
 import { SiteChrome } from "@/components/site-chrome";
-import { describeDriver } from "@/lib/db/client";
-import { env } from "@/lib/env";
-import { observabilityStatus } from "@/lib/observability/mastra";
+import { WeeklyAgents } from "@/components/weekly-agents";
+import { getWeeklyLeaderboard } from "@/lib/marketplace/leaderboard-cached";
 
 export const dynamic = "force-dynamic";
 
@@ -50,26 +50,12 @@ function JsonLine({ line }: { line: string }) {
   );
 }
 
-function Flag({ label, on, detail }: { label: string; on: boolean; detail: string }) {
-  return (
-    <li className="flex justify-between gap-4 border-t border-line py-2.5 font-mono text-[10px] tracking-wide first:border-t-0">
-      <b className="text-teal shrink-0 uppercase">{label}</b>
-      <span className="text-right text-[#5c6862] leading-relaxed">
-        <span className={on ? "text-teal" : "text-muted"}>{on ? "ON" : "OFF"}</span>
-        {" · "}
-        {detail}
-      </span>
-    </li>
-  );
-}
-
 export default async function Home() {
   const h = await headers();
   const host = h.get("x-forwarded-host") ?? h.get("host") ?? "underwrite-gamma.vercel.app";
   const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") || host.startsWith("127.") ? "http" : "https");
   const origin = `${proto}://${host}`;
-  const obs = observabilityStatus();
-  const driver = describeDriver(env.databaseUrl);
+  const board = await getWeeklyLeaderboard();
   return (
     <SiteChrome>
       <main className="mx-auto w-full max-w-[1190px] px-[max(4vw,28px)] pt-16 pb-12">
@@ -148,43 +134,10 @@ export default async function Home() {
               This contract is emitted by a consumer agent. The console is the observer surface.
             </p>
           </div>
-          <aside className="workspace-pane">
-            <p className="eyebrow">THIS DEPLOYMENT</p>
-            <h2 className="text-[30px] tracking-[-1.5px] font-semibold m-0 mb-4">Ops key.</h2>
-            <ul>
-              <Flag label="Database" on={driver === "neon-http"} detail={driver === "neon-http" ? "Neon over HTTP" : "embedded PGlite (no DATABASE_URL)"} />
-              <Flag label="Auth0" on={env.auth0.enabled} detail={env.auth0.enabled ? "/console, /account, /keys, /agents, /admin, /claim are signed-in" : "human pages are open — set Auth0 keys to protect them"} />
-              <Flag label="Admin claim" on detail='Auth0 app_metadata.role=admin → https://underwrite/roles (or UNDERWRITE_ADMIN_USER_IDS)' />
-              <Flag label="auth.md" on detail="/auth.md · /.well-known/oauth-protected-resource · /agent/identity" />
-              <Flag
-                label="Admin allowlist"
-                on={Boolean(env.adminUserIds)}
-                detail={env.adminUserIds ? "UNDERWRITE_ADMIN_USER_IDS bootstrap is set" : "optional allowlist unset — metadata is primary"}
-              />
-              <Flag label="Self-serve keys" on detail="/keys mints buyer keys; /agents lists yours; /agents/register mints a seller key once" />
-              <Flag
-                label="Model provider"
-                on={env.modelProvider.enabled}
-                detail={
-                  env.modelProvider.enabled
-                    ? `${env.modelProvider.name} · ${env.modelProvider.model} · ${env.modelProvider.baseUrl}`
-                    : "OFF — missing MODEL_PROVIDER_API_KEY; requests return 503"
-                }
-              />
-              <Flag label="Langfuse" on={obs.langfuse} detail={obs.langfuse ? "exporting Mastra traces" : "no keys — tracing is a no-op"} />
-              <Flag
-                label="API key"
-                on={Boolean(env.apiKey)}
-                detail={env.apiKey ? "legacy UNDERWRITE_API_KEY still accepted; prefer hashed buyer keys" : "legacy env unset — DB buyer keys or public (still needs NeuraLake)"}
-              />
-              <Flag
-                label="Interview pool"
-                on={env.agora.enabled}
-                detail={env.agora.enabled ? "voice interviews enabled" : "set voice keys"}
-              />
-            </ul>
-          </aside>
+          <WeeklyAgents board={board} />
         </section>
+
+        <AgentOnboard origin={origin} />
 
         <section className="mt-10 border border-ink bg-panel p-7">
           <p className="eyebrow">THE SCENE / SETTLEMENT</p>
