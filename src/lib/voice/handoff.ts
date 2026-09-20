@@ -15,6 +15,7 @@ import type { RequestInput } from "@/lib/contracts";
 import type { Db } from "@/lib/db/client";
 import { voiceSessions, type VoiceSessionRow } from "@/lib/db/schema";
 import { createRequest } from "@/lib/marketplace/requests";
+import { classifyTask, type TaskClassification } from "@/lib/typesafe/classify";
 import { DEFAULT_VOICE_CATEGORY, type VoiceTaskBrief } from "./types";
 
 const MAX_REQUIREMENT_CHARS = 4_000;
@@ -53,7 +54,23 @@ export function composeVoiceRequirement(brief: VoiceTaskBrief): string {
   return text.length <= MAX_REQUIREMENT_CHARS ? text : `${text.slice(0, MAX_REQUIREMENT_CHARS - 1).trimEnd()}…`;
 }
 
-export function voiceBriefToRequestInput(brief: VoiceTaskBrief): RequestInput {
+/**
+ * Classify the requirement, then build the request.
+ *
+ * Replaces the hardcoded `DEFAULT_VOICE_CATEGORY`: the category decides which rubric judges the work, and
+ * defaulting it meant a landing page was graded by the PDF report rubric and could never pass.
+ *
+ * The classification is a cost line like any other model call, so it is returned rather than dropped — the
+ * efficiency numbers should include the decision that shaped the task.
+ */
+export async function voiceBriefToRequestInputClassified(
+  brief: VoiceTaskBrief,
+): Promise<{ input: RequestInput; classification: TaskClassification }> {
+  const classification = await classifyTask(brief.requirement);
+  return { input: voiceBriefToRequestInput(brief, classification.category), classification };
+}
+
+export function voiceBriefToRequestInput(brief: VoiceTaskBrief, category?: string): RequestInput {
   return {
     task: {
       requirement: composeVoiceRequirement(brief),
@@ -65,7 +82,7 @@ export function voiceBriefToRequestInput(brief: VoiceTaskBrief): RequestInput {
     min_confidence: brief.min_confidence,
     failure_policy: brief.failure_policy,
     selection_timeout_s: 5,
-    category: brief.category ?? DEFAULT_VOICE_CATEGORY,
+    category: brief.category ?? category ?? DEFAULT_VOICE_CATEGORY,
   };
 }
 
@@ -82,7 +99,21 @@ export async function createTaskFromVoiceBrief(
   const [current] = await db.select().from(voiceSessions).where(eq(voiceSessions.id, args.session.id)).limit(1);
   if (current?.requestId) return { requestId: current.requestId, created: false };
 
-  const input = voiceBriefToRequestInput(args.brief);
+  // The category decides which rubric judges the work, so it is inferred from the brief rather than
+  // defaulted. `classifyTask` never throws: unconfigured or unreachable, it falls back to the old default.
+  const { input, classification } = await voiceBriefToRequestInputClassified(args.brief);
+  if (classification.source === "jev") {
+    console.log(
+      "[classify]",
+      JSON.stringify({
+        category: classification.category,
+        confidence: classification.confidence,
+        ambiguous: classification.ambiguous,
+        cost_usd: classification.cost_usd,
+        latency_ms: classification.latency_ms,
+      }),
+    );
+  }
   const row = await createRequest(db, input, {
     // The agent composed and filed this, not the person. Recording `agent` keeps the request free of
     // post-hoc human events, so `human_interventions` stays meaningful after `request_received`.
