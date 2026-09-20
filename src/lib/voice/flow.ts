@@ -9,6 +9,7 @@ import type { Db } from "@/lib/db/client";
 import { env } from "@/lib/env";
 import { mintJoinToken, newBrowserUid, newChannelName, startGptLiveAgent, stopGptLiveAgent } from "@/lib/agora/gpt-live";
 import { createTaskFromVoiceBrief } from "./handoff";
+import { extractBriefFromTranscript } from "./extract";
 import { buildVoiceComposerGreeting, buildVoiceComposerPrompt, summarizeBrief } from "./prompt";
 import {
   MAX_VOICE_TRANSCRIPT_TURNS_PER_WRITE,
@@ -19,6 +20,7 @@ import {
   failVoiceSession,
   getVoiceSession,
   insertVoiceSession,
+  replaceVoiceSession,
 } from "./store";
 import { DEFAULT_VOICE_CATEGORY, VOICE_AGENT_UID, VoiceFinalizeInput, type VoiceTaskBrief } from "./types";
 
@@ -60,7 +62,7 @@ export async function startVoiceSession(db: Db, userId: string): Promise<StartVo
         console.warn("[voice] failed to stop previous agent", error);
       }
     }
-    await failVoiceSession(db, stale.id, { error: "superseded by a new conversation" });
+    await replaceVoiceSession(db, stale.id);
   }
 
   const uid = newBrowserUid();
@@ -144,13 +146,27 @@ export async function finalizeVoiceSession(
 
   const parsed = VoiceFinalizeInput.safeParse(args.input);
   if (!parsed.success) {
-    return { ok: false, status: 422, error: "brief is not valid", details: parsed.error.flatten() };
+    return { ok: false, status: 422, error: "transcript is required to file the task", details: parsed.error.flatten() };
   }
 
-  const transcript = parsed.data.transcript_json?.slice(-MAX_VOICE_TRANSCRIPT_TURNS_PER_WRITE);
-  if (transcript?.length) await appendVoiceTranscript(db, session.id, transcript);
+  const transcript = parsed.data.transcript_json;
+  await appendVoiceTranscript(db, session.id, transcript.slice(-MAX_VOICE_TRANSCRIPT_TURNS_PER_WRITE));
 
-  const brief: VoiceTaskBrief = parsed.data.brief;
+  /*
+   * The brief comes from the transcript, not from the agent speaking it. TTS/ASR mangles dictated JSON,
+   * so the structure is recovered in text where it can be validated and retried — the same pattern
+   * `finalizeSession` uses for interviews. A client-supplied brief (when the agent's closing text
+   * happened to parse) is used as-is, because it costs nothing and skips an inference call.
+   */
+  const brief = parsed.data.brief ?? (await extractBriefFromTranscript(transcript));
+  if (!brief) {
+    return {
+      ok: false,
+      status: 409,
+      error: "could not read a complete brief from the conversation — the agent still needs the deliverable and the terms",
+    };
+  }
+
   const task = await createTaskFromVoiceBrief(db, { session, brief });
   await completeVoiceSession(db, session.id, { brief, transcript, requestId: task.requestId });
 

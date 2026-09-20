@@ -115,6 +115,19 @@ export async function completeVoiceSession(
   return row;
 }
 
+/**
+ * Close a session that a new conversation replaced.
+ *
+ * Distinct from `failed`: nothing went wrong, the person simply started again. Showing it as `failed`
+ * in the UI made ordinary cleanup look like a defect, which cost real debugging time.
+ */
+export async function replaceVoiceSession(db: Db, id: string): Promise<void> {
+  await db
+    .update(voiceSessions)
+    .set({ status: "replaced", error: null, endedAt: new Date() })
+    .where(eq(voiceSessions.id, id));
+}
+
 export async function failVoiceSession(
   db: Db,
   id: string,

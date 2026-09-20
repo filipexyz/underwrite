@@ -40,6 +40,13 @@ export function VoiceComposer({ startPath }: { startPath: string }) {
   const [agentState, setAgentState] = useState("idle");
   /** Whether the agent's audio track has been subscribed to. Silence without this is a bug, not a pause. */
   const [agentConnected, setAgentConnected] = useState(false);
+  /**
+   * Agora's own view of the call. Surfaced because three attempts to fix "no audio" by reasoning about
+   * the code failed: without the agent console, these two numbers are the only way to tell
+   * "the agent never joined" apart from "it joined and published nothing".
+   */
+  const [remoteCount, setRemoteCount] = useState(0);
+  const [connState, setConnState] = useState("idle");
   const [micOn, setMicOn] = useState(true);
   const [transcript, setTranscript] = useState<TranscriptTurn[]>([]);
   const [elapsed, setElapsed] = useState(0);
@@ -54,6 +61,12 @@ export function VoiceComposer({ startPath }: { startPath: string }) {
   const starting = useRef(false);
   const transcriptRef = useRef<TranscriptTurn[]>([]);
   const pushedRef = useRef(0);
+  /** `user-left` fires outside React's render cycle; the handler needs the current phase. */
+  const phaseRef = useRef<Phase>("idle");
+
+  useEffect(() => {
+    phaseRef.current = phase;
+  }, [phase]);
 
   useEffect(() => {
     transcriptRef.current = transcript;
@@ -114,7 +127,7 @@ export function VoiceComposer({ startPath }: { startPath: string }) {
   }, [phase, sessionId]);
 
   const finish = useCallback(
-    async (turns: TranscriptTurn[], brief: VoiceTaskBrief) => {
+    async (turns: TranscriptTurn[], brief?: VoiceTaskBrief) => {
       if (finishing.current || !sessionId) return;
       finishing.current = true;
       setPhase("ending");
@@ -122,7 +135,8 @@ export function VoiceComposer({ startPath }: { startPath: string }) {
         const res = await fetch(`/api/v1/voice/sessions/${sessionId}/finalize`, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ brief, transcript_json: turns }),
+          // The transcript is the payload that matters; the server extracts the brief from it.
+          body: JSON.stringify({ transcript_json: turns, ...(brief ? { brief } : {}) }),
         });
         const body = (await res.json().catch(() => ({}))) as FinalizePayload;
         if (!res.ok || !body.request_id) {
@@ -143,7 +157,10 @@ export function VoiceComposer({ startPath }: { startPath: string }) {
     [cleanup, sessionId],
   );
 
-  /** The agent declares completion by emitting the brief JSON as its last spoken turn. */
+  /**
+   * The happy path: the agent's closing turn mentioned nothing structured, so a brief is only available
+   * if it *happened* to be parseable. When it is, skip the server-side extraction.
+   */
   const maybeFinish = useCallback(
     (turns: TranscriptTurn[]) => {
       const lastAssistant = [...turns].reverse().find((t) => t.role === "assistant" && t.turn_id !== -1);
@@ -151,10 +168,7 @@ export function VoiceComposer({ startPath }: { startPath: string }) {
       const parsed = extractBriefJson(lastAssistant.text);
       if (!parsed) return;
       const brief = VoiceTaskBrief.safeParse(parsed);
-      if (!brief.success) {
-        setError("The agent finished but its brief was incomplete — tell it what is missing and it will continue.");
-        return;
-      }
+      if (!brief.success) return;
       void finish(turns, brief.data);
     },
     [finish],
@@ -209,7 +223,17 @@ export function VoiceComposer({ startPath }: { startPath: string }) {
       client.on("user-unpublished", (_user, mediaType) => {
         if (mediaType === "audio") setAgentConnected(false);
       });
-      client.on("user-left", () => setAgentConnected(false));
+      client.on("user-left", () => {
+        setRemoteCount((n) => Math.max(0, n - 1));
+        setAgentConnected(false);
+        // The agent leaving the channel is a protocol-level "we're done" — far more reliable than
+        // waiting for a sentence we would have to pattern-match. The server reads the transcript.
+        if (phaseRef.current === "live" && transcriptRef.current.length > 1) {
+          void finish(transcriptRef.current);
+        }
+      });
+      client.on("user-joined", () => setRemoteCount((n) => n + 1));
+      client.on("connection-state-change", (state) => setConnState(String(state)));
       await client.join(payload.app_id ?? "", payload.channel, payload.token, Number(payload.uid));
       await client.publish([mic]);
 
@@ -303,6 +327,11 @@ export function VoiceComposer({ startPath }: { startPath: string }) {
         <p className="eyebrow !mb-0">
           {phase === "live" ? `${agentConnected ? agentState : "waiting for the agent's audio"} · ${elapsed}s` : phase}
         </p>
+        {phase !== "idle" ? (
+          <p className="mono text-[10px] text-muted">
+            rtc {connState} · remotes {remoteCount} · audio {agentConnected ? "on" : "none"}
+          </p>
+        ) : null}
         {phase === "idle" ? (
           <p className="font-sans text-sm text-[#53605a] max-w-sm leading-relaxed">
             Tell the agent what you need delivered. It will ask for the price you will pay, how long you will wait,
@@ -344,6 +373,21 @@ export function VoiceComposer({ startPath }: { startPath: string }) {
               ))}
             </ol>
           </details>
+        ) : null}
+
+        {/*
+         * Demo safety net, and the only human step anywhere in this flow. It appears only once the
+         * conversation has substance, and posts what was agreed without needing the agent's timing to
+         * be perfect — the server reads the transcript, so this cannot produce a task from nothing.
+         */}
+        {phase === "live" && transcript.filter((t) => t.role === "assistant" && t.turn_id !== -1).length >= 3 ? (
+          <button
+            type="button"
+            onClick={() => void finish(transcriptRef.current)}
+            className="btn-ghost w-full"
+          >
+            Post the task with what we agreed
+          </button>
         ) : null}
       </div>
     </section>

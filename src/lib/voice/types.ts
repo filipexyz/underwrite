@@ -9,7 +9,7 @@
 import { z } from "zod";
 import { FailurePolicy } from "@/lib/contracts";
 
-export const VoiceSessionStatus = z.enum(["live", "completed", "failed", "cancelled"]);
+export const VoiceSessionStatus = z.enum(["live", "completed", "replaced", "failed", "cancelled"]);
 export type VoiceSessionStatus = z.infer<typeof VoiceSessionStatus>;
 
 /**
@@ -42,10 +42,16 @@ export const TranscriptTurn = z.object({
 });
 export type TranscriptTurn = z.infer<typeof TranscriptTurn>;
 
-/** What the browser sends when the agent declares the brief complete. */
+/**
+ * What the browser sends when the conversation is over.
+ *
+ * The transcript is the input that matters: the brief is extracted from it server-side. `brief` is an
+ * optional fast path for the case where the agent's own completion text happened to parse — never a
+ * requirement, because the agent is explicitly forbidden from speaking structured data.
+ */
 export const VoiceFinalizeInput = z.object({
-  brief: VoiceTaskBrief,
-  transcript_json: z.array(TranscriptTurn).max(600).optional(),
+  transcript_json: z.array(TranscriptTurn).min(1).max(600),
+  brief: VoiceTaskBrief.optional(),
 });
 export type VoiceFinalizeInput = z.infer<typeof VoiceFinalizeInput>;
 

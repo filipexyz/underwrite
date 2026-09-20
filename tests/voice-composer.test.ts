@@ -24,6 +24,7 @@ import {
   listVoiceSessions,
 } from "@/lib/voice/store";
 import { VoiceTaskBrief } from "@/lib/voice/types";
+import { extractLastJsonObject, transcriptToPrompt } from "@/lib/voice/extract";
 import { buildVoiceComposerGreeting, buildVoiceComposerPrompt, summarizeBrief } from "@/lib/voice/prompt";
 
 /** The routes authenticate through `requireSignedInApi`, which is `local-dev` when Auth0 is off. */
@@ -72,6 +73,33 @@ describe("brief extraction from the agent's last turn", () => {
   });
 });
 
+describe("brief extraction from the transcript", () => {
+  it("reads the last JSON object out of a model reply with trailing prose", () => {
+    const parsed = extractLastJsonObject(
+      'Here you go: {"requirement":"a brief","max_cost_usd":0.2,"max_latency_s":60,"min_confidence":0.9,"failure_policy":"refund"} hope that helps',
+    );
+    expect(VoiceTaskBrief.safeParse(parsed).success).toBe(true);
+  });
+
+  it("returns null on an unparseable reply instead of throwing", () => {
+    expect(extractLastJsonObject("no json")).toBeNull();
+    expect(extractLastJsonObject("{ nope }")).toBeNull();
+  });
+
+  it("renders the transcript for the extractor and keeps the most recent part", () => {
+    const turns = [
+      { role: "assistant" as const, text: "What should be delivered?" },
+      { role: "user" as const, text: "A one-page brief" },
+    ];
+    const rendered = transcriptToPrompt(turns);
+    expect(rendered).toContain("AGENT: What should be delivered?");
+    expect(rendered).toContain("HUMAN: A one-page brief");
+    // Long calls must not produce an unbounded prompt: the tail is what carries the agreement.
+    const long = transcriptToPrompt([{ role: "user", text: "x".repeat(9_000) }]);
+    expect(long.length).toBeLessThanOrEqual(8_000);
+  });
+});
+
 describe("prompt guidance", () => {
   it("tells the agent the terms, the order, and that it must push back", () => {
     const prompt = buildVoiceComposerPrompt();
@@ -80,8 +108,15 @@ describe("prompt guidance", () => {
     // The guiding behaviour is the feature — assert it is actually instructed, not implied.
     expect(prompt.toLowerCase()).toContain("push back");
     expect(prompt).toContain("empty market");
-    // And the finish protocol.
-    expect(prompt).toContain('"failure_policy"');
+  });
+
+  it("forbids the agent from speaking structured data", () => {
+    const prompt = buildVoiceComposerPrompt();
+    // Dictated JSON is mangled by TTS/ASR and never parses: the brief is extracted from the transcript
+    // server-side instead. If this instruction disappears, the failure returns.
+    expect(prompt).toContain("NEVER speak structured data");
+    expect(prompt).not.toContain('"failure_policy"');
+    expect(prompt).toContain("stop asking questions");
   });
 
   it("greets with the first question instead of silence", () => {
