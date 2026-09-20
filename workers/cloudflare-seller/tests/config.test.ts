@@ -39,3 +39,14 @@ describe("UNDERWRITE_BASE_URL production contract", () => {
     expect(cfg.underwriteBaseUrl).toBe(PRODUCTION_UNDERWRITE_BASE_URL);
   });
 });
+
+describe("Workers Observability / Logs", () => {
+  it("enables persisted invocation logs in wrangler.jsonc so CI deploy turns dashboard Logs on", () => {
+    const wrangler = envFile("wrangler.jsonc");
+    expect(wrangler).toMatch(/"observability"\s*:\s*\{/);
+    expect(wrangler).toMatch(/"enabled"\s*:\s*true/);
+    expect(wrangler).toMatch(/"invocation_logs"\s*:\s*true/);
+    expect(wrangler).toMatch(/"persist"\s*:\s*true/);
+    expect(wrangler).not.toMatch(/"observability"\s*:\s*\{[^}]*"enabled"\s*:\s*false/);
+  });
+});

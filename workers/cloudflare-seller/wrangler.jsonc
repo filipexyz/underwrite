@@ -27,6 +27,19 @@
     "NEURALAKE_BASE_URL": "https://api.neuralake.cloud/v1",
     "NEURALAKE_MODEL": "auto",
     "SELLER_INSTANCE_NAME": "default"
+  },
+  // Workers Logs / Observability. `wrangler deploy` applies this on every CI
+  // push to main so dashboard Logs stay ON (dashboard-only enable is overwritten
+  // or left off). Docs: https://developers.cloudflare.com/workers/observability/logs/workers-logs/
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+    "logs": {
+      "enabled": true,
+      "invocation_logs": true,
+      "persist": true,
+      "head_sampling_rate": 1
+    }
   }
   // Hosted multi-tenant secrets (never commit): wrangler secret put
   //   UNDERWRITE_HOSTED_RUNTIME_SECRET   — shared with Underwrite

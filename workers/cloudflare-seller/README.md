@@ -177,6 +177,18 @@ or BYOK in GitHub Actions.
 `UNDERWRITE_BASE_URL=https://underwrite-gamma.vercel.app`. After deploy, `GET /health`
 must show that origin (or unset until set once) — never `http://localhost:3000`.
 
+The same deploy enables **Workers Observability / Logs**
+(`observability.enabled` + persisted invocation logs in `wrangler.jsonc`).
+Do not rely on turning Logs on only in the Cloudflare dashboard — the next
+`wrangler deploy` is the source of truth.
+
+### View production logs
+
+1. Cloudflare dashboard → **Workers & Pages** → `underwrite-cloudflare-seller` → **Observability** (Logs / Query Builder).
+   Direct: [Workers & Pages](https://dash.cloudflare.com/?to=/:account/workers-and-pages).
+2. Real-time (not persisted): from this package, `npx wrangler tail`.
+3. `console.log` in the Worker shows up as custom logs; each request also writes an invocation log (`$cloudflare.$metadata.type = "cf-worker-event"`). Retention is 3 days on the Free plan, 7 days on Paid.
+
 Set `UNDERWRITE_HOSTED_RUNTIME_SECRET` once on the Worker (dashboard or
 `wrangler secret put`). Set the same runtime secret + `HOSTED_SELLER_BASE_URL` +
 `UNDERWRITE_BASE_URL=https://underwrite-gamma.vercel.app` on the Next.js app.
