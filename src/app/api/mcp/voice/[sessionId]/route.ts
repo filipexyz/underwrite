@@ -15,12 +15,13 @@
  * JSON-RPC 2.0 over HTTP with plain JSON responses. Streamable HTTP permits SSE, but every method here
  * returns immediately, so a stream would add a failure mode for nothing.
  */
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { voiceSessions } from "@/lib/db/schema";
 import { env } from "@/lib/env";
 import { submitVoiceBrief, submitTaskToolName } from "@/lib/voice/flow";
+import { runMarketplace } from "@/mastra";
 import { appendVoiceTranscript } from "@/lib/voice/store";
 import { DEFAULT_VOICE_CATEGORY, VoiceTaskBrief } from "@/lib/voice/types";
 
@@ -183,6 +184,28 @@ async function handleToolCall(
 
   try {
     const submitted = await submitVoiceBrief(db, { session, brief: parsed.data });
+
+    /*
+     * Start the auction.
+     *
+     * Creating the request is not the same as running the market: without this the task sits at `received`
+     * forever with a single ledger event, which is exactly what a live demo showed — a posted task and
+     * nothing happening. The finalize route and the console's fire button both run the loop; the tool path
+     * was the one that forgot.
+     *
+     * `after()` so the tool response is not held open by the marketplace loop: the model needs an answer
+     * promptly to keep talking, and Agora is waiting on this request.
+     */
+    if (submitted.created) {
+      after(async () => {
+        try {
+          await runMarketplace(submitted.requestId);
+        } catch (error) {
+          // The task exists and is visible; a crashed loop is recoverable by re-running it.
+          console.error(`[voice-mcp] marketplace loop for ${submitted.requestId} crashed:`, error);
+        }
+      });
+    }
     console.log("[voice-mcp] submitted", JSON.stringify({ session: sessionId, request_id: submitted.requestId }));
     void note(sessionId, `[mcp] submitted ${submitted.requestId}`);
     return rpcResult(id, {
