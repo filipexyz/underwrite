@@ -166,6 +166,7 @@ export function AgentTestArea({
       }
       setJob(body);
       await refreshDiagnosis();
+      router.refresh();
     } catch (err) {
       setError({ status: 0, message: err instanceof Error ? err.message : String(err) });
     } finally {
