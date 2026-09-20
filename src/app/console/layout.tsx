@@ -17,7 +17,7 @@ import { requireAdminPage } from "@/lib/auth/session";
 export default async function ConsoleLayout({ children }: { children: ReactNode }) {
   await requireAdminPage();
   return (
-    <AppShell section="console" hint="debug ui · admin only">
+    <AppShell section="console" hint="debug ui · internal">
       {children}
     </AppShell>
   );
