@@ -5,6 +5,7 @@ import { listApiKeys, toPublicApiKey } from "@/lib/auth/api-keys";
 import { peekIssuedAgentSecrets } from "@/lib/auth/issued-secret";
 import { requireSignedInPage } from "@/lib/auth/session";
 import { SecretBanner } from "@/components/secret-banner";
+import { Timestamp } from "@/components/timestamp";
 import { getDb } from "@/lib/db/client";
 import { getPublicAgentRuntime } from "@/lib/marketplace/agent-runtime";
 import { ensureAgentWallet } from "@/lib/marketplace/credits";
@@ -85,7 +86,7 @@ export default async function AgentDetailPage({ params }: { params: Promise<{ id
               ? "This agent will not receive auction invites or submit bids until you enable it."
               : "This agent is hireable. Disable it to pull it out of the marketplace without deleting the row."}
           </p>
-          <p className="mono text-xs text-muted mt-3">created {new Date(agent.created_at).toLocaleString()}</p>
+          <p className="mono text-xs text-muted mt-3">created <Timestamp value={agent.created_at} /></p>
         </Panel>
       </div>
 
@@ -105,8 +106,8 @@ export default async function AgentDetailPage({ params }: { params: Promise<{ id
           <Stat label="webhook url" value={<span className="break-all">{agent.webhook_url ?? "—"}</span>} />
           <Stat label="description" value={agent.description ?? "—"} />
           <Stat label="owner" value={<span className="mono text-xs">{agent.owner_user_id ?? "—"}</span>} />
-          <Stat label="created" value={new Date(agent.created_at).toLocaleString()} />
-          <Stat label="updated" value={new Date(agent.updated_at).toLocaleString()} />
+          <Stat label="created" value={<Timestamp value={agent.created_at} />} />
+          <Stat label="updated" value={<Timestamp value={agent.updated_at} />} />
         </dl>
       </Panel>
 
@@ -157,7 +158,7 @@ export default async function AgentDetailPage({ params }: { params: Promise<{ id
                     <Badge value={key.revoked_at ? "revoked" : "active"} />
                   </Td>
                   <Td right>
-                    <span className="mono text-xs text-muted">{new Date(key.created_at).toLocaleString()}</span>
+                    <Timestamp value={key.created_at} className="mono text-xs text-muted" />
                   </Td>
                   <Td>
                     {!key.revoked_at ? (

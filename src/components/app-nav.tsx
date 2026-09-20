@@ -12,20 +12,24 @@ export function OpsHint({ fallback }: { fallback: string }) {
 const LINKS = [
   { href: "/", label: "home", match: (path: string) => path === "/" },
   { href: "/docs", label: "docs", match: (path: string) => path === "/docs" || path.startsWith("/docs/") },
-  { href: "/console", label: "console", match: (path: string) => path.startsWith("/console") },
+  // Admin-only surfaces. Rendering the link is not the security boundary (the pages and server
+  // actions enforce it) — it just stops a new account from being offered an internal observability
+  // page and a catalog-reset button it has no business seeing.
+  { href: "/console", label: "console", adminOnly: true, match: (path: string) => path.startsWith("/console") },
   { href: "/interviews", label: "interviews", match: (path: string) => path.startsWith("/interviews") },
   { href: "/account", label: "account", match: (path: string) => path.startsWith("/account") },
   { href: "/keys", label: "keys", match: (path: string) => path.startsWith("/keys") },
   { href: "/agents", label: "agents", match: (path: string) => path.startsWith("/agents") && !path.startsWith("/agents/register") },
   { href: "/agents/register", label: "create", match: (path: string) => path.startsWith("/agents/register") },
-  { href: "/admin", label: "admin", match: (path: string) => path.startsWith("/admin") },
+  { href: "/admin", label: "admin", adminOnly: true, match: (path: string) => path.startsWith("/admin") },
 ] as const;
 
-export function AppNav() {
+export function AppNav({ admin = false }: { admin?: boolean }) {
   const pathname = usePathname() ?? "/";
+  const links = LINKS.filter((link) => !("adminOnly" in link && link.adminOnly) || admin);
   return (
     <>
-      {LINKS.map((link) => (
+      {links.map((link) => (
         <Link
           key={link.href}
           href={link.href}
