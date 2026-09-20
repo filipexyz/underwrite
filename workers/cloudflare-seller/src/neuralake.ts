@@ -32,6 +32,15 @@ export async function chatCompletion(args: {
   signal?: AbortSignal;
 }): Promise<ChatCompletionResult> {
   const url = `${args.baseUrl.replace(/\/+$/, "")}/chat/completions`;
+  console.log(
+    JSON.stringify({
+      service: "cloudflare-seller",
+      ts: new Date().toISOString(),
+      msg: "neuralake_call",
+      url,
+      model: args.model,
+    }),
+  );
   const res = await fetch(url, {
     method: "POST",
     headers: {
@@ -58,6 +67,18 @@ export async function chatCompletion(args: {
       typeof parsed === "object" && parsed && "error" in parsed
         ? JSON.stringify((parsed as { error: unknown }).error)
         : raw.slice(0, 400);
+    console.error(
+      JSON.stringify({
+        service: "cloudflare-seller",
+        ts: new Date().toISOString(),
+        msg: "neuralake_result",
+        url,
+        model: args.model,
+        status: res.status,
+        ok: false,
+        detail: detail.slice(0, 400),
+      }),
+    );
     throw new NeuralakeError(`NeuraLake ${res.status}: ${detail || res.statusText}`, res.status);
   }
   const row = parsed as {
@@ -70,6 +91,20 @@ export async function chatCompletion(args: {
     ? content.map((part) => part.text ?? "").join("")
     : (content ?? "");
   if (!text.trim()) throw new NeuralakeError("NeuraLake returned an empty completion", res.status);
+  console.log(
+    JSON.stringify({
+      service: "cloudflare-seller",
+      ts: new Date().toISOString(),
+      msg: "neuralake_result",
+      url,
+      model: row.model ?? args.model,
+      status: res.status,
+      ok: true,
+      chars: text.trim().length,
+      tokens_in: row.usage?.prompt_tokens ?? 0,
+      tokens_out: row.usage?.completion_tokens ?? 0,
+    }),
+  );
   return {
     text: text.trim(),
     model: row.model ?? args.model,

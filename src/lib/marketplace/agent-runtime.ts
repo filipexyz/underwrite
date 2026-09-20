@@ -18,6 +18,8 @@ export type PublicAgentRuntime = {
   byok_model: string | null;
   provisioned: boolean;
   hosted_webhook_url: string | null;
+  last_error: string | null;
+  last_error_at: string | null;
 };
 
 export type DecryptedAgentRuntime = {
@@ -40,6 +42,9 @@ export type HostedAgentBundle = {
   underwrite_base_url: string;
   seller_api_key: string | null;
   webhook_secret: string;
+  byok_api_key: string | null;
+  byok_base_url: string | null;
+  byok_model: string | null;
   byok: { api_key: string; base_url: string | null; model: string | null } | null;
 };
 
@@ -59,6 +64,8 @@ export function toPublicRuntime(row: AgentRuntimeSecretsRow | null, webhookUrl: 
     byok_model: row?.byokModel ?? null,
     provisioned: Boolean(row?.provisionedAt),
     hosted_webhook_url: hostedWebhookUrl(row?.agentId ?? ""),
+    last_error: row?.lastError ?? null,
+    last_error_at: row?.lastErrorAt ? row.lastErrorAt.toISOString() : null,
   };
 }
 
@@ -221,6 +228,9 @@ export async function loadHostedAgentBundle(db: Db, agentId: string): Promise<Ho
     underwrite_base_url: env.publicBaseUrl,
     seller_api_key: decrypted.sellerApiKey,
     webhook_secret: decrypted.webhookSecret,
+    byok_api_key: decrypted.byokApiKey,
+    byok_base_url: decrypted.byokBaseUrl,
+    byok_model: decrypted.byokModel,
     byok: decrypted.byokApiKey
       ? {
           api_key: decrypted.byokApiKey,
@@ -229,6 +239,23 @@ export async function loadHostedAgentBundle(db: Db, agentId: string): Promise<Ho
         }
       : null,
   };
+}
+
+export async function recordRuntimeLastError(
+  db: Db,
+  agentId: string,
+  lastError: string | null,
+): Promise<void> {
+  const existing = await getRuntimeRow(db, agentId);
+  if (!existing) return;
+  await db
+    .update(agentRuntimeSecrets)
+    .set({
+      lastError: lastError && lastError.trim().length > 0 ? lastError.trim().slice(0, 2000) : null,
+      lastErrorAt: lastError && lastError.trim().length > 0 ? new Date() : null,
+      updatedAt: new Date(),
+    })
+    .where(eq(agentRuntimeSecrets.agentId, agentId));
 }
 
 export async function markRuntimeProvisioned(db: Db, agentId: string, ok: boolean): Promise<void> {

@@ -18,6 +18,9 @@
       "new_sqlite_classes": ["SellerAgent"]
     }
   ],
+  "triggers": {
+    "crons": ["* * * * *"]
+  },
   "vars": {
     // Production Underwrite origin. `wrangler deploy` writes this plaintext
     // var and overwrites any dashboard value with the same name — never put

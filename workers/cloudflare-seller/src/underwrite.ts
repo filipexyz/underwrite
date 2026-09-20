@@ -52,6 +52,17 @@ export function createUnderwriteClient(baseUrl: string, apiKey: string): Underwr
       },
     });
     const body = await readBody(res);
+    console.log(
+      JSON.stringify({
+        service: "cloudflare-seller",
+        ts: new Date().toISOString(),
+        msg: "underwrite_api",
+        method,
+        path,
+        status: res.status,
+        ok: res.ok,
+      }),
+    );
     if (!res.ok) throw new UnderwriteApiError(method, path, res.status, body);
     return body;
   }

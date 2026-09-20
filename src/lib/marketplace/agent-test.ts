@@ -309,7 +309,11 @@ export async function diagnoseAgentTest(
     ),
   ];
 
+  const runtimeError = runtime.last_error
+    ? { source: "worker" as const, message: runtime.last_error, at: runtime.last_error_at }
+    : null;
   const last_error =
+    runtimeError ??
     webhookError ??
     (!worker.reachable && hostedBase
       ? { source: "worker" as const, message: worker.error ?? "Worker unreachable", at: null }

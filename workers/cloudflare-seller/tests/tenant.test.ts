@@ -66,6 +66,23 @@ describe("tenant credentials", () => {
       underwriteBaseUrl: undefined,
     });
   });
+
+  it("reads nested byok from the hosted pull bundle (GET /api/internal/hosted-agents/:id)", () => {
+    expect(
+      credentialsFromProvision({
+        seller_api_key: "uw_seller_pulled",
+        webhook_secret: "whsec_pulled",
+        byok: { api_key: "nl_nested", base_url: "https://api.neuralake.cloud/v1", model: "auto" },
+      }),
+    ).toEqual({
+      sellerApiKey: "uw_seller_pulled",
+      webhookSecret: "whsec_pulled",
+      neuralakeApiKey: "nl_nested",
+      neuralakeBaseUrl: "https://api.neuralake.cloud/v1",
+      neuralakeModel: "auto",
+      underwriteBaseUrl: undefined,
+    });
+  });
 });
 
 describe("per-agent HMAC isolation", () => {
