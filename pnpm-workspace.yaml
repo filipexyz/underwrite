@@ -1,3 +1,6 @@
+packages:
+  - "workers/cloudflare-seller"
+
 ignoredBuiltDependencies:
   - sharp
   - unrs-resolver
