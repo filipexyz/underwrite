@@ -10,6 +10,7 @@ export function OpsHint({ fallback }: { fallback: string }) {
 }
 
 const LINKS = [
+  { href: "/start", label: "start", match: (path: string) => path.startsWith("/start") },
   { href: "/", label: "home", match: (path: string) => path === "/" },
   { href: "/docs", label: "docs", match: (path: string) => path === "/docs" || path.startsWith("/docs/") },
   // Admin-only surfaces. Rendering the link is not the security boundary (the pages and server

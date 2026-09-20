@@ -14,6 +14,7 @@ export type IdPrefix =
   | "agt"
   | "need"
   | "sess"
+  | "voice"
   | "inbox"
   | "inv"
   | "reg"

@@ -17,12 +17,12 @@ export default function ForbiddenPage() {
           <code className="text-ink">UNDERWRITE_ADMIN_USER_IDS</code>.
         </p>
         {/*
-         * Never leave a signed-in human at a dead end. `/interviews` is the surface they actually
-         * want; `/` is the way back to the marketing page.
+         * Never leave a signed-in human at a dead end. `/start` is the initial screen they want;
+         * `/` is the way back to the marketing page.
          */}
         <div className="flex flex-wrap gap-3">
-          <Link href="/interviews" className="btn-ink w-fit">
-            Go to briefs →
+          <Link href="/start" className="btn-ink w-fit">
+            Go to start →
           </Link>
           <Link href="/" className="btn-ghost w-fit">
             ← home
