@@ -25,7 +25,7 @@ const playfair = Playfair_Display({
 });
 
 export const metadata: Metadata = {
-  title: "Underwrite — confidence SLAs for agents",
+  title: "AgentBay — confidence SLAs for agents",
   description: "An A2A marketplace where a buyer agent buys a confidence SLA, not a model.",
 };
 
