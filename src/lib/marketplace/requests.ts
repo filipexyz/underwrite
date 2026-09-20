@@ -54,7 +54,7 @@ export async function createRequest(
   } = {},
 ): Promise<RequestRow> {
   const requestId = newId("req");
-  const category = (meta.category ?? DEFAULT_CATEGORY).trim() || DEFAULT_CATEGORY;
+  const category = (input.category ?? meta.category ?? DEFAULT_CATEGORY).trim() || DEFAULT_CATEGORY;
   const verification = input.verification ?? defaultRubricFor(category);
   const executionMode = resolveExecutionMode(input.execution_mode, meta.executionMode);
   const requestedInviteIds = [...new Set((input.invite_agent_ids ?? []).map((id) => id.trim()).filter(Boolean))];
@@ -183,6 +183,7 @@ export function toApiRequest(detail: RequestDetail) {
   return {
     request_id: r.requestId,
     status: r.status,
+    category: r.category,
     execution_mode: r.executionMode,
     plan_deadline_at: r.planDeadlineAt?.toISOString() ?? r.state?.plan_deadline_at ?? null,
     invited_agent_ids: r.state?.invited_agent_ids ?? [],

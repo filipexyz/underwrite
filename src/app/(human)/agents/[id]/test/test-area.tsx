@@ -7,8 +7,9 @@ import { LiveLedger } from "@/app/console/requests/[id]/live-ledger";
 import { Badge, Empty, Money, Panel, PhaseRail, Stat, inputClass } from "@/app/console/ui";
 import type { LedgerEvent, LedgerMetrics } from "@/lib/contracts";
 import {
-  HTML_TO_PDF_CATEGORY,
   TEST_FIXTURE_SUMMARY,
+  executableSpecialties,
+  testTaskPreview,
   type AgentTestReadiness,
   type PublicTestRuntime,
   type RecentAgentTest,
@@ -17,6 +18,8 @@ import {
 type PublicAgent = {
   agent_id: string;
   name: string;
+  role?: string;
+  description?: string | null;
   status: string;
   specialties: string[];
   webhook_url: string | null;
@@ -114,6 +117,15 @@ export function AgentTestArea({
   const blockers = useMemo(() => readiness.checks.filter((c) => c.severity === "block" && !c.ok), [readiness.checks]);
   const warnings = useMemo(() => readiness.checks.filter((c) => c.severity === "warn" && !c.ok), [readiness.checks]);
   const canRun = readiness.ready && !pending;
+  const executable = useMemo(() => executableSpecialties(agent.specialties), [agent.specialties]);
+  const fixture = useMemo(
+    () =>
+      testTaskPreview(
+        { specialties: agent.specialties, role: agent.role, name: agent.name, description: agent.description },
+        category,
+      ),
+    [agent.description, agent.name, agent.role, agent.specialties, category],
+  );
 
   const liveRequestId = job?.request_id ?? null;
   useEffect(() => {
@@ -262,9 +274,6 @@ export function AgentTestArea({
                     <Link href={`/agents/${agent.agent_id}`} className="text-teal hover:underline">
                       Edit specialties on the agent page
                     </Link>
-                    {readiness.fixture.category !== HTML_TO_PDF_CATEGORY
-                      ? ` · test will still run as ${readiness.fixture.category}`
-                      : ""}
                   </p>
                 ) : null}
               </li>
@@ -283,48 +292,36 @@ export function AgentTestArea({
         aside={<Badge value="invite_agent_ids" />}
       >
         <p className="text-sm text-[#53605a] leading-relaxed mb-4">
-          {category === HTML_TO_PDF_CATEGORY ? (
-            <>
-              Fixture: compile <code>input.html</code> to PDF (A4, 2cm margins) for{" "}
-              <Money value={TEST_FIXTURE_SUMMARY.max_cost_usd} /> / {TEST_FIXTURE_SUMMARY.max_latency_s}s /{" "}
-              {(TEST_FIXTURE_SUMMARY.min_confidence * 100).toFixed(0)}% confidence.
-            </>
-          ) : (
-            <>
-              Fixture: a <code>{category}</code> brief (not the HTML→PDF demo) for{" "}
-              <Money value={TEST_FIXTURE_SUMMARY.max_cost_usd} /> / {TEST_FIXTURE_SUMMARY.max_latency_s}s /{" "}
-              {(TEST_FIXTURE_SUMMARY.min_confidence * 100).toFixed(0)}% confidence. Marketplace invites match
-              this specialty, so this agent is not dropped as{" "}
-              <code>specialty_mismatch:html_to_pdf</code>.
-            </>
-          )}{" "}
-          This is <code>execution_mode: &quot;push&quot;</code> as your Auth0 session (or <code>local-dev</code>
+          Fixture specialty <code>{fixture.category}</code>
+          {executable[0] === fixture.category ? " (first listed)" : " (your override)"}
+          {fixture.uses_html_to_pdf ? " · HTML→PDF demo" : ""}. Budget{" "}
+          <Money value={TEST_FIXTURE_SUMMARY.max_cost_usd} /> / {TEST_FIXTURE_SUMMARY.max_latency_s}s /{" "}
+          {(TEST_FIXTURE_SUMMARY.min_confidence * 100).toFixed(0)}% confidence. This is{" "}
+          <code>execution_mode: &quot;push&quot;</code> as your Auth0 session (or <code>local-dev</code>
           ), not a simulated NeuraLake call and not a signed-only webhook bypass. Selection is pinned with{" "}
-          <code>invite_agent_ids: [{agent.agent_id}]</code>.
+          <code>invite_agent_ids: [{agent.agent_id}]</code> so the marketplace invites this agent for{" "}
+          <code>{fixture.category}</code> instead of Top-K <code>html_to_pdf</code>.
         </p>
-        {!agent.specialties.includes(HTML_TO_PDF_CATEGORY) ? (
-          <p className="text-sm text-[#53605a] leading-relaxed mb-4">
-            This agent is <span className="font-medium">{agent.name}</span> with specialties{" "}
-            <code>{agent.specialties.join(", ") || "—"}</code>.{" "}
-            <Link href={`/agents/${agent.agent_id}`} className="text-teal hover:underline">
-              Add html_to_pdf on the agent page
-            </Link>{" "}
-            if you want the PDF fixture. Or keep the matching specialty below.
-          </p>
-        ) : null}
-        {agent.specialties.filter((item) => !item.startsWith("judge:")).length > 0 ? (
+        <p className="text-sm text-[#53605a] leading-relaxed mb-4">
+          <span className="font-medium">Requirement. </span>
+          {fixture.requirement}
+        </p>
+        {executable.length > 1 ? (
           <label className="flex flex-col gap-1 text-sm mb-4 md:w-80">
             <span className="eyebrow !mb-0">fixture specialty</span>
             <select className={inputClass} value={category} onChange={(event) => setCategory(event.target.value)}>
-              {agent.specialties
-                .filter((item) => !item.startsWith("judge:"))
-                .map((item) => (
-                  <option key={item} value={item}>
-                    {item}
-                  </option>
-                ))}
+              {executable.map((item) => (
+                <option key={item} value={item}>
+                  {item}
+                  {item === executable[0] ? " · primary" : ""}
+                </option>
+              ))}
             </select>
           </label>
+        ) : executable.length === 1 ? (
+          <p className="text-sm text-[#53605a] leading-relaxed mb-4">
+            Primary specialty: <code>{executable[0]}</code>
+          </p>
         ) : null}
         <button type="button" className="btn-ink" disabled={!canRun} onClick={() => void runTest()}>
           <span>{pending ? "Opening job…" : "Run test job"}</span>
@@ -359,7 +356,7 @@ export function AgentTestArea({
             </Link>
           }
         >
-          <dl className="grid gap-4 md:grid-cols-3 text-sm mb-5">
+          <dl className="grid gap-4 md:grid-cols-4 text-sm mb-5">
             <Stat
               label="request"
               value={
@@ -369,6 +366,7 @@ export function AgentTestArea({
               }
             />
             <Stat label="status" value={<Badge value={job.status} />} />
+            <Stat label="specialty" value={<span className="mono text-xs">{job.category ?? fixture.category}</span>} />
             <Stat label="invited" value={<span className="mono text-xs">{job.invited_agent_ids.join(", ") || "—"}</span>} />
           </dl>
           <PhaseRail steps={phaseSteps(job.status)} />

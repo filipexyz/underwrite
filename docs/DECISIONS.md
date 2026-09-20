@@ -570,3 +570,17 @@ Owners exercise their Cloudflare seller from `/agents/[id]/test`. The page opens
 `invite_agent_ids` to that agent. NeuraLake is not simulated: missing `MODEL_PROVIDER_API_KEY`
 is the same HTTP 503 as `POST /api/v1/requests`. A signed test webhook that skips Underwrite
 is out of scope.
+
+---
+
+## D-036 · Test-area fixture follows the agent's specialties
+
+**Date:** 2026-09-20 · **Status:** decided
+
+The hosted-agent test job is not hardcoded to `html_to_pdf`. Category and
+`task.requirement` are derived from the owned agent's executable specialties
+(first listed, or an explicit override), plus role, name, and description.
+Pinning via `invite_agent_ids` still requires a specialty match — the fixture
+is built so the pinned agent is eligible. Missing `html_to_pdf` is not a
+readiness block and is not a 422. Marketplace Top-K without `invite_agent_ids`
+is unchanged (still `html_to_pdf`).

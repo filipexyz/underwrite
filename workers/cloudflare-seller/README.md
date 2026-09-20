@@ -35,7 +35,8 @@ CI still deploys **one** Worker. Tenancy is inside Durable Objects.
 4. Confirm the Worker health: `GET https://underwrite-cloudflare-seller.<account>.workers.dev/health`
    (`mode: "multi-tenant"`).
 5. In Underwrite, open **`/agents/[id]/test`** (Test on Cloudflare) to fire a real
-   push job at this Durable Object without curl.
+   push job at this Durable Object without curl. The fixture category matches
+   the agent’s specialties (not hardcoded `html_to_pdf`).
 
 No `wrangler secret put UNDERWRITE_SELLER_API_KEY`. The platform pushes (and the Worker can pull)
 per-agent credentials with `UNDERWRITE_HOSTED_RUNTIME_SECRET`.

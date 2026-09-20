@@ -28,6 +28,7 @@ type Request = {
   // Buyer input extras (not on the stored Request row as first-class columns):
   // execution_mode?: "seed" | "push"
   // invite_agent_ids?: string[]   // push only — pin the invite set instead of Top-K
+  // category?: string             // marketplace specialty; omit = html_to_pdf
 };
 
 // Declared up front, machine-readable, versioned. An agent cannot bid honestly on a

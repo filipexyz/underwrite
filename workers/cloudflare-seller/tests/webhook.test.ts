@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { parseUnderwriteEvent } from "../src/protocol";
+import { htmlFromBrief, parseUnderwriteEvent } from "../src/protocol";
 import { signWebhookBody, verifyWebhookSignature } from "../src/webhook";
 import { clampPlanToConstraints, parsePlanDraft } from "../src/plan";
 
@@ -53,6 +53,15 @@ describe("parseUnderwriteEvent", () => {
     if (event?.type !== "accepted") throw new Error("expected accepted");
     expect(event.execute).toBe(true);
     expect(event.plan_id).toMatch(/^plan_/);
+  });
+
+  it("wraps a non-HTML specialty brief so execute can still render a PDF", () => {
+    const html = htmlFromBrief({
+      requirement: "Act as an executor specializing in analista de investimentos.",
+      files: [{ name: "brief.txt", media_type: "text/plain", content: "Specialty: analista de investimentos" }],
+    });
+    expect(html).toContain("<pre>");
+    expect(html).toContain("analista de investimentos");
   });
 
   it("unwraps an inbox row", () => {

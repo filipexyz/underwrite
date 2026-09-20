@@ -102,6 +102,11 @@ export const RequestInput = z.object({
    * Unknown, disabled, judge, or wrong-specialty ids are skipped.
    */
   invite_agent_ids: z.array(z.string().trim().min(1).max(80)).max(16).optional(),
+  /**
+   * Marketplace specialty. Omit to use `html_to_pdf` (demo / Top-K). The
+   * hosted-agent test area sets this from the owned agent's specialties.
+   */
+  category: z.string().trim().min(1).max(80).optional(),
 });
 export type RequestInput = z.infer<typeof RequestInput>;
 

@@ -12,6 +12,7 @@ export async function runAcceptedJob(args: {
 }): Promise<JobDeliverableInput> {
   const started = Date.now();
   const html = htmlFromBrief(args.brief);
+  const category = args.accepted.constraints?.category ?? "html_to_pdf";
   const note = await chatCompletion({
     baseUrl: args.baseUrl,
     apiKey: args.apiKey,
@@ -21,15 +22,17 @@ export async function runAcceptedJob(args: {
     messages: [
       {
         role: "system",
-        content:
-          "You execute an Underwrite html_to_pdf job. Reply with 2-4 sentences describing the render you will produce. No JSON.",
+        content: `You execute an Underwrite ${category} job. Reply with 2-4 sentences describing the PDF you will produce. No JSON.`,
       },
       {
         role: "user",
         content: [
+          `Category: ${category}`,
           `Requirement: ${args.brief.requirement}`,
           `Plan ${args.accepted.plan_id} promised confidence ${args.accepted.promised_confidence} at $${args.accepted.price_usd}.`,
-          `HTML characters: ${html.length}. Compile to A4 PDF with embedded fonts and preserved links.`,
+          category === "html_to_pdf"
+            ? `HTML characters: ${html.length}. Compile to A4 PDF with embedded fonts and preserved links.`
+            : `Compile the brief (${html.length} HTML characters) to an A4 PDF report matching this ${category} requirement.`,
         ].join("\n"),
       },
     ],
