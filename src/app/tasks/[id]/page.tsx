@@ -5,38 +5,12 @@ import { Timestamp } from "@/components/timestamp";
 import { requireSignedInPage } from "@/lib/auth/session";
 import { getDb } from "@/lib/db/client";
 import { deriveMetrics, listEvents } from "@/lib/ledger/ledger";
-import { getRequest } from "@/lib/marketplace/requests";
 import { summarizeEvent } from "@/lib/ledger/summarize";
+import { artifactSize, artifactUrl, canPreviewInIframe, humanBytes, type StoredArtifact } from "@/lib/marketplace/artifact-file";
+import { getRequest } from "@/lib/marketplace/requests";
 import { TaskAutoRefresh } from "./auto-refresh";
 
 export const dynamic = "force-dynamic";
-
-/**
- * The delivered bytes, as the engine stores them. Optional in every field because a task that failed has no
- * artifact at all, and a task still running has no shape yet.
- */
-type StoredArtifact = {
-  kind?: string;
-  producer_agent_id?: string;
-  observed_latency_ms?: number;
-  declared_latency_ms?: number;
-  pdf_base64?: string;
-  html?: string;
-  markdown?: string;
-};
-
-function artifactSize(a: StoredArtifact): number {
-  if (typeof a.pdf_base64 === "string") return Math.round((a.pdf_base64.length * 3) / 4);
-  if (typeof a.html === "string") return Buffer.byteLength(a.html, "utf-8");
-  if (typeof a.markdown === "string") return Buffer.byteLength(a.markdown, "utf-8");
-  return 0;
-}
-
-function humanBytes(n: number): string {
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
-  return `${(n / (1024 * 1024)).toFixed(2)} MB`;
-}
 
 /** Statuses where nothing more will happen, so live refresh can stop. */
 const TERMINAL = new Set(["completed", "failed", "no_eligible_bid", "no_eligible_plan"]);
@@ -61,7 +35,7 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
 
   const stored = request.state as { artifact?: StoredArtifact } | null;
   const artifact = stored?.artifact;
-  const artifactUrl = `/api/v1/requests/${id}/artifact`;
+  const deliverableUrl = artifactUrl(id);
   const events = await listEvents(db, id);
   const metrics = deriveMetrics(events);
   const active = !TERMINAL.has(request.status);
@@ -117,17 +91,19 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
                   </span>
                 </div>
                 <a
-                  href={artifactUrl}
+                  href={deliverableUrl}
                   download
                   className="border border-ink bg-ink px-3 py-1.5 font-mono text-[10px] tracking-wide text-paper uppercase"
                 >
                   Download
                 </a>
               </div>
-              {artifact.kind === "pdf" ? (
-                <iframe src={artifactUrl} title="Deliverable" className="h-[520px] w-full bg-white" />
-              ) : artifact.kind === "html" ? (
-                <iframe src={artifactUrl} title="Deliverable" className="h-[420px] w-full bg-white" />
+              {canPreviewInIframe(artifact.kind) ? (
+                <iframe
+                  src={deliverableUrl}
+                  title="Deliverable"
+                  className={artifact.kind === "pdf" ? "h-[520px] w-full bg-white" : "h-[420px] w-full bg-white"}
+                />
               ) : null}
             </div>
           ) : (
