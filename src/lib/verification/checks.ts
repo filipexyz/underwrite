@@ -45,11 +45,20 @@ function topicCoverage(topics: string[], artifactText: string): number {
 }
 
 function kindLabel(kind: ArtifactFacts["kind"]): string {
-  return kind === "html" ? "HTML" : kind === "md" ? "Markdown" : "PDF";
+  if (kind === "html") return "HTML";
+  if (kind === "md") return "Markdown";
+  if (kind === "zip") return "ZIP";
+  return "PDF";
 }
 
 function hasContent(facts: ArtifactFacts): boolean {
-  return facts.bytes > 0 || facts.word_count > 0 || facts.text.trim().length > 0 || facts.screenshots_count > 0;
+  return (
+    facts.bytes > 0 ||
+    facts.word_count > 0 ||
+    facts.text.trim().length > 0 ||
+    facts.screenshots_count > 0 ||
+    facts.zip_entries.length > 0
+  );
 }
 
 function renders(facts: ArtifactFacts): boolean {
@@ -117,10 +126,44 @@ export const CHECK_RUNNERS: Record<string, { name: string; run: CheckRunner }> =
   },
   artifact_not_empty: {
     name: "Artifact not empty",
+    run: (f) => {
+      if (f.kind === "zip") {
+        const ok = f.zip_entries.length > 0;
+        return { passed: ok, detail: ok ? `${f.zip_entries.length} zip entries` : "zip has no entries" };
+      }
+      return {
+        passed: f.word_count > 0 || f.text.trim().length > 0,
+        detail: f.word_count > 0 ? `${f.word_count} word(s)` : "artifact text is empty",
+      };
+    },
+  },
+  zip_valid: {
+    name: "Valid ZIP",
     run: (f) => ({
-      passed: f.word_count > 0 || f.text.trim().length > 0,
-      detail: f.word_count > 0 ? `${f.word_count} word(s)` : "artifact text is empty",
+      passed: f.kind === "zip" && f.valid && f.zip_entries.length > 0,
+      detail:
+        f.kind === "zip" && f.valid
+          ? `parsed ZIP, ${f.zip_entries.length} entries, ${f.bytes} bytes`
+          : "artifact does not parse as ZIP",
     }),
+  },
+  expected_entries_present: {
+    name: "Expected zip entries",
+    run: (f, s) => {
+      const need = s.expected_entries ?? [];
+      if (need.length === 0) {
+        return {
+          passed: f.zip_entries.length > 0,
+          detail: f.zip_entries.length > 0 ? `${f.zip_entries.length} entries` : "zip has no entries",
+        };
+      }
+      const have = f.zip_entries.map((n) => n.toLowerCase());
+      const missing = need.filter((n) => !have.some((h) => h === n.toLowerCase() || h.endsWith(`/${n.toLowerCase()}`)));
+      return {
+        passed: missing.length === 0,
+        detail: missing.length === 0 ? `entries: ${need.join(", ")}` : `missing entries: ${missing.join(", ")}`,
+      };
+    },
   },
   page_count: {
     name: "Page count",

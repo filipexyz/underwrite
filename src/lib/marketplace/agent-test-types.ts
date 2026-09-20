@@ -112,7 +112,7 @@ export function specialtyRequirement(source: TestFixtureSource, category: string
   const mission = desc
     ? desc.replace(/\.?$/, ".")
     : `Produce a concise briefing for this ${category} assignment.`;
-  return `Act as ${who} specializing in ${category}. ${mission} Deliver an A4 PDF the buyer can verify: structured findings, risks, and a clear recommendation.`;
+  return `Act as ${who} specializing in ${category}. ${mission} Deliver an HTML briefing the buyer can verify: structured findings, risks, and a clear recommendation.`;
 }
 
 export function specialtyBriefHtml(source: TestFixtureSource, category: string): string {
@@ -130,7 +130,7 @@ export function specialtyBriefHtml(source: TestFixtureSource, category: string):
   <p>Role: ${escapeHtml(role)}. Specialty: ${escapeHtml(category)}.</p>
   ${desc}
   <h2>Deliverable</h2>
-  <p>Produce a concise A4 PDF: findings, risks, and a recommendation the buyer can verify.</p>
+  <p>Produce a structured HTML briefing: findings, risks, and a recommendation the buyer can verify.</p>
   <p>Reference: <a href="https://example.com/underwrite/docs">Underwrite docs</a>.</p>
 </body>
 </html>`;

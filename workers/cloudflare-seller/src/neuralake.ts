@@ -121,3 +121,44 @@ export function extractJsonObject(text: string): unknown {
   if (start < 0 || end <= start) throw new NeuralakeError("model output did not contain a JSON object");
   return JSON.parse(raw.slice(start, end + 1)) as unknown;
 }
+
+export type BundleFile = { name: string; content: string };
+
+/** Pull `{ files: [{ name, content }] }` from a completion, including fenced JSON. */
+export function extractFileBundle(text: string): BundleFile[] | null {
+  try {
+    const raw = extractJsonObject(text);
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+    const files = (raw as { files?: unknown }).files;
+    if (!Array.isArray(files)) return null;
+    const out: BundleFile[] = [];
+    for (const item of files) {
+      if (!item || typeof item !== "object") continue;
+      const row = item as { name?: unknown; content?: unknown };
+      const name = typeof row.name === "string" ? row.name.trim() : "";
+      const content = typeof row.content === "string" ? row.content : "";
+      if (name && content.trim()) out.push({ name, content });
+    }
+    return out.length > 0 ? out : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Pull an HTML document out of a chat completion, including fenced ```html blocks. */
+export function extractHtmlDocument(text: string): string | null {
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+
+  const fenced = /```(?:html)?\s*\n?([\s\S]*?)```/i.exec(trimmed);
+  let raw = (fenced?.[1] ?? trimmed).trim();
+  raw = raw.replace(/^```(?:html)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
+  if (!raw) return null;
+
+  const full = /<!doctype\s+html[\s\S]*<\/html>/i.exec(raw);
+  if (full) return full[0].trim();
+  const htmlTag = /<html\b[\s\S]*<\/html>/i.exec(raw);
+  if (htmlTag) return htmlTag[0].trim();
+  if (/<(?:h[1-3]|p|body|section|article|ul|ol|table|div)\b/i.test(raw)) return raw;
+  return null;
+}

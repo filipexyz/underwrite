@@ -203,9 +203,8 @@ export const JobDeliverableScreenshot = z.object({
 });
 
 /**
- * Worker-produced artifact. PDF remains the default (`pdf_base64`); HTML and
- * Markdown are accepted so landing / dashboard / research jobs can deliver
- * without inventing a PDF.
+ * Worker-produced artifact. PDF is only for `html_to_pdf`. Specialties deliver
+ * HTML, Markdown, or a ZIP (`zip_base64`) of multiple files.
  */
 export const JobDeliverableArtifact = z
   .object({
@@ -213,20 +212,21 @@ export const JobDeliverableArtifact = z
     html: z.string().min(1).optional(),
     markdown: z.string().min(1).optional(),
     md: z.string().min(1).optional(),
+    zip_base64: z.string().min(20).optional(),
     url: z.string().optional(),
     screenshots: z.array(JobDeliverableScreenshot).optional(),
     artifact_ref: z.string().min(1).optional(),
-    kind: z.enum(["pdf", "html", "md", "markdown"]).optional(),
+    kind: z.enum(["pdf", "html", "md", "markdown", "zip"]).optional(),
     observed_latency_ms: z.number().nonnegative().optional(),
     declared_latency_ms: z.number().nonnegative().optional(),
     self_report: unit.optional(),
   })
-  .refine((value) => Boolean(value.pdf_base64 || value.html || value.markdown || value.md), {
-    message: "artifact must include pdf_base64, html, or markdown",
+  .refine((value) => Boolean(value.pdf_base64 || value.html || value.markdown || value.md || value.zip_base64), {
+    message: "artifact must include pdf_base64, html, markdown, or zip_base64",
   });
 export type JobDeliverableArtifact = z.infer<typeof JobDeliverableArtifact>;
 
-/** Winner deliverable. One of `pdf_base64`, `html`, or `markdown` is required. */
+/** Winner deliverable. One of `pdf_base64`, `html`, `markdown`, or `zip_base64` is required. */
 export const JobDeliverableInput = z.object({
   artifact: JobDeliverableArtifact,
   self_confidence: unit.optional(),

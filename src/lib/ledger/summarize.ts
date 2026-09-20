@@ -4,14 +4,28 @@
 import type { LedgerEvent } from "@/lib/contracts";
 
 const chain = (hops: unknown) => (Array.isArray(hops) ? (hops as Array<{ agent_id: string }>).map((h) => h.agent_id).join(" → ") : "");
-const usd = (n: unknown) => `$${Number(n).toFixed(4)}`;
-const pct = (n: unknown) => `${Math.round(Number(n) * 100)}%`;
+const finite = (n: unknown): number | undefined => {
+  const v = Number(n);
+  return Number.isFinite(v) ? v : undefined;
+};
+const usd = (n: unknown) => {
+  const v = finite(n);
+  return v === undefined ? "$—" : `$${v.toFixed(4)}`;
+};
+const pct = (n: unknown) => {
+  const v = finite(n);
+  return v === undefined ? "—%" : `${Math.round(v * 100)}%`;
+};
+const seconds = (n: unknown) => {
+  const v = finite(n);
+  return v === undefined ? "—" : `${v}s`;
+};
 
 export function summarizeEvent(e: Pick<LedgerEvent, "type" | "payload">): string {
   const p = e.payload;
   switch (e.type) {
     case "request_received":
-      return `${p.requirement} · max ${usd(p.max_cost_usd)} · ≤ ${p.max_latency_s}s · min confidence ${pct(p.min_confidence)} · ${p.failure_policy} · actor ${p.actor}${p.execution_mode ? ` · ${p.execution_mode}` : ""}`;
+      return `${p.requirement} · max ${usd(p.max_cost_usd)} · ≤ ${seconds(p.max_latency_s)} · min confidence ${pct(p.min_confidence)} · ${p.failure_policy} · actor ${p.actor}${p.execution_mode ? ` · ${p.execution_mode}` : ""}`;
     case "escrow_held":
       return `hold ${usd(p.amount_usd)} from ${p.payer} · ${p.status ?? "HELD"}`;
     case "plan_request":
@@ -19,13 +33,17 @@ export function summarizeEvent(e: Pick<LedgerEvent, "type" | "payload">): string
     case "plan_selected":
       return `${p.rule ?? "best-score"} · ${p.reason}${p.candidates && Array.isArray(p.candidates) ? ` · ${(p.candidates as unknown[]).length} plan(s)` : ""}`;
     case "bid_submitted":
-      return `${p.compliant ? "compliant" : `non-compliant (${p.rejection_reason})`} · ${usd(p.cost_usd)} · confidence ${pct(p.confidence)} · ${p.latency_s}s · ${chain(p.chain)}`;
+      return `${p.compliant ? "compliant" : `non-compliant (${p.rejection_reason})`} · ${usd(p.cost_usd)} · confidence ${pct(p.confidence)} · ${seconds(p.latency_s)} · ${chain(p.chain)}`;
     case "agent_hired":
       return `hired by ${p.hirer}${p.selection ? ` — ${(p.selection as { rationale: string }).rationale}` : p.rule ? ` — ${p.rule}` : ""}`;
     case "task_delegated":
       return `${p.from} → ${p.to}: ${p.subtask} (floor ${pct(p.floor)}, ${usd(p.price_usd)}, ≤ ${Number(p.deadline_s).toFixed(1)}s)`;
-    case "plan_generated":
-      return `promised ${pct(p.promised_confidence)} · max ${usd(p.max_cost_usd)} · ${p.est_latency_s}s · ${p.strategy_chosen} · ${chain(p.chain)}${p.supersedes_plan_id ? " · re-plan" : ""}`;
+    case "plan_generated": {
+      const maxCost = finite(p.max_cost_usd) ?? finite(p.price_usd);
+      const latency = finite(p.est_latency_s) ?? finite(p.max_latency_s);
+      const strategy = typeof p.strategy_chosen === "string" && p.strategy_chosen ? p.strategy_chosen : "self";
+      return `promised ${pct(p.promised_confidence)} · max ${usd(maxCost)} · ${seconds(latency)} · ${strategy} · ${chain(p.chain)}${p.supersedes_plan_id ? " · re-plan" : ""}`;
+    }
     case "plan_validated":
       return "validated against declared constraints";
     case "plan_rejected":

@@ -9,6 +9,7 @@
   "constraints": {
     "max_cost_usd": 0.05,
     "max_latency_s": 30,
-    "min_confidence": 0.95
+    "min_confidence": 0.95,
+    "category": "html_to_pdf"
   }
 }

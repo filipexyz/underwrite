@@ -15,6 +15,7 @@ import {
   type PDFPage,
 } from "pdf-lib";
 import { extractLinks, stripHtml, type ArtifactKind, type DeliveryArtifact } from "@/lib/marketplace/artifact";
+import { isZipBytes, unzipEntries } from "@/lib/marketplace/zip";
 
 export type ArtifactFacts = {
   artifact_ref: string;
@@ -42,6 +43,7 @@ export type ArtifactFacts = {
   data_payload_nonempty: boolean;
   has_sources_section: boolean;
   broken_required_assets: string[];
+  zip_entries: string[];
 };
 
 export type InspectMeta = {
@@ -85,6 +87,7 @@ const EMPTY_FACTS = (meta: InspectMeta, bytes: number, valid: boolean, kind: Art
   data_payload_nonempty: false,
   has_sources_section: false,
   broken_required_assets: [],
+  zip_entries: [],
 });
 
 function asDict(value: unknown): PDFDict | null {
@@ -448,6 +451,7 @@ export async function inspectPdfBytes(bytes: Uint8Array, meta: InspectMeta): Pro
       data_payload_nonempty: text.length > 0,
       has_sources_section: looksLikeSources(text),
       broken_required_assets: [],
+      zip_entries: [],
     };
   } catch {
     return EMPTY_FACTS(meta, length, false);
@@ -578,11 +582,46 @@ function inspectMetaOf(artifact: DeliveryArtifact): InspectMeta {
   };
 }
 
+function inspectZipBytes(bytes: Uint8Array, meta: InspectMeta): ArtifactFacts {
+  if (!isZipBytes(bytes)) return EMPTY_FACTS(meta, bytes.byteLength, false, "zip");
+  try {
+    const entries = unzipEntries(bytes);
+    if (entries.length === 0) return { ...EMPTY_FACTS(meta, bytes.byteLength, false, "zip"), zip_entries: [] };
+    const names = entries.map((e) => e.name);
+    const textParts = entries.map((e) => e.text).filter((t): t is string => Boolean(t?.trim()));
+    const text = textParts.join("\n").replace(/\s+/g, " ").trim();
+    const htmlEntry = entries.find((e) => /\.html?$/i.test(e.name) && e.text);
+    const mdEntry = entries.find((e) => /\.md$/i.test(e.name) && e.text);
+    const probe = htmlEntry?.text
+      ? inspectHtmlString(htmlEntry.text, meta)
+      : mdEntry?.text
+        ? inspectMarkdownString(mdEntry.text, meta)
+        : null;
+    const jsonNonempty = entries.some((e) => /\.json$/i.test(e.name) && Boolean(e.text?.trim()));
+    return {
+      ...(probe ?? EMPTY_FACTS(meta, bytes.byteLength, true, "zip")),
+      kind: "zip",
+      valid: true,
+      bytes: bytes.byteLength,
+      text: text || probe?.text || "",
+      word_count: wordCountOf(text || probe?.text || ""),
+      data_payload_nonempty: jsonNonempty || Boolean(probe?.data_payload_nonempty),
+      zip_entries: names,
+    };
+  } catch {
+    return EMPTY_FACTS(meta, bytes.byteLength, false, "zip");
+  }
+}
+
 export async function inspectArtifact(artifact: DeliveryArtifact): Promise<ArtifactFacts> {
   const meta = inspectMetaOf(artifact);
   const screenshots = artifact.screenshots?.length ?? 0;
   const withShots = (facts: ArtifactFacts): ArtifactFacts => ({ ...facts, screenshots_count: screenshots });
 
+  if (artifact.kind === "zip" || artifact.zip_base64) {
+    const bytes = new Uint8Array(Buffer.from((artifact.zip_base64 ?? "").replace(/\s+/g, ""), "base64"));
+    return withShots(inspectZipBytes(bytes, meta));
+  }
   if (artifact.kind === "html" || (artifact.html && artifact.kind !== "pdf" && artifact.kind !== "md")) {
     return withShots(inspectHtmlString(artifact.html ?? "", meta));
   }

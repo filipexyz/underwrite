@@ -42,6 +42,8 @@ export const DASHBOARD_CHECK_IDS = [
 
 export const RESEARCH_CHECK_IDS = ["has_structure", "covers_brief_topics", "has_sources_section", "min_length"] as const;
 
+export const ZIP_CHECK_IDS = ["zip_valid", "expected_entries_present"] as const;
+
 export const HTML_TO_PDF_RUBRIC: VerificationSpec = {
   rubric_version: "html_to_pdf@v0",
   /** Weighted share of checks that must pass. 1 = every check. */
@@ -56,22 +58,22 @@ export const HTML_TO_PDF_RUBRIC: VerificationSpec = {
   ],
 };
 
-/** Lighter rubric for specialty fixtures that are still delivered as a PDF report. */
+const sharedChecks: DeclaredCheck[] = [
+  { check_id: "artifact_exists", weight: 1, description: "A deliverable artifact is present." },
+  { check_id: "artifact_renders", weight: 1, description: "The artifact parses as the expected kind (HTML, PDF, Markdown, or ZIP)." },
+  { check_id: "artifact_not_empty", weight: 1, description: "The artifact contains extractable content." },
+];
+
+/** Content rubric for custom specialties (HTML, Markdown, or ZIP — not a PDF compile). */
 export const SPECIALTY_REPORT_RUBRIC: VerificationSpec = {
   rubric_version: "specialty_report@v0",
   required_passing: 1,
   checks: [
-    { check_id: "pdf_valid", weight: 2, description: "The artifact parses as a PDF document." },
-    { check_id: "text_matches_source", weight: 2, description: "Text extracted from the PDF covers the source brief." },
-    { check_id: "no_layout_overflow", weight: 1, description: "No content region overflows its page box." },
+    ...sharedChecks,
+    { check_id: "has_structure", weight: 2, description: "The report has a titled heading structure." },
+    { check_id: "covers_brief_topics", weight: 2, description: "The report covers the topics named in the brief." },
   ],
 };
-
-const sharedChecks: DeclaredCheck[] = [
-  { check_id: "artifact_exists", weight: 1, description: "A deliverable artifact is present." },
-  { check_id: "artifact_renders", weight: 1, description: "The artifact parses as the expected kind (HTML, PDF, or Markdown)." },
-  { check_id: "artifact_not_empty", weight: 1, description: "The artifact contains extractable content." },
-];
 
 export const LANDING_PAGE_RUBRIC: VerificationSpec = {
   rubric_version: "landing_page@v0",
@@ -189,6 +191,10 @@ export function impliedCheckIds(taskRequirement: string, constraints: ScopeConst
   if (kind === "pdf" || category === "html_to_pdf" || /\bpdf\b/.test(text)) implied.add("pdf_valid");
   if (kind === "html" || category === "landing_page" || category === "dashboard") implied.add("html_valid");
   if (kind === "md" || category === "research_report" || /\bmarkdown\b|\.md\b/.test(text)) implied.add("md_valid");
+  if (kind === "zip" || /\bzip\b|\.zip\b/.test(text) || (taskRequirement.match(/\b[\w.-]+\.(?:md|html?|json|csv|txt|png|svg)\b/gi) ?? []).length >= 2) {
+    implied.add("zip_valid");
+    implied.add("expected_entries_present");
+  }
 
   const allowPdfGeometry =
     category === "html_to_pdf" ||
@@ -247,19 +253,59 @@ function kindSupports(checkId: string, kind: ArtifactKind | undefined): boolean 
   if (checkId === "pdf_valid" || PDF_GEOMETRY_CHECK_IDS.includes(checkId as (typeof PDF_GEOMETRY_CHECK_IDS)[number])) {
     return kind === "pdf";
   }
-  if (checkId === "html_valid" || LANDING_CHECK_IDS.includes(checkId as (typeof LANDING_CHECK_IDS)[number])) {
-    return kind === "html" || checkId === "screenshots_present";
-  }
+  if (ZIP_CHECK_IDS.includes(checkId as (typeof ZIP_CHECK_IDS)[number])) return kind === "zip";
+  if (checkId === "html_valid") return kind === "html";
   if (checkId === "md_valid") return kind === "md";
-  if (DASHBOARD_CHECK_IDS.includes(checkId as (typeof DASHBOARD_CHECK_IDS)[number])) return kind === "html";
+  if (LANDING_CHECK_IDS.includes(checkId as (typeof LANDING_CHECK_IDS)[number])) {
+    return kind === "html" || kind === "zip" || checkId === "screenshots_present";
+  }
+  if (DASHBOARD_CHECK_IDS.includes(checkId as (typeof DASHBOARD_CHECK_IDS)[number])) return kind === "html" || kind === "zip";
   return true;
+}
+
+function askedForPdf(taskRequirement: string, category: string | undefined): boolean {
+  return category === "html_to_pdf" || /\bpdf\b/i.test(taskRequirement);
+}
+
+function dropPdfOnlyChecks(
+  spec: VerificationSpec,
+  taskRequirement: string,
+  constraints: ScopeConstraints,
+): VerificationSpec {
+  const allowPdf = askedForPdf(taskRequirement, constraints.category) || constraints.artifact_kind === "pdf";
+  const checks = spec.checks.filter((c) => {
+    const pdfOnly = (PDF_GEOMETRY_CHECK_IDS as readonly string[]).includes(c.check_id);
+    if (pdfOnly && !allowPdf) return false;
+    return kindSupports(c.check_id, constraints.artifact_kind);
+  });
+  if (checks.length > 0) return { ...spec, checks };
+  const fallback = sharedChecks.filter((c) => kindSupports(c.check_id, constraints.artifact_kind));
+  return {
+    ...spec,
+    checks:
+      fallback.length > 0
+        ? fallback
+        : [{ check_id: "artifact_exists", weight: 1, description: "A deliverable artifact is present." }],
+  };
 }
 
 /**
  * Intersection of a category check map (or a declared spec) with the checks
- * implied by TASK_SPEC. Unknown / specialty categories keep their declared
- * rubric so existing fixtures stay intact.
+ * implied by TASK_SPEC. Unknown / specialty categories keep their content
+ * rubric but never inherit PDF-only checks unless TASK_SPEC asked for a PDF.
  */
+const ZIP_RUBRIC_CHECKS: DeclaredCheck[] = [
+  { check_id: "zip_valid", weight: 2, description: "The artifact parses as a ZIP archive with at least one entry." },
+  { check_id: "expected_entries_present", weight: 1, description: "Named files from the brief are present in the ZIP." },
+];
+
+function mergeZipChecks(spec: VerificationSpec): VerificationSpec {
+  const ids = new Set(spec.checks.map((c) => c.check_id));
+  const extra = ZIP_RUBRIC_CHECKS.filter((c) => !ids.has(c.check_id));
+  const checks = [...spec.checks.filter((c) => kindSupports(c.check_id, "zip")), ...extra];
+  return { ...spec, checks };
+}
+
 export function scopeChecks(
   specOrMap: VerificationSpec | string,
   taskRequirement: string,
@@ -267,7 +313,10 @@ export function scopeChecks(
 ): VerificationSpec {
   const spec = asSpec(specOrMap);
   const category = constraints.category ?? categoryFromRubric(spec.rubric_version);
-  if (!isKnownCategory(category)) return spec;
+  if (constraints.artifact_kind === "zip") {
+    return dropPdfOnlyChecks(mergeZipChecks(spec), taskRequirement, { ...constraints, category });
+  }
+  if (!isKnownCategory(category)) return dropPdfOnlyChecks(spec, taskRequirement, { ...constraints, category });
 
   const map = defaultRubricFor(category);
   const implied = impliedCheckIds(taskRequirement, { ...constraints, category });
