@@ -62,6 +62,11 @@ export type QuoteContext = {
   /** Agents that already failed on this request; never re-hired. */
   exclude: Set<string>;
   depth: number;
+  /**
+   * What this hop's hirer can pay — the buyer's ceiling for the prime, the parent's charge below it.
+   * Optional: with no budget there is nothing to take a share of, and the absolute price applies.
+   */
+  budget_usd?: number;
 };
 
 const ALL_STRATEGIES: Strategy[] = ["self", "decompose", "outsource"];
@@ -112,11 +117,17 @@ export function buildQuote(
     floor_required: floorRequired,
   };
 
+  // A share prices against the hirer's ceiling; absent one, the old absolute maths stands unchanged.
+  const priced =
+    policy.price_share === undefined || ctx.budget_usd === undefined
+      ? null
+      : round6(Math.max(0, ctx.budget_usd) * policy.price_share);
+
   if (policy.strategy === "self") {
     const execLatency = agent.policy.execution?.latency_s ?? 0;
     return {
       ...base,
-      price_usd: round6(policy.own_cost_usd),
+      price_usd: priced === null ? round6(policy.own_cost_usd) : Math.max(priced, round6(policy.own_cost_usd)),
       latency_s: policy.own_latency_s + execLatency,
       sub: null,
       selection: null,
@@ -126,13 +137,22 @@ export function buildQuote(
   if (!policy.subcontract_specialty) return null;
   if (ctx.depth + 1 > RULES.MAX_DEPTH) return null;
 
-  const selection = selectSubcontractor(agent, policy.subcontract_specialty, floorRequired, ctx);
+  // The subcontractor's ceiling is what this hop can pass down: its charge minus the share it retains.
+  // Same arithmetic the engine uses to build the child request (price_usd - own_cost_usd), so the two agree.
+  const passDown = Math.max(0, (priced ?? ctx.budget_usd ?? 0) - policy.own_cost_usd);
+  const selection = selectSubcontractor(agent, policy.subcontract_specialty, floorRequired, {
+    ...ctx,
+    budget_usd: passDown,
+  });
   if (!selection.chosen) return null;
   const sub = selection.quote as Quote;
 
   return {
     ...base,
-    price_usd: round6(policy.own_cost_usd + sub.price_usd),
+    // Never below cost + subcontract: a price that does not cover the chain would hand the child a negative
+    // budget (engine.ts:429), which is how a share-priced hop used to kill the request outright.
+    price_usd:
+      priced === null ? round6(policy.own_cost_usd + sub.price_usd) : Math.max(priced, round6(policy.own_cost_usd + sub.price_usd)),
     latency_s: policy.own_latency_s + sub.latency_s,
     sub,
     selection: selection.selection,
@@ -181,7 +201,7 @@ export function selectSubcontractor(
       ...ctx,
       ancestors: [...ctx.ancestors, hirer.agentId],
       depth: ctx.depth + 1,
-    });
+        });
     if (!quote) return { snapshot: { ...snapshot, reason: "no feasible chain" }, quote: null };
 
     snapshot.price_usd = quote.price_usd;

@@ -71,6 +71,8 @@ export const SEED_AGENTS: SeedAgent[] = [
         promised_confidence: 0.96,
         own_latency_s: 3,
         own_cost_usd: 0.008,
+        // Prices against the hirer's ceiling, so bids read in dollars at any budget scale.
+        price_share: 0.7,
         subcontract_specialty: TASK_CATEGORY,
         subtask: "underwrite the SLA, split the job and manage the chain",
       },
@@ -108,6 +110,8 @@ export const SEED_AGENTS: SeedAgent[] = [
         promised_confidence: 0.95,
         own_latency_s: 4,
         own_cost_usd: 0.03,
+        // Prices against the hirer's ceiling, so bids read in dollars at any budget scale.
+        price_share: 0.72,
         subtask: "normalize and render the document end to end",
       },
       // Careless with other people's SLA: under subcontract it hires the cheapest renderer.
@@ -117,6 +121,8 @@ export const SEED_AGENTS: SeedAgent[] = [
           promised_confidence: 0.96,
           own_latency_s: 4,
           own_cost_usd: 0.006,
+          // Prices against the hirer's ceiling, so bids read in dollars at any budget scale.
+          price_share: 0.72,
           subcontract_specialty: RENDER_SPECIALTY,
           subtask: "normalize the HTML (fonts, page size, margins), then subcontract the render",
         },
@@ -161,6 +167,8 @@ export const SEED_AGENTS: SeedAgent[] = [
           promised_confidence: 0.98,
           own_latency_s: 0,
           own_cost_usd: 0.006,
+          // Prices against the hirer's ceiling, so bids read in dollars at any budget scale.
+          price_share: 0.35,
           subtask: "render the normalized HTML to PDF",
         },
       },
@@ -202,6 +210,8 @@ export const SEED_AGENTS: SeedAgent[] = [
         promised_confidence: 0.96,
         own_latency_s: 4,
         own_cost_usd: 0.038,
+        // Prices against the hirer's ceiling, so bids read in dollars at any budget scale.
+        price_share: 0.75,
         subtask: "normalize and render the document end to end",
       },
       sub: {
@@ -210,6 +220,8 @@ export const SEED_AGENTS: SeedAgent[] = [
           promised_confidence: 0.96,
           own_latency_s: 4,
           own_cost_usd: 0.016,
+          // Prices against the hirer's ceiling, so bids read in dollars at any budget scale.
+          price_share: 0.75,
           subtask: "normalize and render the document end to end",
         },
         [RENDER_SPECIALTY]: {
@@ -217,6 +229,8 @@ export const SEED_AGENTS: SeedAgent[] = [
           promised_confidence: 0.96,
           own_latency_s: 0,
           own_cost_usd: 0.012,
+          // Prices against the hirer's ceiling, so bids read in dollars at any budget scale.
+          price_share: 0.75,
           subtask: "render the normalized HTML to PDF",
         },
       },
