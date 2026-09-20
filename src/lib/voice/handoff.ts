@@ -111,17 +111,6 @@ export async function createTaskFromVoiceBrief(
   // is inferred from the brief. `classifyTask` never throws: unconfigured or unreachable, it uses
   // the keyword heuristic — never a silent html_to_pdf stamp.
   const { input, classification } = await voiceBriefToRequestInputClassified(args.brief);
-  console.log(
-    "[classify]",
-    JSON.stringify({
-      category: classification.category,
-      source: classification.source,
-      confidence: classification.confidence,
-      ambiguous: classification.ambiguous,
-      cost_usd: classification.cost_usd,
-      latency_ms: classification.latency_ms,
-    }),
-  );
   const category = input.category ?? classification.category;
   const row = await createRequest(db, input, {
     // The agent composed and filed this, not the person. Recording `agent` keeps the request free of
@@ -131,6 +120,7 @@ export async function createTaskFromVoiceBrief(
     buyerWalletId: args.session.userId,
     category,
     classifySource: classification.source,
+    classifyOverride: classification.override,
     // Always push. The seed Mastra html-to-pdf auction must not run here.
     executionMode: "push",
   });

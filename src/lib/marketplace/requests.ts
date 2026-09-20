@@ -67,6 +67,7 @@ export async function createRequest(
     executionMode?: "seed" | "push";
     category?: string;
     classifySource?: string;
+    classifyOverride?: string;
   } = {},
 ): Promise<RequestRow> {
   const requestId = newId("req");
@@ -117,6 +118,7 @@ export async function createRequest(
       invite_agent_ids: requestedInviteIds,
       category,
       ...(meta.classifySource ? { classify_source: meta.classifySource } : {}),
+      ...(meta.classifyOverride ? { classify_override: meta.classifyOverride } : {}),
     },
   });
   return row;

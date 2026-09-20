@@ -120,16 +120,34 @@ describe("classifyTask when JEV is configured", () => {
     expect(result.source).toBe("jev");
   });
 
-  it("prefers the heuristic over a weak JEV html_to_pdf guess on a clear landing brief", async () => {
+  it("overrides JEV html_to_pdf on the literally-nothing landing brief, even when JEV is confident", async () => {
     mockJev({
       choice: "html_to_pdf",
-      probabilities: { html_to_pdf: 0.48, landing_page: 0.42, dashboard: 0.05, research_report: 0.05 },
-      confidence: 0.48,
+      probabilities: { html_to_pdf: 0.91, landing_page: 0.05, dashboard: 0.02, research_report: 0.02 },
+      confidence: 0.91,
     });
     const result = await classifyTask(LITERALLY_NOTHING_LANDING);
     expect(result.category).toBe("landing_page");
     expect(result.source).toBe("heuristic");
-    expect(result.ambiguous).toBe(true);
+    expect(result.override).toBe("jev_html_to_pdf_vs_clear_landing");
+  });
+
+  it("overrides other clear mismatches when JEV says html_to_pdf", async () => {
+    mockJev({
+      choice: "html_to_pdf",
+      probabilities: { html_to_pdf: 0.8, dashboard: 0.1, landing_page: 0.05, research_report: 0.05 },
+      confidence: 0.8,
+    });
+    expect((await classifyTask("Build a dashboard of revenue metrics with filters")).category).toBe("dashboard");
+
+    mockJev({
+      choice: "html_to_pdf",
+      probabilities: { html_to_pdf: 0.8, research_report: 0.1, landing_page: 0.05, dashboard: 0.05 },
+      confidence: 0.8,
+    });
+    expect((await classifyTask("Research the market and write a report with citations")).category).toBe(
+      "research_report",
+    );
   });
 
   it("uses the heuristic on HTTP error, timeout, or unrecognized choice", async () => {
@@ -154,6 +172,18 @@ describe("classifyTask when JEV is configured", () => {
     const result = await classifyTask(PDF_COMPILE);
     expect(result.category).toBe("html_to_pdf");
     expect(result.source).toBe("jev");
+  });
+
+  it("overrides JEV landing_page on a clear compile-to-PDF brief", async () => {
+    mockJev({
+      choice: "landing_page",
+      probabilities: { landing_page: 0.8, html_to_pdf: 0.15, dashboard: 0.03, research_report: 0.02 },
+      confidence: 0.8,
+    });
+    const result = await classifyTask(PDF_COMPILE);
+    expect(result.category).toBe("html_to_pdf");
+    expect(result.source).toBe("heuristic");
+    expect(result.override).toBe("clear_pdf_compile_vs_jev_landing_page");
   });
 });
 
