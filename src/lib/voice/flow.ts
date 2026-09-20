@@ -6,7 +6,7 @@
  * need, no invite token, and no second human.
  */
 import type { Db } from "@/lib/db/client";
-import type { LlmTool } from "agora-agents";
+import type { McpServersItem } from "agora-agents";
 import { env } from "@/lib/env";
 import {
   mintJoinToken,
@@ -87,7 +87,7 @@ export async function startVoiceSession(db: Db, userId: string): Promise<StartVo
       prompt: buildVoiceComposerPrompt(),
       greeting: buildVoiceComposerGreeting(),
       agentUid: String(VOICE_AGENT_UID),
-      tools: [buildSubmitTaskTool(session.id)],
+      mcpServers: [buildVoiceMcpServer(session.id)],
     });
     await attachVoiceAgentId(db, session.id, started.agentId);
     return {
@@ -131,58 +131,25 @@ function sessionIdForChannel(userId: string): string {
  * the tool twice — or a retried request — still produces exactly one task.
  */
 /**
- * The end tool, declared for the model and executed by Agora.
+ * Our internal MCP server, declared to the agent.
  *
- * `LlmTool` with `type: "function"` plus `server` is an **inline REST tool**: Agora performs the HTTP
- * request itself, synchronously, and feeds the raw result back into the model's context. That is why no
- * sentence, no data channel and no timer is involved in submitting a task — the model calls a function and
- * the marketplace is updated as part of that call.
+ * Agora's ConvoAI engine is the MCP **client**: it drives `initialize` -> `tools/list` -> `tools/call`
+ * against this URL, so `submit_task` executes in our process and the model receives the result as context —
+ * which is what lets it say a task is posted only after it actually is.
  *
- * Requires `withTools(true)` on the agent; `startGptLiveAgent` sets it whenever tools are supplied.
+ * The entry shape is not typed in the SDK (`McpServersItem` is `Record<string, unknown>`); it comes from
+ * Agora's own sample in `agent-samples`:
+ *   `{ "name": "...", "endpoint": "...", "transport": "streamable_http", "allowed_tools": ["*"] }`
  */
 export const submitTaskToolName = "submit_task";
 
-function buildSubmitTaskTool(sessionId: string): LlmTool {
-  const base = publicApiBaseUrl();
+function buildVoiceMcpServer(sessionId: string): McpServersItem {
   return {
-    type: "function",
-    function: {
-      name: submitTaskToolName,
-      description:
-        "Submit the agreed task to the marketplace. Call this once — and only once — you have the deliverable and all four terms. Afterwards tell the person briefly that the task is posted.",
-      parameters: {
-        type: "object",
-        properties: {
-          requirement: {
-            type: "string",
-            description: "What must be delivered, specific enough to be objectively checked.",
-          },
-          max_cost_usd: { type: "number", description: "Maximum price the buyer agreed to pay, in US dollars." },
-          max_latency_s: { type: "number", description: "Maximum time the buyer agreed to wait, in seconds." },
-          min_confidence: { type: "number", description: "Minimum confidence required, as a fraction; 95% is 0.95." },
-          failure_policy: {
-            type: "string",
-            enum: ["refund", "discount", "accept_flagged"],
-            description: "What happens if the work fails verification.",
-          },
-        },
-        required: ["requirement", "max_cost_usd", "max_latency_s", "min_confidence", "failure_policy"],
-      },
-    },
-    server: {
-      method: "POST",
-      url: base + "/api/v1/voice/sessions/" + sessionId + "/tools/submit_task",
-      // `{{args.*}}` is not allowed in headers, so the shared secret is a constant: the Agora app
-      // certificate, which Agora's cloud already holds and is the only caller of that URL.
-      headers: { authorization: "Bearer " + String(env.agora.certificate ?? "") },
-      body: {
-        requirement: "{{args.requirement}}",
-        max_cost_usd: "{{args.max_cost_usd}}",
-        max_latency_s: "{{args.max_latency_s}}",
-        min_confidence: "{{args.min_confidence}}",
-        failure_policy: "{{args.failure_policy}}",
-      },
-    },
+    name: "underwrite",
+    endpoint: publicApiBaseUrl() + "/api/mcp/voice/" + sessionId,
+    transport: "streamable_http",
+    headers: { Authorization: "Bearer " + String(env.agora.certificate ?? "") },
+    allowed_tools: ["*"],
   };
 }
 
