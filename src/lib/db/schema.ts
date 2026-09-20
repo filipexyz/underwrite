@@ -329,28 +329,14 @@ export const attributions = pgTable(
 // ---------------------------------------------------------------------------
 // Interview pool (Agora + GPT Live) — parallel to the marketplace.
 // ---------------------------------------------------------------------------
+//
+// These types are re-exported from `@/lib/interviews/types` rather than redefined here. They used to
+// be duplicated, which meant the zod schema (the actual wire contract) and the column type could drift
+// apart silently — adding a field to the brief would compile here and be invisible to the schema.
 
-export type InterviewBrief = {
-  goal: string;
-  questions: string[];
-  context: string;
-  required_fields: string[];
-  success_criteria: string;
-};
+import type { InterviewAnswers, InterviewBrief, TranscriptTurn } from "@/lib/interviews/types";
 
-export type InterviewAnswers = {
-  answers: Record<string, string>;
-  notes?: string;
-  source?: "agent_json" | "client" | "llm_extract" | "partial";
-};
-
-export type TranscriptTurn = {
-  role: "user" | "assistant" | "system";
-  text: string;
-  at?: number;
-  uid?: string;
-  turn_id?: number;
-};
+export type { InterviewAnswers, InterviewBrief, TranscriptTurn };
 
 export const interviewNeeds = pgTable(
   "interview_needs",
@@ -363,6 +349,11 @@ export const interviewNeeds = pgTable(
     publicToken: text("public_token").notNull().unique(),
     assignedSessionId: text("assigned_session_id"),
     resultJson: jsonb("result_json").$type<InterviewAnswers | Record<string, unknown>>(),
+    /**
+     * The marketplace request this interview produced (handoff.ts). Set exactly once, at finalize.
+     * Nullable: needs that were interviewed before the handoff existed, or that failed to convert.
+     */
+    requestId: text("request_id"),
     createdAt: createdAt(),
     completedAt: timestamp("completed_at", { withTimezone: true }),
   },

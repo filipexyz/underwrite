@@ -16,6 +16,8 @@ import {
 } from "./extract";
 import { runInference } from "@/lib/observability/inference";
 import { env } from "@/lib/env";
+import { createTaskFromInterview } from "./handoff";
+import { upsertTranscript } from "./rtm";
 import type { CreateNeedInput, InterviewAnswers, InterviewNeedStatus, TranscriptTurn } from "./types";
 
 export function toApiNeed(row: InterviewNeedRow, sessions?: InterviewSessionRow[]) {
@@ -99,6 +101,58 @@ export async function getNeedDetail(db: Db, id: string) {
   if (!need) return null;
   const sessions = await listSessionsForNeed(db, id);
   return { need, sessions };
+}
+
+/**
+ * Hard cap on stored turns per session.
+ *
+ * The write path is a **public** endpoint (possession of the invite token is the auth), so an
+ * unbounded append would let anyone holding a link grow a row without limit. Older turns are dropped
+ * from the front — a live transcript is a rolling window, and the authoritative record is `answers`,
+ * not the scrollback.
+ */
+export const MAX_TRANSCRIPT_TURNS = 600;
+/** Per-request cap, so one call cannot jump past the window in a single write. */
+export const MAX_TRANSCRIPT_TURNS_PER_WRITE = 60;
+
+/**
+ * Append transcript turns to a live session.
+ *
+ * Merges through the same `upsertTranscript` the browser uses, so an in-progress agent turn that is
+ * re-sent with more text updates its entry instead of appending a duplicate — which is what makes it
+ * safe for the room to push on a timer rather than only at the end of the call.
+ *
+ * Returns the resulting window, so the caller can render without a second read.
+ */
+export async function appendTranscriptTurns(
+  db: Db,
+  sessionId: string,
+  incoming: TranscriptTurn[],
+): Promise<{ turns: TranscriptTurn[]; skipped: number }> {
+  const session = await getSession(db, sessionId);
+  if (!session) return { turns: [], skipped: incoming.length };
+  // A finalized session is frozen: late pushes from a reconnecting browser must not reopen it.
+  if (session.status !== "live") return { turns: session.transcriptJson ?? [], skipped: incoming.length };
+
+  let turns = session.transcriptJson ?? [];
+  let skipped = 0;
+
+  for (const turn of incoming.slice(0, MAX_TRANSCRIPT_TURNS_PER_WRITE)) {
+    const text = typeof turn.text === "string" ? turn.text : "";
+    if (!text.trim()) {
+      skipped += 1;
+      continue;
+    }
+    // `inProgress: false` — the browser only pushes turns it considers settled, and an id-less
+    // turn cannot be merged by id anyway, so appending (and dropping a stale id-less tail) is right.
+    turns = upsertTranscript(turns, { ...turn, text }, false);
+  }
+  if (incoming.length > MAX_TRANSCRIPT_TURNS_PER_WRITE) skipped += incoming.length - MAX_TRANSCRIPT_TURNS_PER_WRITE;
+
+  if (turns.length > MAX_TRANSCRIPT_TURNS) turns = turns.slice(turns.length - MAX_TRANSCRIPT_TURNS);
+
+  await db.update(interviewSessions).set({ transcriptJson: turns }).where(eq(interviewSessions.id, sessionId));
+  return { turns, skipped };
 }
 
 export async function insertLiveSession(
@@ -233,5 +287,23 @@ export async function finalizeSession(
     .where(eq(interviewNeeds.id, need.id))
     .returning();
 
-  return { session: updatedSession, need: updatedNeed, answers };
+  /*
+   * Hand the interview to the marketplace. This used to be where the flow stopped: answers captured,
+   * need closed, agent stopped, and nothing downstream — so the human still had to write the task.
+   *
+   * Deliberately after the need is marked complete and never allowed to fail the finalize: the human
+   * has just finished a live call and their answers are already persisted, so a handoff error must
+   * degrade to "need completed, task pending" rather than losing the interview. The error is surfaced
+   * on the need row via `requestId` staying null plus the caller's response, not by throwing away the
+   * transcript.
+   */
+  try {
+    await createTaskFromInterview(db, { need: updatedNeed, answers });
+  } catch (error) {
+    console.error(`[interviews] task handoff failed for need ${need.id}:`, error);
+  }
+
+  const [finalNeed] = await db.select().from(interviewNeeds).where(eq(interviewNeeds.id, need.id)).limit(1);
+
+  return { session: updatedSession, need: finalNeed ?? updatedNeed, answers };
 }

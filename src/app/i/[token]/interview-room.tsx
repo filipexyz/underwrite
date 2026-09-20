@@ -21,11 +21,14 @@ type RoomPhase = CallPhase | "thanks";
 export function InterviewRoom({
   startPath,
   finalizePath,
+  transcriptPath,
   appId,
   requiredFields,
 }: {
   startPath: string;
   finalizePath: string;
+  /** Live transcript append. Optional so the room still runs if it is not wired. */
+  transcriptPath?: string;
   appId: string;
   requiredFields: string[];
 }) {
@@ -42,6 +45,9 @@ export function InterviewRoom({
   const finishing = useRef(false);
   const joining = useRef(false);
   const liveSince = useRef<number | null>(null);
+  /** Turns already pushed to the server, so the creator's view can follow along live. */
+  const pushedRef = useRef(0);
+  const transcriptRef = useRef<TranscriptTurn[]>([]);
 
   const cleanupMedia = useCallback(async () => {
     try {
@@ -65,8 +71,7 @@ export function InterviewRoom({
     rtmRef.current = null;
   }, []);
 
-  const finalize = useCallback(
-    async (turns: TranscriptTurn[]) => {
+  const finalize = useCallback(    async (turns: TranscriptTurn[]) => {
       if (finishing.current) return;
       finishing.current = true;
       setPhase("ending");
@@ -96,8 +101,46 @@ export function InterviewRoom({
     [cleanupMedia, finalizePath],
   );
 
-  const join = useCallback(async () => {
-    if (joining.current || finishing.current) return;
+  // Keep the latest transcript in a ref so the push loop below can stay keyed on `phase` alone.
+  // Depending on `transcript` directly would tear down and rebuild the interval on every turn.
+  useEffect(() => {
+    transcriptRef.current = transcript;
+  }, [transcript]);
+
+  /**
+   * Publish settled turns while the call is live, so the creator can watch the interview happen
+   * instead of only seeing it after finalize. Best-effort by design: the authoritative write is still
+   * the transcript in the finalize payload, so a failed push loses nothing but the live view.
+   */
+  useEffect(() => {
+    if (!transcriptPath || phase !== "live") return;
+    const timer = window.setInterval(() => {
+      // Skip the trailing in-progress turn (turn_id -1): it is still growing and would land as a
+      // separate row from the version we push next tick.
+      const settled = transcriptRef.current.filter((turn) => turn.turn_id !== -1);
+      const from = pushedRef.current;
+      if (settled.length <= from) return;
+      const pending = settled.slice(from).slice(-60);
+      pushedRef.current = settled.length;
+      void fetch(transcriptPath, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ transcript_json: pending }),
+      })
+        .then((res) => {
+          // 410/409 mean the session already finished; stop trying rather than hammering it.
+          if (!res.ok && (res.status === 409 || res.status === 410)) pushedRef.current = settled.length;
+          else if (!res.ok) pushedRef.current = from;
+        })
+        .catch(() => {
+          // Retry from where we were. Re-sends merge by `turn_id` server-side, so this is safe.
+          pushedRef.current = from;
+        });
+    }, 2000);
+    return () => window.clearInterval(timer);
+  }, [phase, transcriptPath]);
+
+  const join = useCallback(async () => {    if (joining.current || finishing.current) return;
     joining.current = true;
     setError(null);
     setPhase("connecting");
