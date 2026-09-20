@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getDb } from "@/lib/db/client";
+import { artifactSize, artifactUrl, canPreviewInIframe, humanBytes } from "@/lib/marketplace/artifact-file";
 import { getRequestDetail } from "@/lib/marketplace/requests";
 import { Badge, Empty, Money, NetworkStrip, PageIntro, Panel, Pct, PhaseRail, Stat, Td, Th } from "../../ui";
 import { LiveLedger } from "./live-ledger";
@@ -64,6 +65,8 @@ export default async function RequestPage({ params }: { params: Promise<{ id: st
   const { request, metrics, events, bids, plans, escrows, verifications, attributions } = detail;
   const outcome = (request.outcome ?? {}) as { certificate?: Certificate; reason?: string };
   const hops = request.state?.hops ?? [];
+  const artifact = request.state?.artifact ?? null;
+  const deliverableUrl = artifactUrl(request.requestId);
   const latest = verifications.at(-1) ?? null;
   const first = verifications[0] ?? null;
   const topPromise = plans.find((p) => p.parentPlanId === null)?.promisedConfidence ?? null;
@@ -162,6 +165,45 @@ export default async function RequestPage({ params }: { params: Promise<{ id: st
       ) : null}
 
       {request.error ? <p className="text-sm text-danger">{request.error}</p> : null}
+
+      <section className="border border-ink bg-panel">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-3.5">
+          <div className="flex flex-col gap-0.5">
+            <p className="eyebrow !mb-1">DELIVERABLE</p>
+            {artifact ? (
+              <>
+                <span className="mono text-[11px] text-ink">
+                  {artifact.kind} · {humanBytes(artifactSize(artifact))}
+                </span>
+                <span className="text-xs leading-relaxed text-[#53605a]">
+                  produced by {artifact.producer_agent_id}
+                  {typeof artifact.observed_latency_ms === "number"
+                    ? ` · executed in ${(artifact.observed_latency_ms / 1000).toFixed(1)}s`
+                    : ""}
+                </span>
+              </>
+            ) : (
+              <span className="text-sm text-[#59635f]">
+                {request.status === "completed" || request.status === "failed"
+                  ? "No artifact was stored on this request."
+                  : "Nothing delivered yet — the chain is still working."}
+              </span>
+            )}
+          </div>
+          {artifact ? (
+            <a href={deliverableUrl} download className="btn-ghost">
+              Download
+            </a>
+          ) : null}
+        </div>
+        {canPreviewInIframe(artifact?.kind) ? (
+          <iframe
+            src={deliverableUrl}
+            title="Deliverable"
+            className={artifact?.kind === "pdf" ? "h-[520px] w-full bg-white" : "h-[420px] w-full bg-white"}
+          />
+        ) : null}
+      </section>
 
       {(first || latest) && (
         <section className="grid gap-4 md:grid-cols-2">
