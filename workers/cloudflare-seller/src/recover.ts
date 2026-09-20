@@ -25,11 +25,14 @@ function asEvent(value: unknown): UnderwriteEvent | null {
   return parseUnderwriteEvent(value);
 }
 
-export function mergeJob<T extends { jobs: Record<string, J> }, J>(
-  state: T,
+export function mergeJob<TState extends { jobs: Record<string, object> }>(
+  state: TState,
   jobId: string,
-  patch: Partial<J>,
-): T {
-  const current = state.jobs[jobId] ?? ({} as J);
-  return { ...state, jobs: { ...state.jobs, [jobId]: { ...current, ...patch } } };
+  patch: object,
+): TState {
+  const current = state.jobs[jobId] ?? {};
+  return {
+    ...state,
+    jobs: { ...state.jobs, [jobId]: { ...current, ...patch } as TState["jobs"][string] },
+  };
 }

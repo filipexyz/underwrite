@@ -12,13 +12,13 @@ describe("mergeJob", () => {
   it("keeps Durable Object credentials and tenants when recording a job", () => {
     const next = mergeJob(
       {
-        jobs: {},
+        jobs: {} as Record<string, { lastType?: string }>,
         credentials: { sellerApiKey: "uw_seller_x", webhookSecret: "whsec_x", neuralakeApiKey: "nl_x" },
         tenants: ["agt_a"],
         lastError: "old",
       },
       "req_1",
-      { lastType: "plan_request" as const },
+      { lastType: "plan_request" },
     );
     expect(next.credentials?.sellerApiKey).toBe("uw_seller_x");
     expect(next.credentials?.neuralakeApiKey).toBe("nl_x");
