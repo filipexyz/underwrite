@@ -11,6 +11,33 @@ import { TaskAutoRefresh } from "./auto-refresh";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * The delivered bytes, as the engine stores them. Optional in every field because a task that failed has no
+ * artifact at all, and a task still running has no shape yet.
+ */
+type StoredArtifact = {
+  kind?: string;
+  producer_agent_id?: string;
+  observed_latency_ms?: number;
+  declared_latency_ms?: number;
+  pdf_base64?: string;
+  html?: string;
+  markdown?: string;
+};
+
+function artifactSize(a: StoredArtifact): number {
+  if (typeof a.pdf_base64 === "string") return Math.round((a.pdf_base64.length * 3) / 4);
+  if (typeof a.html === "string") return Buffer.byteLength(a.html, "utf-8");
+  if (typeof a.markdown === "string") return Buffer.byteLength(a.markdown, "utf-8");
+  return 0;
+}
+
+function humanBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(2)} MB`;
+}
+
 /** Statuses where nothing more will happen, so live refresh can stop. */
 const TERMINAL = new Set(["completed", "failed", "no_eligible_bid", "no_eligible_plan"]);
 
@@ -32,6 +59,9 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
   const request = await getRequest(db, id);
   if (!request || request.buyerWalletId !== identity.userId) notFound();
 
+  const stored = request.state as { artifact?: StoredArtifact } | null;
+  const artifact = stored?.artifact;
+  const artifactUrl = `/api/v1/requests/${id}/artifact`;
   const events = await listEvents(db, id);
   const metrics = deriveMetrics(events);
   const active = !TERMINAL.has(request.status);
@@ -68,6 +98,45 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
           <Stat label="handoffs" value={String(metrics.handoffs)} />
           <Stat label="checks" value={`${metrics.checks_passed}/${metrics.checks_total}`} />
           <Stat label="human interventions" value={String(metrics.human_interventions)} />
+        </section>
+
+        <section className="flex flex-col gap-3">
+          <h2 className="eyebrow !mb-0">Deliverable</h2>
+          {artifact ? (
+            <div className="border border-line bg-panel">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3">
+                <div className="flex flex-col gap-0.5">
+                  <span className="mono text-[11px] text-ink">
+                    {artifact.kind ?? "file"} · {humanBytes(artifactSize(artifact))}
+                  </span>
+                  <span className="text-xs leading-relaxed text-[#53605a]">
+                    produced by {artifact.producer_agent_id ?? "the chain"}
+                    {typeof artifact.observed_latency_ms === "number"
+                      ? ` · executed in ${(artifact.observed_latency_ms / 1000).toFixed(1)}s`
+                      : ""}
+                  </span>
+                </div>
+                <a
+                  href={artifactUrl}
+                  download
+                  className="border border-ink bg-ink px-3 py-1.5 font-mono text-[10px] tracking-wide text-paper uppercase"
+                >
+                  Download
+                </a>
+              </div>
+              {artifact.kind === "pdf" ? (
+                <iframe src={artifactUrl} title="Deliverable" className="h-[520px] w-full bg-white" />
+              ) : artifact.kind === "html" ? (
+                <iframe src={artifactUrl} title="Deliverable" className="h-[420px] w-full bg-white" />
+              ) : null}
+            </div>
+          ) : (
+            <p className="border border-line bg-panel px-4 py-3 text-sm text-[#53605a]">
+              {active
+                ? "Nothing delivered yet — the chain is still working."
+                : "No artifact was delivered for this task."}
+            </p>
+          )}
         </section>
 
         <details className="border border-line bg-paper">
