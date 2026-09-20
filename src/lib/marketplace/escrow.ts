@@ -2,8 +2,10 @@
  * Escrow state machine (CONTRACTS.md §6). Every transition is checked against
  * `ESCROW_TRANSITIONS`, persisted, mirrored in the ledger and in the wallets.
  *
- * Hard rule enforced here: RELEASED requires `verdict = pass` AND
- * `confidence ≥ escrow.min_confidence`. There is no partial payment.
+ * Hard rule: RELEASED requires `verdict = pass` and judges in agreement.
+ * There is no partial payment. Execution-first SLA (Luís): when every
+ * declared applicable check passed, confidence below `min_confidence` must
+ * not withhold — `hardcoded_v0` is still recorded for display.
  */
 import { eq } from "drizzle-orm";
 import { ESCROW_TRANSITIONS, type EscrowStatus, type Verdict } from "@/lib/contracts";
@@ -252,11 +254,37 @@ export async function createLockedEscrowFromHold(
   return locked;
 }
 
-export type SlaEvidence = { verdict: Verdict; confidence: number; judges_disagree?: boolean };
+export type SlaEvidence = {
+  verdict: Verdict;
+  confidence: number;
+  judges_disagree?: boolean;
+  /** True when `runChecks` was conclusive and every declared applicable check passed (`objective === 1`). */
+  all_checks_passed?: boolean;
+};
 
-/** `verdict = pass` AND `confidence ≥ min_confidence` AND judges in agreement (CONTRACTS.md §4/§6). */
+/** Every declared applicable check that ran, passed. Empty/unknown check lists are not a pass. */
+export function allDeclaredChecksPassed(checks: ReadonlyArray<{ passed: boolean }>): boolean {
+  return checks.length > 0 && checks.every((c) => c.passed);
+}
+
+/**
+ * SLA for escrow release.
+ *
+ * Execution-first (Luís: "vamo sempre forçar passar se a execução funcionar"):
+ * if the deterministic checks are a conclusive pass, the job meets the SLA
+ * and escrow releases even when `hardcoded_v0` confidence is below
+ * `escrow.minConfidence`. Burned `track_record`, missing judges (null
+ * `agreement`), and the self-report blend must not withhold a delivery the
+ * checks already accepted. Confidence is still recorded on the ledger.
+ *
+ * A failed applicable check still withholds. Judge disagreement still
+ * withholds. The confidence floor remains a gate only when checks did not
+ * all pass (inconclusive / partial).
+ */
 export function slaMet(escrow: EscrowRow, evidence: SlaEvidence): boolean {
-  return evidence.verdict === "pass" && !evidence.judges_disagree && evidence.confidence >= escrow.minConfidence;
+  if (evidence.verdict !== "pass" || evidence.judges_disagree) return false;
+  if (evidence.all_checks_passed) return true;
+  return evidence.confidence >= escrow.minConfidence;
 }
 
 export async function releaseEscrow(

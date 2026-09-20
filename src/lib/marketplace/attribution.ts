@@ -10,6 +10,10 @@
  *   bad_underwriting  → whoever promised more than its chain could sustain
  *   spec_ambiguous    → nobody (failure without a failing declared check)
  *
+ * Checks-passed + confidence below the floor is not `spec_ambiguous` and must
+ * not be explained as "verdict inconclusive". Execution-first SLA should not
+ * withhold that case at all.
+ *
  * `spec_ambiguous` never penalizes an axis — otherwise agents learn to sandbag.
  */
 import type { Attribution, RootCause, Verification } from "@/lib/contracts";
@@ -56,12 +60,31 @@ export function walkBack(args: {
   const failedChecks = verification.checks.filter((c) => !c.passed);
   const pct = (n: number) => `${Math.round(n * 100)}%`;
 
+  if (failedChecks.length === 0 && verification.verdict === "pass") {
+    // Checks passed. Under execution-first SLA this should not withhold at
+    // all; if we still walk back (legacy confidence gate, or judges
+    // disagreed), do not call it spec_ambiguous / "verdict inconclusive".
+    if (verification.judges_disagree) {
+      return {
+        root_cause: "spec_ambiguous",
+        blamed_agent: null,
+        explanation: `The delivery passed every declared check but independent judges disagreed. The rubric, not an agent, is at fault — returned for clarification, no axis penalized.`,
+      };
+    }
+    const top = hops[0];
+    return {
+      root_cause: "bad_underwriting",
+      blamed_agent: top?.agent_id ?? failed.agent_id,
+      explanation: `Every declared check passed, but the confidence blend (${pct(delivered)}) was treated as missing the SLA floor. That is a confidence-gate miss, not an inconclusive verdict.`,
+    };
+  }
+
   if (failedChecks.length === 0 && verification.verdict !== "fail") {
     return {
       root_cause: "spec_ambiguous",
       blamed_agent: null,
       explanation: `The delivery failed the SLA without failing a declared check (${
-        verification.judges_disagree ? "judges disagreed" : "verdict inconclusive"
+        verification.judges_disagree ? "judges disagreed" : "checks were inconclusive"
       }). The rubric, not an agent, is at fault — returned for clarification, no axis penalized.`,
     };
   }

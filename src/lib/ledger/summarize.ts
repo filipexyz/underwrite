@@ -50,8 +50,14 @@ export function summarizeEvent(e: Pick<LedgerEvent, "type" | "payload">): string
       return `rejected: ${(p.reasons as string[] | undefined)?.join("; ")}`;
     case "escrow_locked":
       return `${p.payer} → ${p.payee} · ${usd(p.amount_usd)} · floor ${pct(p.min_confidence)}`;
-    case "escrow_released":
-      return `${p.payer} → ${p.payee} · ${usd(p.amount_usd)} · delivered ${pct(p.delivered_confidence)} ≥ floor ${pct(p.min_confidence)}`;
+    case "escrow_released": {
+      const delivered = Number(p.delivered_confidence);
+      const floor = Number(p.min_confidence);
+      if (p.execution_first_sla || delivered + 1e-9 < floor) {
+        return `${p.payer} → ${p.payee} · ${usd(p.amount_usd)} · delivered ${pct(delivered)} · checks passed (execution-first SLA; floor ${pct(floor)})`;
+      }
+      return `${p.payer} → ${p.payee} · ${usd(p.amount_usd)} · delivered ${pct(delivered)} ≥ floor ${pct(floor)}`;
+    }
     case "escrow_withheld":
       return `${p.payer} → ${p.payee} · ${usd(p.amount_usd)} · promised ${pct(p.promised_confidence)}, delivered ${pct(p.delivered_confidence)} < floor ${pct(p.min_confidence)}`;
     case "stake_posted":
