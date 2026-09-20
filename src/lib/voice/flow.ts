@@ -114,6 +114,33 @@ function sessionIdForChannel(userId: string): string {
   return `${userId}-${Date.now().toString(36)}`;
 }
 
+/**
+ * File the task for an already-validated brief, once.
+ *
+ * Shared by the two ways a conversation can end: the tool call (the agent submits typed arguments) and
+ * the fallback path (the server extracts the brief from the transcript). Both must produce exactly one
+ * task per conversation, so the idempotency lives here rather than in either caller.
+ */
+export async function submitVoiceBrief(
+  db: Db,
+  args: { session: { id: string; agoraAgentId: string | null; requestId: string | null }; brief: VoiceTaskBrief; transcript?: unknown },
+): Promise<{ requestId: string; created: boolean; summary: string }> {
+  const task = await createTaskFromVoiceBrief(db, {
+    // `createTaskFromVoiceBrief` only reads `id` and `userId` off the row; the narrow shape keeps this
+    // callable from a tool route that has not loaded the full session.
+    session: args.session as never,
+    brief: args.brief,
+  });
+  await completeVoiceSession(db, args.session.id, { brief: args.brief, requestId: task.requestId });
+  try {
+    await stopGptLiveAgent(args.session.agoraAgentId);
+  } catch (error) {
+    // The task exists; a stuck agent must not fail the submission.
+    console.warn("[voice] stop agent failed (task already created):", error);
+  }
+  return { requestId: task.requestId, created: task.created, summary: summarizeBrief(args.brief) };
+}
+
 export type FinalizeVoiceResult =
   | { ok: true; payload: { session_id: string; request_id: string; created: boolean; summary: string; category: string } }
   | { ok: false; status: number; error: string; details?: unknown };
@@ -167,23 +194,14 @@ export async function finalizeVoiceSession(
     };
   }
 
-  const task = await createTaskFromVoiceBrief(db, { session, brief });
-  await completeVoiceSession(db, session.id, { brief, transcript, requestId: task.requestId });
-
-  try {
-    await stopGptLiveAgent(session.agoraAgentId);
-  } catch (error) {
-    // Answers and the task are already persisted; a stuck agent must not fail the request.
-    console.warn("[voice] stop agent failed (task already created):", error);
-  }
-
+  const submitted = await submitVoiceBrief(db, { session, brief });
   return {
     ok: true,
     payload: {
       session_id: session.id,
-      request_id: task.requestId,
-      created: task.created,
-      summary: summarizeBrief(brief),
+      request_id: submitted.requestId,
+      created: submitted.created,
+      summary: submitted.summary,
       category: brief.category ?? DEFAULT_VOICE_CATEGORY,
     },
   };

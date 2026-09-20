@@ -9,6 +9,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { POST as finalizeRoute } from "@/app/api/v1/voice/sessions/[id]/finalize/route";
 import { GET as sessionRoute, } from "@/app/api/v1/voice/sessions/[id]/route";
 import { POST as transcriptRoute } from "@/app/api/v1/voice/sessions/[id]/transcript/route";
+import { POST as submitRoute } from "@/app/api/v1/voice/sessions/[id]/submit/route";
 import { getDb } from "@/lib/db/client";
 import { LOCAL_DEV_USER_ID } from "@/lib/auth/session";
 import { listEvents } from "@/lib/ledger/ledger";
@@ -272,5 +273,42 @@ describe("routes", () => {
     expect(body.total).toBe(2);
     expect(body.from).toBe(1);
     expect(body.turns.map((t) => t.text)).toEqual(["second"]);
+  });
+});
+
+describe("the submit end tool", () => {
+  it("files the task from the tool's typed arguments, and is idempotent on a retried call", async () => {
+    const { db } = await getDb();
+    const session = await insertVoiceSession(db, { userId: USER, channel: "voice-submit-1" });
+
+    const first = await submitRoute(jsonRequest(brief) as never, { params: Promise.resolve({ id: session.id }) });
+    expect(first.status).toBe(201);
+    const created = (await first.json()) as { request_id: string; created: boolean };
+    expect(created.created).toBe(true);
+
+    const request = await getRequest(db, created.request_id);
+    // The agent's own words, not a paraphrase — the whole point of a typed tool call.
+    expect(request?.requirement).toContain("launch brief");
+    expect(request?.maxCostUsd).toBe(0.35);
+
+    const again = await submitRoute(jsonRequest(brief) as never, { params: Promise.resolve({ id: session.id }) });
+    expect(again.status).toBe(200);
+    expect(((await again.json()) as { request_id: string }).request_id).toBe(created.request_id);
+  });
+
+  it("rejects a brief outside the marketplace's range", async () => {
+    const { db } = await getDb();
+    const session = await insertVoiceSession(db, { userId: USER, channel: "voice-submit-2" });
+    const res = await submitRoute(jsonRequest({ ...brief, min_confidence: 1.4 }) as never, {
+      params: Promise.resolve({ id: session.id }),
+    });
+    expect(res.status).toBe(422);
+  });
+
+  it("404s a session the caller does not own", async () => {
+    const { db } = await getDb();
+    const foreign = await insertVoiceSession(db, { userId: "auth0|someone-else", channel: "voice-submit-3" });
+    const res = await submitRoute(jsonRequest(brief) as never, { params: Promise.resolve({ id: foreign.id }) });
+    expect(res.status).toBe(404);
   });
 });
