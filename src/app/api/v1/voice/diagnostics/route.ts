@@ -56,7 +56,19 @@ async function rpc(url: string, method: string, params: unknown, token: string):
     } catch {
       /* keep the raw text so a non-JSON response is visible */
     }
-    return { name: method, ok: res.ok, detail: res.ok ? "responded" : "non-2xx", status: res.status, body };
+    /*
+     * HTTP 200 with a JSON-RPC `error` in the body is a failed step. Treating the status code as the
+     * verdict is the same silent-success mistake this whole endpoint exists to catch — it reported a
+     * green tick for `tools/call` while the tool was returning "session not found".
+     */
+    const rpcError = Boolean(body && typeof body === "object" && "error" in body);
+    return {
+      name: method,
+      ok: res.ok && !rpcError,
+      detail: rpcError ? "json-rpc error" : res.ok ? "responded" : "non-2xx",
+      status: res.status,
+      body,
+    };
   } catch (error) {
     return { name: method, ok: false, detail: error instanceof Error ? error.message : "fetch failed" };
   }

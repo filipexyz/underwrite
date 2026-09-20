@@ -161,10 +161,6 @@ async function handleToolCall(
     });
   }
 
-  const { db } = await getDb();
-  const [session] = await db.select().from(voiceSessions).where(eq(voiceSessions.id, sessionId)).limit(1);
-  if (!session) return rpcError(id, -32002, "session not found");
-
   /*
    * A dry run validates the arguments and returns the task that *would* be created, without creating it.
    * That is what makes the endpoint self-testable: the whole validation path can be proven from a button
@@ -180,6 +176,10 @@ async function handleToolCall(
       ],
     });
   }
+
+  const { db } = await getDb();
+  const [session] = await db.select().from(voiceSessions).where(eq(voiceSessions.id, sessionId)).limit(1);
+  if (!session) return rpcError(id, -32002, "session not found");
 
   try {
     const submitted = await submitVoiceBrief(db, { session, brief: parsed.data });
