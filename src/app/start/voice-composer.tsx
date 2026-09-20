@@ -176,6 +176,16 @@ export function VoiceComposer({ startPath }: { startPath: string }) {
       setSessionId(payload.session_id);
 
       const AgoraRTC = (await import("agora-rtc-sdk-ng")).default;
+      try {
+        // Matches the interview room. Audio PTS affects playback timing and is easy to lose when the
+        // call setup is duplicated instead of shared — which is exactly how this bug class arrived.
+        (AgoraRTC as typeof AgoraRTC & { setParameter?: (k: string, v: unknown) => void }).setParameter?.(
+          "ENABLE_AUDIO_PTS",
+          true,
+        );
+      } catch {
+        /* optional */
+      }
       const mic = await AgoraRTC.createMicrophoneAudioTrack();
       micRef.current = mic;
       const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
@@ -183,19 +193,23 @@ export function VoiceComposer({ startPath }: { startPath: string }) {
       /*
        * Subscribing to the agent's tracks is what makes it audible. Without these handlers the client
        * joins and publishes fine, RTM still delivers the transcript, and the call looks healthy while
-       * the human hears nothing — the agent's audio is never subscribed to, let alone played.
+       * the human hears nothing.
+       *
+       * `agentConnected` is driven by the audio subscription itself rather than a uid comparison: this
+       * call has exactly one remote participant, so published audio *is* the agent — and a uid mismatch
+       * must not be able to report "waiting for audio" while audio is in fact playing.
        */
       client.on("user-published", async (user, mediaType) => {
         await client.subscribe(user, mediaType);
-        if (mediaType === "audio") user.audioTrack?.play();
-        if (String(user.uid) === payload.agent_uid) setAgentConnected(true);
+        if (mediaType === "audio") {
+          user.audioTrack?.play();
+          setAgentConnected(true);
+        }
       });
-      client.on("user-unpublished", (user) => {
-        if (String(user.uid) === payload.agent_uid) setAgentConnected(false);
+      client.on("user-unpublished", (_user, mediaType) => {
+        if (mediaType === "audio") setAgentConnected(false);
       });
-      client.on("user-joined", (user) => {
-        if (String(user.uid) === payload.agent_uid) setAgentConnected(true);
-      });
+      client.on("user-left", () => setAgentConnected(false));
       await client.join(payload.app_id ?? "", payload.channel, payload.token, Number(payload.uid));
       await client.publish([mic]);
 
