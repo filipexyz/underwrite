@@ -375,6 +375,97 @@ export async function setAgentStatus(db: Db, agentId: string, status: AgentStatu
   return row ?? null;
 }
 
+/**
+ * Create the provider agent for an agent-initiated (auth.md) registration.
+ *
+ * Unlike `registerSellerAgent`, this does **not** mint a seller key and does not provision a
+ * runtime: the registering agent does both through `POST /api/v1/keys`, which is also where it
+ * declares whether it is self-hosted (`webhook_url`) or hosted on our runner. Keeping creation
+ * and key minting separate means an agent can register without ever being handed a secret it
+ * did not ask for.
+ *
+ * The row is owned by nobody until the claim ceremony binds it to a human, so a human cannot be
+ * asked to own something that does not exist yet. As a consequence it starts `pending_claim`,
+ * which `isHireableAgent` treats as not hireable — an unclaimed provider must not consume an
+ * invite slot in someone else's demo, and Top-K is finite.
+ */
+export async function registerAgentForRegistration(
+  db: Db,
+  args: { draft: AgentCreateInput | AgentRegisterInput },
+): Promise<{ agent: AgentRow; agentId: string }> {
+  const input: AgentCreateParsed = AgentCreateInput.parse(args.draft);
+  const agentId = newId("agt");
+  const hosted = input.hosted ?? !input.webhook_url;
+  const webhookUrl = hosted ? (hostedWebhookUrl(agentId) ?? input.webhook_url ?? null) : (input.webhook_url ?? null);
+  const policy = defaultRegisteredPolicy(input);
+
+  const [agent] = await db
+    .insert(agents)
+    .values({
+      agentId,
+      name: input.name,
+      role: input.role,
+      specialties: input.specialties,
+      modelFamily: input.model_family,
+      model: input.model,
+      baselineConfidence: input.baseline_confidence,
+      costCeilingUsd: input.cost_ceiling_usd,
+      latencyClass: input.latency_class,
+      riskTolerance: input.risk_tolerance,
+      policy,
+      status: "pending_claim",
+      ownerUserId: null,
+      contact: input.contact ?? null,
+      webhookUrl,
+      description: input.description ?? null,
+    })
+    .returning();
+
+  await ensureAgentWallet(db, agentId);
+
+  for (const specialty of input.specialties.filter((s) => !s.startsWith("judge:"))) {
+    await db
+      .insert(trustAxes)
+      .values({
+        agentId,
+        category: specialty,
+        execution: null,
+        selection: null,
+        underwriting: null,
+        latency: null,
+        costHonesty: null,
+        judgment: null,
+        samples: 0,
+      })
+      .onConflictDoNothing();
+  }
+
+  // No runtime row yet: `POST /api/v1/keys {role:"seller"}` creates it (generating the
+  // `whsec_…` webhook secret) at the moment the agent actually takes a key, so we never store
+  // an empty seller-key ciphertext or hand out a webhook secret nobody asked for.
+
+  return { agent, agentId };
+}
+
+/**
+ * Bind an agent created by an unclaimed registration to the human who just claimed it, and make it
+ * hireable. Deliberately leaves a `disabled` status alone: adopting an agent must not undo an
+ * admin's decision.
+ */
+export async function adoptAgentForClaim(db: Db, agentId: string, ownerUserId: string): Promise<void> {
+  const row = await getAgentRow(db, agentId);
+  if (!row || row.ownerUserId === ownerUserId) return;
+  await db
+    .update(agents)
+    .set({
+      ownerUserId,
+      status: row.status === "pending_claim" ? "registered" : row.status,
+      updatedAt: new Date(),
+    })
+    .where(eq(agents.agentId, agentId));
+}
+
+/** Owner-only profile + enable/disable. Null when the caller does not own the agent. */
 /** Owner-only profile + enable/disable. Null when the caller does not own the agent. */
 export async function patchOwnedAgent(
   db: Db,

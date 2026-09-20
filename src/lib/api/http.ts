@@ -8,11 +8,14 @@
  */
 import { NextResponse } from "next/server";
 import { extractPresentedKey } from "@/lib/auth/api-keys";
+import type { ApiScope } from "@/lib/auth/scopes";
 import {
   attachChallenge,
   resolveBuyerRequestAuth,
+  resolveRegistrationAuth,
   resolveSellerRequestAuth,
   type BuyerAuth,
+  type RegistrationAuth,
   type SellerAuth,
 } from "@/lib/auth/bearer";
 import type { ApiKeyRow } from "@/lib/db/schema";
@@ -64,11 +67,25 @@ export async function requireSellerKey(
   };
 }
 
-export function absoluteUrl(request: Request, path: string): string {
-  const url = new URL(request.url);
+export function absoluteUrl(request: Request, path: string): string {  const url = new URL(request.url);
   const proto = request.headers.get("x-forwarded-proto") ?? url.protocol.replace(":", "");
   const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? url.host;
   return `${proto}://${host}${path}`;
+}
+
+/**
+ * Gate a route on an auth.md **registration** token carrying `scope`.
+ * Used by provider self-onboarding, where no seller agent exists yet.
+ */
+export async function requireRegistrationScope(
+  request: Request,
+  scope: ApiScope,
+): Promise<{ ok: true; auth: RegistrationAuth } | { ok: false; response: NextResponse }> {
+  const result = await resolveRegistrationAuth({ presented: extractPresentedKey(request.headers), scope });
+  if (!result.ok) {
+    return { ok: false, response: attachChallenge(jsonError(result.status, result.error), request) };
+  }
+  return { ok: true, auth: result.auth };
 }
 
 /** 503 when NeuraLake is not configured. Marketplace requests must not simulate. */

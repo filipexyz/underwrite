@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { issueApiKey, listApiKeys, revokeApiKey } from "@/lib/auth/api-keys";
+import { BUYER_SCOPE, SELLER_SCOPES } from "@/lib/auth/scopes";
 import { requireSignedInPage } from "@/lib/auth/session";
 import { getDb } from "@/lib/db/client";
 import { bindHostedSellerKey } from "@/lib/marketplace/agent-runtime";
@@ -17,7 +18,7 @@ export async function createBuyerKey(_prev: KeyFormState, formData: FormData): P
     name,
     role: "buyer",
     ownerUserId: userId,
-    scopes: ["requests"],
+    scopes: [BUYER_SCOPE],
   });
   revalidatePath("/keys");
   return { secret: issued.secret };
@@ -36,7 +37,7 @@ export async function createSellerKey(_prev: KeyFormState, formData: FormData): 
     role: "seller",
     ownerUserId: userId,
     agentId,
-    scopes: ["agents:me"],
+    scopes: [...SELLER_SCOPES],
   });
   await bindHostedSellerKey(db, agentId, issued.secret, issued.row.id);
   revalidatePath("/keys");

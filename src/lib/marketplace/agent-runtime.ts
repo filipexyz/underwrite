@@ -152,6 +152,49 @@ export async function bindHostedSellerKey(db: Db, agentId: string, sellerApiKey:
   await provisionHostedAgent(db, agentId);
 }
 
+/**
+ * Ensure a runtime row exists for `agentId`, bind a seller key to it, and provision the hosted
+ * runner when this agent is hosted by us.
+ *
+ * `bindHostedSellerKey` alone returns early when there is no runtime row — which is the normal case
+ * for an agent that self-registered through auth.md and is minting its first key. Creating the row
+ * here means the `whsec_…` webhook secret is generated exactly once, on the same call that hands
+ * out the key, so an agent is never given a key it cannot verify pushes with.
+ *
+ * Self-hosted agents (their own `webhook_url`) get the runtime row but are **not** provisioned to
+ * our Cloudflare runner: there is no Durable Object of ours for them.
+ */
+export async function ensureSellerKeyForAgent(
+  db: Db,
+  args: { agentId: string; sellerApiKey: string; sellerKeyId: string },
+): Promise<{ webhookSecret: string; created: boolean; provisioned: boolean }> {
+  const existing = await getRuntimeRow(db, args.agentId);
+  if (existing) {
+    await bindHostedSellerKey(db, args.agentId, args.sellerApiKey, args.sellerKeyId);
+    return {
+      webhookSecret: decryptSecret(existing.webhookSecretCiphertext),
+      created: false,
+      provisioned: Boolean(existing.provisionedAt),
+    };
+  }
+
+  const [agent] = await db
+    .select({ webhookUrl: agents.webhookUrl })
+    .from(agents)
+    .where(eq(agents.agentId, args.agentId))
+    .limit(1);
+  const hostedUrl = hostedWebhookUrl(args.agentId);
+  const kind: AgentRuntimeKind = agent?.webhookUrl && agent.webhookUrl !== hostedUrl ? "self_hosted" : "hosted";
+  const created = await createAgentRuntime(db, {
+    agentId: args.agentId,
+    kind,
+    sellerApiKey: args.sellerApiKey,
+    sellerKeyId: args.sellerKeyId,
+  });
+  if (kind === "hosted") await provisionHostedAgent(db, args.agentId);
+  return { webhookSecret: created.webhookSecret, created: true, provisioned: kind === "hosted" };
+}
+
 export async function updateAgentByok(
   db: Db,
   agentId: string,

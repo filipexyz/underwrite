@@ -28,6 +28,13 @@ export type SellerAuth =
   | { kind: "key"; key: ApiKeyRow; agentId: string }
   | { kind: "jwt"; claims: UnderwriteAccessClaims; agentId: string };
 
+export type RegistrationAuth = {
+  registrationId: string;
+  ownerUserId?: string;
+  agentId?: string;
+  scopes: string[];
+};
+
 export function buyerWalletOwnerId(auth: BuyerAuth): string | undefined {
   if (auth.kind === "key") return auth.key.ownerUserId ?? undefined;
   if (auth.kind === "session") return auth.userId;
@@ -98,8 +105,51 @@ export async function resolveSellerRequestAuth(opts: {
   return { ok: true, auth: { kind: "key", key: keyed.key, agentId: keyed.agentId } };
 }
 
-export function attachChallenge(response: NextResponse, request: Request): NextResponse {
-  if (!response.headers.has("WWW-Authenticate")) {
+/**
+ * Resolve a live auth.md registration token that carries `scope`, **without** requiring a bound
+ * seller agent.
+ *
+ * `resolveSellerRequestAuth` cannot serve provider self-onboarding: it insists on `claims.agent_id`,
+ * which is precisely what the caller is trying to create. This resolver is intentionally narrower —
+ * token only, no hashed keys, no session — so it can only ever be used by an agent that completed
+ * the auth.md flow.
+ */
+export async function resolveRegistrationAuth(opts: {
+  presented: string | null;
+  scope: ApiScope;
+}): Promise<{ ok: true; auth: RegistrationAuth } | AuthFailure> {
+  const { presented, scope } = opts;
+  if (!presented || !looksLikeJwt(presented)) {
+    return {
+      ok: false,
+      status: 401,
+      error: "missing bearer token: this endpoint requires a registration token from /agent/identity",
+    };
+  }
+  const claims = await verifyAccessToken(presented);
+  if (!claims) return { ok: false, status: 401, error: "missing or invalid access token" };
+  const { db } = await getDb();
+  if (!(await isAccessTokenLive(db, claims))) {
+    return { ok: false, status: 401, error: "access token was revoked" };
+  }
+  if (!hasScope(claims.scopes, scope)) {
+    return { ok: false, status: 403, error: `token is missing scope ${scope}` };
+  }
+  if (!claims.registration_id) {
+    return { ok: false, status: 401, error: "token is not bound to a registration" };
+  }
+  return {
+    ok: true,
+    auth: {
+      registrationId: claims.registration_id,
+      ownerUserId: claims.owner_user_id,
+      agentId: claims.agent_id,
+      scopes: claims.scopes,
+    },
+  };
+}
+
+export function attachChallenge(response: NextResponse, request: Request): NextResponse {  if (!response.headers.has("WWW-Authenticate")) {
     response.headers.set("WWW-Authenticate", wwwAuthenticate(request));
   }
   return response;
