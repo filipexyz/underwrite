@@ -196,9 +196,22 @@ export function parseUnderwriteEvent(raw: unknown): UnderwriteEvent | null {
   return null;
 }
 
+export function isHtmlBriefFile(file: BriefFile): boolean {
+  return /html/i.test(file.media_type) || /\.html?$/i.test(file.name);
+}
+
+export function briefHasHtmlFile(brief: PlanRequestEvent["brief"]): boolean {
+  return brief.files.some((file) => isHtmlBriefFile(file) && Boolean(file.content.trim()));
+}
+
+export function sourceHtmlFromBrief(brief: PlanRequestEvent["brief"]): string | undefined {
+  const htmlFile = brief.files.find((file) => isHtmlBriefFile(file) && file.content.trim());
+  return htmlFile?.content;
+}
+
 export function htmlFromBrief(brief: PlanRequestEvent["brief"]): string {
-  const htmlFile = brief.files.find((f) => /html/i.test(f.media_type) || /\.html?$/i.test(f.name));
-  if (htmlFile?.content.trim()) return htmlFile.content;
+  const html = sourceHtmlFromBrief(brief);
+  if (html) return html;
   const any = brief.files.find((f) => f.content.trim());
   if (any?.content.trim()) {
     return `<!doctype html><html><body><pre>${escapeHtml(any.content)}</pre></body></html>`;

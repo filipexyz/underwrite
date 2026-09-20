@@ -53,9 +53,10 @@ describe("parseUnderwriteEvent", () => {
     if (event?.type !== "accepted") throw new Error("expected accepted");
     expect(event.execute).toBe(true);
     expect(event.plan_id).toMatch(/^plan_/);
+    expect(event.constraints?.category).toBe("html_to_pdf");
   });
 
-  it("wraps a non-HTML specialty brief so execute can still render a PDF", () => {
+  it("wraps a non-HTML file as a <pre> page (compile helper only; specialty execute does not use this stub)", () => {
     const html = htmlFromBrief({
       requirement: "Act as an executor specializing in analista de investimentos.",
       files: [{ name: "brief.txt", media_type: "text/plain", content: "Specialty: analista de investimentos" }],

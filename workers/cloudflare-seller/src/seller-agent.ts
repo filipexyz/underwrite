@@ -396,6 +396,7 @@ export class SellerAgent extends Agent<Env, SellerState> {
       model: cfg.neuralakeModel,
       brief,
       accepted: event,
+      category: remembered?.constraints?.category ?? event.constraints?.category,
       signal,
     });
     try {

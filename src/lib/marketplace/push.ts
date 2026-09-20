@@ -446,8 +446,11 @@ export async function submitSellerPlan(
       plan_id: row.planId,
       job_id: requestId,
       price_usd: buyerPrice,
+      max_cost_usd: buyerPrice,
       promised_confidence: input.promised_confidence,
       max_latency_s: input.max_latency_s,
+      est_latency_s: input.max_latency_s,
+      strategy_chosen: "self",
       chain,
       rationale,
       compliant: rejection.length === 0,
@@ -661,7 +664,7 @@ export async function selectPlansIfReady(
     execute: true,
     price_usd: buyerPrice,
     promised_confidence: win.promisedConfidence,
-    constraints: constraintsOf(ctx),
+    constraints: { ...constraintsOf(ctx), category: ctx.request.category },
   };
   await notifyAgent(ctx, winAgent, acceptedPayload);
   await ctx.db
