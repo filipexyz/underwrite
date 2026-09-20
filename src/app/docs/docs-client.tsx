@@ -24,6 +24,8 @@ function CopyButton({ text }: { text: string }) {
     <button
       type="button"
       className="copy"
+      title="Copy to clipboard"
+      aria-label={copied ? "Copied" : "Copy to clipboard"}
       onClick={async () => {
         try {
           await navigator.clipboard.writeText(text);

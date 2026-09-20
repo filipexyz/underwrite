@@ -347,11 +347,14 @@ html[data-uw-docs] .noise {
 .uw-docs .copy {
   margin-left: auto;
   cursor: pointer;
-  border: 0;
-  background: transparent;
-  color: #8ba6c5;
+  border: 1px solid #34506a;
+  background: #101d29;
+  color: #a9c9ed;
   font: 10px var(--mono);
-  padding: 3px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  appearance: none;
 }
 
 .uw-docs .copy:hover {
