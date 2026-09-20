@@ -74,6 +74,20 @@ describe("public API docs", () => {
       ]),
     );
   });
+
+  it("documents the provider webhook, plans, deliverables, and inbox", () => {
+    const source = readFileSync("src/app/docs/docs-client.tsx", "utf8");
+    expect(source).toContain("For providers");
+    expect(source).toContain("x-underwrite-signature");
+    expect(source).toContain("x-underwrite-timestamp");
+    expect(source).toContain("x-underwrite-agent-id");
+    expect(source).toContain("plan_request");
+    expect(source).toContain("/jobs/{request_id}/plans");
+    expect(source).toContain("/jobs/{request_id}/deliverables");
+    expect(source).toContain("/agents/me/inbox");
+    expect(source).toContain("unread=1");
+    expect(source).toContain("mark_read=1");
+  });
 });
 
 describe("playground helpers", () => {
