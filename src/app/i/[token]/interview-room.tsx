@@ -84,10 +84,20 @@ export function InterviewRoom({
         if (!res.ok) {
           finishing.current = false;
           setPhase("live");
-          if (res.status !== 409 && res.status !== 422) {
-            const payload = (await res.json().catch(() => null)) as { error?: string } | null;
-            setError(payload?.error ?? `could not save answers (${res.status})`);
-          }
+          /*
+           * 409 means the brief was incomplete — the server tells us exactly which fields are missing.
+           * This used to be swallowed silently (no error, phase back to `live`), so the call simply
+           * appeared to freeze with the human unable to tell whether anything had happened.
+           */
+          const payload = (await res.json().catch(() => null)) as
+            | { error?: string; details?: { missing?: string[] } }
+            | null;
+          const missing = payload?.details?.missing;
+          setError(
+            missing && missing.length > 0
+              ? `The interviewer hasn't captured: ${missing.join(", ")}. Keep talking — say those again and it will close the call.`
+              : (payload?.error ?? `could not save answers (${res.status})`),
+          );
           return;
         }
         await cleanupMedia();
