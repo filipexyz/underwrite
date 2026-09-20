@@ -1,6 +1,6 @@
 /**
  * POST /api/v1/jobs/[requestId]/deliverables — seller key, winner only.
- * Body must include worker-produced `artifact.pdf_base64` (no platform render).
+ * Body must include a worker-produced artifact (`pdf_base64`, `html`, or `markdown`).
  * Runs existing verification against the plan promise, then RELEASE or WITHHOLD.
  */
 import { NextResponse } from "next/server";

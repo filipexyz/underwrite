@@ -20,6 +20,7 @@ import { agents, trustAxes, trustPairwise, wallets } from "./schema";
 
 export const TASK_CATEGORY = "html_to_pdf";
 export const RENDER_SPECIALTY = "pdf_render";
+export const JUDGE_CATEGORIES = ["html_to_pdf", "landing_page", "dashboard", "research_report"] as const;
 
 export type SeedAgent = {
   agent_id: string;
@@ -235,7 +236,7 @@ export const SEED_AGENTS: SeedAgent[] = [
     agent_id: "j1-judge",
     name: "J1 · Judge",
     role: "judge",
-    specialties: [`judge:${TASK_CATEGORY}`],
+    specialties: JUDGE_CATEGORIES.map((c) => `judge:${c}`),
     model_family: "family-beta",
     model: "beta-judge-mini",
     baseline_confidence: 0.9,
@@ -264,7 +265,7 @@ export const SEED_AGENTS: SeedAgent[] = [
     agent_id: "j2-judge",
     name: "J2 · Judge",
     role: "judge",
-    specialties: [`judge:${TASK_CATEGORY}`],
+    specialties: JUDGE_CATEGORIES.map((c) => `judge:${c}`),
     model_family: "family-delta",
     model: "delta-judge-mini",
     baseline_confidence: 0.9,

@@ -14,11 +14,11 @@ import {
   decodePDFRawStream,
   type PDFPage,
 } from "pdf-lib";
-import type { PdfArtifact } from "@/lib/marketplace/artifact";
+import { extractLinks, stripHtml, type ArtifactKind, type DeliveryArtifact } from "@/lib/marketplace/artifact";
 
 export type ArtifactFacts = {
   artifact_ref: string;
-  kind: "pdf";
+  kind: ArtifactKind;
   valid: boolean;
   pages: number;
   text: string;
@@ -28,6 +28,20 @@ export type ArtifactFacts = {
   bytes: number;
   observed_latency_ms: number;
   declared_latency_ms: number;
+  title: string | null;
+  sections: string[];
+  has_viewport_meta: boolean;
+  cta_selectors_found: string[];
+  metrics_found: string[];
+  filters_found: string[];
+  screenshots_count: number;
+  word_count: number;
+  has_lang: boolean;
+  images_missing_alt: number;
+  has_primary_view: boolean;
+  data_payload_nonempty: boolean;
+  has_sources_section: boolean;
+  broken_required_assets: string[];
 };
 
 export type InspectMeta = {
@@ -36,9 +50,18 @@ export type InspectMeta = {
   declared_latency_ms: number;
 };
 
-const EMPTY_FACTS = (meta: InspectMeta, bytes: number, valid: boolean): ArtifactFacts => ({
+function wordCountOf(text: string): number {
+  const trimmed = text.trim();
+  return trimmed ? trimmed.split(/\s+/).length : 0;
+}
+
+function looksLikeSources(value: string): boolean {
+  return /\b(sources?|citations?|references?|bibliography)\b/i.test(value);
+}
+
+const EMPTY_FACTS = (meta: InspectMeta, bytes: number, valid: boolean, kind: ArtifactKind = "pdf"): ArtifactFacts => ({
   artifact_ref: meta.artifact_ref,
-  kind: "pdf",
+  kind,
   valid,
   pages: 0,
   text: "",
@@ -48,6 +71,20 @@ const EMPTY_FACTS = (meta: InspectMeta, bytes: number, valid: boolean): Artifact
   bytes,
   observed_latency_ms: meta.observed_latency_ms,
   declared_latency_ms: meta.declared_latency_ms,
+  title: null,
+  sections: [],
+  has_viewport_meta: false,
+  cta_selectors_found: [],
+  metrics_found: [],
+  filters_found: [],
+  screenshots_count: 0,
+  word_count: 0,
+  has_lang: false,
+  images_missing_alt: 0,
+  has_primary_view: false,
+  data_payload_nonempty: false,
+  has_sources_section: false,
+  broken_required_assets: [],
 });
 
 function asDict(value: unknown): PDFDict | null {
@@ -384,29 +421,178 @@ export async function inspectPdfBytes(bytes: Uint8Array, meta: InspectMeta): Pro
       links.push(...pageLinks(page));
     }
 
+    const text = texts.join(" ").replace(/\s+/g, " ").trim();
     return {
       artifact_ref: meta.artifact_ref,
       kind: "pdf",
       valid: pages.length > 0,
       pages: pages.length,
-      text: texts.join(" ").replace(/\s+/g, " ").trim(),
+      text,
       overflow_regions: overflow,
       fonts_embedded: fonts > 0 && embedded === fonts,
       links: [...new Set(links)],
       bytes: length,
       observed_latency_ms: meta.observed_latency_ms,
       declared_latency_ms: meta.declared_latency_ms,
+      title: text ? text.slice(0, 80) : null,
+      sections: [],
+      has_viewport_meta: false,
+      cta_selectors_found: [],
+      metrics_found: [],
+      filters_found: [],
+      screenshots_count: 0,
+      word_count: wordCountOf(text),
+      has_lang: false,
+      images_missing_alt: 0,
+      has_primary_view: false,
+      data_payload_nonempty: text.length > 0,
+      has_sources_section: looksLikeSources(text),
+      broken_required_assets: [],
     };
   } catch {
     return EMPTY_FACTS(meta, length, false);
   }
 }
 
-export async function inspectArtifact(artifact: PdfArtifact): Promise<ArtifactFacts> {
-  const bytes = new Uint8Array(Buffer.from(artifact.pdf_base64, "base64"));
-  return inspectPdfBytes(bytes, {
+const CTA_COPY = /\b(get started|sign[\s-]?up|subscribe|buy now|start now|join|register|book|contact us|try|download|learn more|cta)\b/i;
+
+function headingTexts(html: string): string[] {
+  return [...html.matchAll(/<h[1-3][^>]*>([\s\S]*?)<\/h[1-3]>/gi)].map((m) => stripHtml(m[1])).filter(Boolean);
+}
+
+function findCtas(html: string): string[] {
+  const found: string[] = [];
+  const tags = html.matchAll(/<(a|button)(\s[^>]*)?>([\s\S]*?)<\/\1>/gi);
+  for (const m of tags) {
+    const name = m[1].toLowerCase();
+    const attrs = m[2] ?? "";
+    const text = stripHtml(m[3]);
+    const cls = /class\s*=\s*["']([^"']+)/i.exec(attrs)?.[1] ?? "";
+    if (name === "button" || /cta|btn|button/i.test(cls) || /role\s*=\s*["']button/i.test(attrs) || CTA_COPY.test(text)) {
+      found.push(name === "button" ? "button" : /cta/i.test(cls) ? "a.cta" : `a:${text.slice(0, 40)}`);
+    }
+  }
+  if (/<input\b[^>]*type\s*=\s*["']submit/i.test(html)) found.push("input[type=submit]");
+  return [...new Set(found)];
+}
+
+function findMetrics(html: string): string[] {
+  const found: string[] = [];
+  for (const m of html.matchAll(/data-metric\s*=\s*["']([^"']+)["']/gi)) found.push(m[1]);
+  for (const m of html.matchAll(/<(?:div|span|p|li|dd|td)\b[^>]*class\s*=\s*["'][^"']*\b(?:metric|kpi|stat)\b[^"']*["'][^>]*>([\s\S]*?)<\//gi)) {
+    const text = stripHtml(m[1]);
+    if (text) found.push(text.slice(0, 40));
+  }
+  return [...new Set(found)];
+}
+
+function findFilters(html: string): string[] {
+  const found: string[] = [];
+  if (/<select\b/i.test(html)) found.push("select");
+  if (/<input\b[^>]*type\s*=\s*["']search/i.test(html)) found.push("input[type=search]");
+  if (/data-filter\b/i.test(html) || /class\s*=\s*["'][^"']*\bfilter/i.test(html)) found.push("[data-filter]");
+  return found;
+}
+
+function brokenAssets(html: string): string[] {
+  const broken: string[] = [];
+  const assets = html.matchAll(/<(img|script|link)\b([^>]*)\/?>/gi);
+  for (const m of assets) {
+    const tag = m[1].toLowerCase();
+    const attrs = m[2] ?? "";
+    const href = /(?:src|href)\s*=\s*["']([^"']*)["']/i.exec(attrs)?.[1];
+    const needs = tag === "link" ? /rel\s*=\s*["']stylesheet/i.test(attrs) : true;
+    if (!needs) continue;
+    if (href === undefined || href.trim() === "" || href === "#" || href.toLowerCase().startsWith("javascript:")) {
+      broken.push(tag);
+    }
+  }
+  return broken;
+}
+
+function inspectHtmlString(html: string, meta: InspectMeta): ArtifactFacts {
+  const title =
+    /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html)?.[1]?.replace(/\s+/g, " ").trim() ||
+    /<h1[^>]*>([\s\S]*?)<\/h1>/i.exec(html)?.[1]?.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim() ||
+    null;
+  const sections = headingTexts(html);
+  const text = stripHtml(html);
+  const images = [...html.matchAll(/<img\b([^>]*)\/?>/gi)];
+  const imagesMissingAlt = images.filter((m) => !/\balt\s*=/i.test(m[1] ?? "")).length;
+  const jsonBlocks = [...html.matchAll(/<script\b[^>]*type\s*=\s*["']application\/json["'][^>]*>([\s\S]*?)<\/script>/gi)];
+  const jsonNonempty = jsonBlocks.some((m) => {
+    try {
+      const parsed = JSON.parse(m[1]);
+      return parsed && (Array.isArray(parsed) ? parsed.length > 0 : typeof parsed === "object" ? Object.keys(parsed).length > 0 : true);
+    } catch {
+      return m[1].trim().length > 0;
+    }
+  });
+  const tableRows = (html.match(/<tr\b/gi) ?? []).length;
+  const valid = /<!doctype html|<html\b|<body\b|<head\b/i.test(html) || (/<[a-z][\s\S]*>/i.test(html) && text.length > 0);
+
+  return {
+    ...EMPTY_FACTS(meta, html.length, valid, "html"),
+    text,
+    links: extractLinks(html),
+    title,
+    sections,
+    has_viewport_meta: /<meta\b[^>]*name\s*=\s*["']viewport["']/i.test(html),
+    cta_selectors_found: findCtas(html),
+    metrics_found: findMetrics(html),
+    filters_found: findFilters(html),
+    word_count: wordCountOf(text),
+    has_lang: /<html\b[^>]*\blang\s*=/i.test(html),
+    images_missing_alt: imagesMissingAlt,
+    has_primary_view: /<main\b|role\s*=\s*["']main["']|class\s*=\s*["'][^"']*\b(dashboard|chart|panel|grid)\b|<table\b/i.test(html),
+    data_payload_nonempty: jsonNonempty || tableRows > 1,
+    has_sources_section: sections.some(looksLikeSources) || looksLikeSources(text),
+    broken_required_assets: brokenAssets(html),
+  };
+}
+
+function markdownLinks(md: string): string[] {
+  return [...md.matchAll(/\[[^\]]*]\((https?:[^)\s]+)\)/g)].map((m) => m[1]);
+}
+
+function inspectMarkdownString(md: string, meta: InspectMeta): ArtifactFacts {
+  const headings = [...md.matchAll(/^#{1,3}\s+(.+)$/gm)].map((m) => m[1].trim());
+  const text = md.replace(/\s+/g, " ").trim();
+  return {
+    ...EMPTY_FACTS(meta, md.length, md.trim().length > 0, "md"),
+    text,
+    links: markdownLinks(md),
+    title: headings[0] ?? (text ? text.slice(0, 80) : null),
+    sections: headings,
+    word_count: wordCountOf(md),
+    has_sources_section: headings.some(looksLikeSources) || looksLikeSources(md) || markdownLinks(md).length > 0,
+    data_payload_nonempty: md.trim().length > 0,
+  };
+}
+
+function inspectMetaOf(artifact: DeliveryArtifact): InspectMeta {
+  return {
     artifact_ref: artifact.artifact_ref,
     observed_latency_ms: artifact.observed_latency_ms,
     declared_latency_ms: artifact.declared_latency_ms,
-  });
+  };
+}
+
+export async function inspectArtifact(artifact: DeliveryArtifact): Promise<ArtifactFacts> {
+  const meta = inspectMetaOf(artifact);
+  const screenshots = artifact.screenshots?.length ?? 0;
+  const withShots = (facts: ArtifactFacts): ArtifactFacts => ({ ...facts, screenshots_count: screenshots });
+
+  if (artifact.kind === "html" || (artifact.html && artifact.kind !== "pdf" && artifact.kind !== "md")) {
+    return withShots(inspectHtmlString(artifact.html ?? "", meta));
+  }
+  if (artifact.kind === "md" || artifact.markdown) {
+    return withShots(inspectMarkdownString(artifact.markdown ?? "", meta));
+  }
+  if (artifact.pdf_base64) {
+    const bytes = new Uint8Array(Buffer.from(artifact.pdf_base64, "base64"));
+    return withShots(await inspectPdfBytes(bytes, meta));
+  }
+  if (artifact.html) return withShots(inspectHtmlString(artifact.html, meta));
+  return EMPTY_FACTS(meta, 0, false, artifact.kind);
 }

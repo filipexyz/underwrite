@@ -196,21 +196,37 @@ export const JobPlanInput = z.object({
 });
 export type JobPlanInput = z.infer<typeof JobPlanInput>;
 
-/**
- * Worker-produced PDF. The platform inspects `pdf_base64` bytes — it does not
- * render or invent an artifact on the push path.
- */
-export const JobDeliverableArtifact = z.object({
-  pdf_base64: z.string().min(20),
-  artifact_ref: z.string().min(1).optional(),
-  kind: z.literal("pdf").optional(),
-  observed_latency_ms: z.number().nonnegative().optional(),
-  declared_latency_ms: z.number().nonnegative().optional(),
-  self_report: unit.optional(),
+export const JobDeliverableScreenshot = z.object({
+  name: z.string().optional(),
+  viewport: z.string().optional(),
+  data_base64: z.string().optional(),
 });
+
+/**
+ * Worker-produced artifact. PDF remains the default (`pdf_base64`); HTML and
+ * Markdown are accepted so landing / dashboard / research jobs can deliver
+ * without inventing a PDF.
+ */
+export const JobDeliverableArtifact = z
+  .object({
+    pdf_base64: z.string().min(20).optional(),
+    html: z.string().min(1).optional(),
+    markdown: z.string().min(1).optional(),
+    md: z.string().min(1).optional(),
+    url: z.string().optional(),
+    screenshots: z.array(JobDeliverableScreenshot).optional(),
+    artifact_ref: z.string().min(1).optional(),
+    kind: z.enum(["pdf", "html", "md", "markdown"]).optional(),
+    observed_latency_ms: z.number().nonnegative().optional(),
+    declared_latency_ms: z.number().nonnegative().optional(),
+    self_report: unit.optional(),
+  })
+  .refine((value) => Boolean(value.pdf_base64 || value.html || value.markdown || value.md), {
+    message: "artifact must include pdf_base64, html, or markdown",
+  });
 export type JobDeliverableArtifact = z.infer<typeof JobDeliverableArtifact>;
 
-/** Winner deliverable. `artifact.pdf_base64` is required. */
+/** Winner deliverable. One of `pdf_base64`, `html`, or `markdown` is required. */
 export const JobDeliverableInput = z.object({
   artifact: JobDeliverableArtifact,
   self_confidence: unit.optional(),

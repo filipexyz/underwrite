@@ -9,13 +9,14 @@
 import type { Verdict, Verification, VerificationSpec } from "@/lib/contracts";
 import { verifications, type VerificationRow } from "@/lib/db/schema";
 import { newId } from "@/lib/ids";
-import type { PdfArtifact, SourceDocument } from "@/lib/marketplace/artifact";
+import type { DeliveryArtifact, SourceDocument } from "@/lib/marketplace/artifact";
 import type { EngineContext } from "@/lib/marketplace/context";
 import type { RegistryAgent } from "@/lib/marketplace/registry";
 import { runChecks } from "./checks";
 import { computeConfidence, processSignal } from "./confidence";
 import { inspectArtifact } from "./inspect";
 import { runJudges, type JudgingResult } from "./judges";
+import { scopeChecks } from "./rubric";
 
 export type VerificationOutcome = {
   verification: Verification;
@@ -36,17 +37,27 @@ export function trackRecordOf(agent: RegistryAgent): number {
 export async function verifyArtifact(
   ctx: EngineContext,
   args: {
-    artifact: PdfArtifact;
+    artifact: DeliveryArtifact;
     source: SourceDocument;
     producer: RegistryAgent;
     chainAgentIds: string[];
     planId: string;
     spec: VerificationSpec;
     artifactEventId: string | null;
+    category?: string;
+    taskRequirement?: string;
   },
 ): Promise<VerificationOutcome> {
   const facts = await inspectArtifact(args.artifact);
-  const result = runChecks(args.spec, facts, args.source);
+  const category = args.category ?? ctx.request.category;
+  const taskRequirement = args.taskRequirement ?? ctx.request.requirement;
+  const spec = scopeChecks(args.spec, taskRequirement, {
+    category,
+    artifact_kind: facts.kind,
+    screenshots_count: facts.screenshots_count,
+    min_length: args.source.min_word_count,
+  });
+  const result = runChecks(spec, facts, args.source);
 
   const checkEventIds: string[] = [];
   for (const check of result.checks) {
@@ -62,7 +73,7 @@ export async function verifyArtifact(
         detail: check.detail,
         artifact_ref: facts.artifact_ref,
         producer_agent_id: args.producer.agentId,
-        rubric_version: args.spec.rubric_version,
+        rubric_version: spec.rubric_version,
       },
     });
     checkEventIds.push(event.event_id);
@@ -70,7 +81,7 @@ export async function verifyArtifact(
 
   let verdict: Verdict;
   if (!result.conclusive || result.objective === null) verdict = "inconclusive";
-  else verdict = result.objective >= args.spec.required_passing ? "pass" : "fail";
+  else verdict = result.objective >= spec.required_passing ? "pass" : "fail";
 
   let judging: JudgingResult = { judges: [], agreement: null, judges_disagree: false, event_ids: [], skipped: [] };
   if (verdict !== "fail") {
@@ -79,8 +90,10 @@ export async function verifyArtifact(
       chainAgentIds: args.chainAgentIds,
       facts,
       source: args.source,
-      spec: args.spec,
+      spec,
       parentEventId: args.artifactEventId,
+      taskRequirement,
+      category,
     });
     if (verdict === "inconclusive" && judging.judges.length > 0) {
       const all = new Set(judging.judges.map((j) => j.verdict));

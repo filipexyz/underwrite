@@ -106,6 +106,7 @@ export function discover(
     .sort((a, b) => a.agentId.localeCompare(b.agentId));
 }
 
+/** Judges registered for this task category (`judge:${category}`). */
 export function judgesFor(registry: Registry, category: string): RegistryAgent[] {
   return [...registry.agents.values()]
     .filter((a) => a.role === "judge" && a.specialties.includes(`judge:${category}`))

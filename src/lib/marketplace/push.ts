@@ -23,7 +23,7 @@ import {
 import { env } from "@/lib/env";
 import { newId } from "@/lib/ids";
 import { inspectArtifact } from "@/lib/verification/inspect";
-import type { PdfArtifact } from "./artifact";
+import type { DeliveryArtifact } from "./artifact";
 import { buildContext, RULES, setRequestStatus, type EngineContext } from "./context";
 import { finalizeRequest, verifyDelivery, settleChain } from "./engine";
 import {
@@ -704,26 +704,39 @@ export async function selectPlansIfReady(
   return { selected: true, winner_agent_id: win.agentId };
 }
 
-function artifactFromInput(agent: RegistryAgent, input: JobDeliverableInput): PdfArtifact {
+function artifactFromInput(agent: RegistryAgent, input: JobDeliverableInput): DeliveryArtifact {
   const raw = input.artifact;
-  const pdf_base64 = raw.pdf_base64.replace(/\s+/g, "");
-  const bytes = Buffer.from(pdf_base64, "base64");
-  const header = bytes.subarray(0, 5).toString("latin1");
-  if (header !== "%PDF-") {
-    throw new PushJobError(422, "artifact.pdf_base64 is not a PDF");
-  }
+  const html = raw.html?.trim();
+  const markdown = (raw.markdown ?? raw.md)?.trim();
+  const pdf_base64 = raw.pdf_base64?.replace(/\s+/g, "");
+  const kind = raw.kind === "markdown" ? "md" : raw.kind;
   const self =
     input.self_confidence ?? raw.self_report ?? agent.policy.execution?.self_report ?? agent.baselineConfidence;
   const declared = raw.declared_latency_ms ?? 0;
-  return {
+  const base = {
     artifact_ref: raw.artifact_ref?.trim() || newId("art"),
-    kind: "pdf",
     producer_agent_id: agent.agentId,
-    pdf_base64,
     self_report: self,
     observed_latency_ms: raw.observed_latency_ms ?? declared,
     declared_latency_ms: declared,
+    screenshots: raw.screenshots,
+    url: raw.url,
   };
+
+  if (kind === "html" || (html && kind !== "pdf" && kind !== "md")) {
+    if (!html) throw new PushJobError(422, "artifact.html is required for html deliverables");
+    return { ...base, kind: "html", html };
+  }
+  if (kind === "md" || (markdown && kind !== "pdf")) {
+    if (!markdown) throw new PushJobError(422, "artifact.markdown is required for markdown deliverables");
+    return { ...base, kind: "md", markdown };
+  }
+  if (!pdf_base64) throw new PushJobError(422, "artifact.pdf_base64 is not a PDF");
+  const header = Buffer.from(pdf_base64, "base64").subarray(0, 5).toString("latin1");
+  if (header !== "%PDF-") {
+    throw new PushJobError(422, "artifact.pdf_base64 is not a PDF");
+  }
+  return { ...base, kind: "pdf", pdf_base64 };
 }
 
 export async function submitDeliverable(
