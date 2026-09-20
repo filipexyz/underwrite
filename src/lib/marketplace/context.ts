@@ -63,10 +63,41 @@ export async function setRequestStatus(
   ctx.request = { ...ctx.request, status, ...extra };
 }
 
-/** Real pause between hops so the console visibly streams on stage (0 by default). */
-export async function pace(): Promise<void> {
-  const ms = env.demoStepDelayMs;
-  if (ms > 0) await new Promise((r) => setTimeout(r, ms));
+/**
+ * The cadence of a run, in ms.
+ *
+ * A marketplace that settles in 600ms reads as a mock no matter how real the money is, and the person
+ * watching cannot see the parts they are meant to judge. These are not latency theatre: each pause sits
+ * where a real step would take time — a bid being planned, a contract being locked, an artifact being
+ * rendered, a verifier reading it — so the screen fills at the speed the work would actually fill it.
+ */
+export const DEMO_PACING = {
+  /** One bid being planned and priced. */
+  bid_ms: 600,
+  /** One hop's contract being locked. */
+  contract_ms: 450,
+  /** A verifier reading the artifact and reaching a verdict. */
+  verify_ms: 1600,
+  /** Floor for an execution beat, so even an agent declaring 0s is visibly doing something. */
+  execute_floor_ms: 1800,
+} as const;
+
+/** Tests never sleep: a suite that waits on wall clock is a suite nobody runs. */
+function isTestRun(): boolean {
+  return process.env.VITEST === "true" || process.env.NODE_ENV === "test";
+}
+
+/**
+ * Real pause at a step boundary.
+ *
+ * `DEMO_STEP_DELAY_MS` still overrides the whole cadence with a single fixed value when a stage needs a
+ * different rhythm, but nothing has to be configured for the demo to look like work.
+ */
+export async function pace(ms: number): Promise<void> {
+  if (isTestRun()) return;
+  const override = env.demoStepDelayMs;
+  const wait = override > 0 ? override : ms;
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
 }
 
 // ---------------------------------------------------------------------------

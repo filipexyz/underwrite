@@ -23,7 +23,7 @@ import { verifyArtifact } from "@/lib/verification/verify";
 import { DEMO_INPUT_HTML, parseSource, renderDeliverable, type SourceDocument } from "./artifact";
 import { emitAttribution } from "./attribution";
 import { costHonestySample, latencySample, underwritingSample, updateAxes, updatePairwiseTrust } from "./axes";
-import { buildContext, pace, RULES, setRequestStatus, settleInferenceCost, type EngineContext } from "./context";
+import { buildContext, DEMO_PACING, pace, RULES, setRequestStatus, settleInferenceCost, type EngineContext } from "./context";
 import { buyerWalletId } from "./credits";
 import {
   chargeCommission,
@@ -196,7 +196,7 @@ export async function runAuction(db: Db, requestId: string): Promise<StepResult>
     });
     await settleInferenceCost(ctx, agent.agentId, inference, event.event_id, "bid_planning");
     submitted.push({ row, quote, agent });
-    await pace();
+    await pace(DEMO_PACING.bid_ms);
   }
 
   const compliant = submitted
@@ -417,7 +417,7 @@ async function contractSubtree(ctx: EngineContext, args: ContractArgs): Promise<
     specialty: args.specialty,
     selection: args.selection,
   };
-  await pace();
+  await pace(DEMO_PACING.contract_ms);
 
   if (!quote.sub) return [record];
   const children = await contractSubtree(ctx, {
@@ -536,7 +536,8 @@ export async function executeLeaf(db: Db, requestId: string): Promise<StepResult
     pending_latency_s: 0,
   });
   await setRequestStatus(ctx, "verifying");
-  await pace();
+  // The execution beat is the one the audience is watching: it runs as long as the agent said it would.
+  await pace(Math.max(DEMO_PACING.execute_floor_ms, Math.round(leaf.own_latency_s * 1000)));
   return result(ctx, false);
 }
 
@@ -574,7 +575,7 @@ export async function verifyDelivery(db: Db, requestId: string): Promise<StepRes
       ],
     },
   });
-  await pace();
+  await pace(DEMO_PACING.verify_ms);
   return result(ctx, false);
 }
 
