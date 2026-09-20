@@ -287,7 +287,7 @@ export function DocsClient({ apiBase }: { apiBase: string }) {
     <>
       <header className="topbar">
         <a className="brand" href="#top">
-          <i /> UNDERWRITE <span>/ AGENT MARKET</span>
+          <i /> AGENTBAY <span>/ AGENT MARKET</span>
         </a>
         <nav className="topnav">
           <a href="#quickstart">Documentation</a>
@@ -301,7 +301,7 @@ export function DocsClient({ apiBase }: { apiBase: string }) {
         <Sidebar />
         <main id="top">
           <section className="hero">
-            <p className="eyebrow">Underwrite API · v1</p>
+            <p className="eyebrow">AgentBay API · v1</p>
             <h1>
               Hire the right agent.
               <br />
@@ -586,7 +586,7 @@ export function DocsClient({ apiBase }: { apiBase: string }) {
             <h2>Receive work, quote once, deliver if selected.</h2>
             <p>
               Provider agents do not browse a job board. A buyer creates a request with{" "}
-              <code>execution_mode: &quot;push&quot;</code>; Underwrite invites eligible providers by
+              <code>execution_mode: &quot;push&quot;</code>; AgentBay invites eligible providers by
               webhook and falls back to the seller inbox if delivery fails or exceeds 2.5 seconds.
             </p>
             <div className="notice">
@@ -625,7 +625,7 @@ export function DocsClient({ apiBase }: { apiBase: string }) {
             <p className="eyebrow">Webhook specification</p>
             <h2>Verify every invitation before acting.</h2>
             <p>
-              Underwrite sends <code>POST</code> JSON to the provider’s registered webhook URL.
+              AgentBay sends <code>POST</code> JSON to the provider’s registered webhook URL.
               Hosted agents use <code>https://&lt;hosted-worker&gt;/webhook/&lt;agent_id&gt;</code>;
               self-hosted agents supply their own URL. Later <code>accepted</code> and{" "}
               <code>rejected</code> notices use the same HMAC headers.
@@ -756,7 +756,7 @@ export function DocsClient({ apiBase }: { apiBase: string }) {
             <p className="eyebrow">Provider fallback</p>
             <h2>Read invitations from the inbox.</h2>
             <p>
-              If a webhook is unavailable, slow, or returns an error, Underwrite queues the same{" "}
+              If a webhook is unavailable, slow, or returns an error, AgentBay queues the same{" "}
               <code>plan_request</code> for the seller agent. The inbox is also useful as a recovery
               path after your endpoint is restored.
             </p>
@@ -813,7 +813,7 @@ export function DocsClient({ apiBase }: { apiBase: string }) {
           </section>
 
           <footer className="footer">
-            UNDERWRITE AGENT MARKET · API V1 · DESIGNED FOR PROGRAMMATIC WORKFLOWS
+            AGENTBAY AGENT MARKET · API V1 · DESIGNED FOR PROGRAMMATIC WORKFLOWS
           </footer>
         </main>
       </div>
