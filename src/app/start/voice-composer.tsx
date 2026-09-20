@@ -56,6 +56,20 @@ export function VoiceComposer({ startPath }: { startPath: string }) {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [result, setResult] = useState<{ requestId: string; summary: string } | null>(null);
   const router = useRouter();
+  /**
+   * On-screen trace of what is happening during the call.
+   *
+   * Requested directly: "quero ver na tela o que ta rolando". Console logs are useless on a call someone is
+   * having out loud, and a stalled agent is indistinguishable from a slow one without seeing which turns
+   * arrived, whether a brief was detected, and what the finalize attempt answered.
+   */
+  const [trace, setTrace] = useState<Array<{ at: number; text: string }>>([]);
+  const traceRef = useRef<Array<{ at: number; text: string }>>([]);
+  const log = useCallback((text: string) => {
+    const next = [...traceRef.current, { at: Date.now(), text }].slice(-40);
+    traceRef.current = next;
+    setTrace(next);
+  }, []);
 
   const rtcRef = useRef<import("agora-rtc-sdk-ng").IAgoraRTCClient | null>(null);
   const micRef = useRef<import("agora-rtc-sdk-ng").IMicrophoneAudioTrack | null>(null);
@@ -135,6 +149,7 @@ export function VoiceComposer({ startPath }: { startPath: string }) {
       if (finishing.current || !sessionId) return;
       finishing.current = true;
       setPhase("ending");
+      log("POST /finalize …");
       try {
         const res = await fetch(`/api/v1/voice/sessions/${sessionId}/finalize`, {
           method: "POST",
@@ -143,6 +158,7 @@ export function VoiceComposer({ startPath }: { startPath: string }) {
           body: JSON.stringify({ transcript_json: turns, ...(brief ? { brief } : {}) }),
         });
         const body = (await res.json().catch(() => ({}))) as FinalizePayload;
+        log("finalize -> " + res.status + " " + JSON.stringify(body).slice(0, 300));
         if (!res.ok || !body.request_id) {
           finishing.current = false;
           setPhase("live");
@@ -178,6 +194,7 @@ export function VoiceComposer({ startPath }: { startPath: string }) {
   const maybeFinish = useCallback(
     (turns: TranscriptTurn[]) => {
       const brief = extractBriefFromTurns(turns);
+      log(brief ? "brief DETECTED in transcript -> submitting" : "settled turn, no complete brief yet");
       if (brief) void finish(turns, brief);
     },
     [finish],
@@ -251,7 +268,10 @@ export function VoiceComposer({ startPath }: { startPath: string }) {
       rtmRef.current = rtm;
       rtm.addEventListener("message", (event: { message: unknown }) => {
         const parsed = parseRtmMessage(event.message);
-        if (parsed.kind === "state") setAgentState(parsed.state);
+        if (parsed.kind === "state") {
+          setAgentState(parsed.state);
+          log("rtm state: " + parsed.state);
+        }
         if (parsed.kind === "error") {
           /*
            * The agent's failure arrives here and nowhere else — the server's `session.start()` already
@@ -259,6 +279,7 @@ export function VoiceComposer({ startPath }: { startPath: string }) {
            * text on screen and persist it, instead of a truncated line nobody can act on.
            */
           setError(`agent error: ${parsed.message}`);
+          log("agent ERROR: " + parsed.message.slice(0, 400));
           setAgentError(parsed.message);
         }
         if (parsed.kind === "transcript") {
@@ -266,6 +287,7 @@ export function VoiceComposer({ startPath }: { startPath: string }) {
           // questions with no answers, which reads as a frozen call.
           setTranscript((prev) => {
             const next = upsertTranscript(prev, parsed.turn, parsed.inProgress);
+            if (!parsed.inProgress) log("turn " + parsed.turn.role + ": " + parsed.turn.text.slice(0, 160));
             if (!parsed.inProgress && parsed.turn.role === "assistant") maybeFinish(next);
             return next;
           });
@@ -317,6 +339,19 @@ export function VoiceComposer({ startPath }: { startPath: string }) {
     <section className="border border-line bg-paper flex flex-col">
       <div className="flex flex-col items-center gap-3 px-6 pt-8 pb-6 text-center">
         <span className={phase === "live" ? "live-dot" : "live-dot opacity-40"} aria-hidden />
+        <div className="w-full border border-line bg-paper text-left">
+          <p className="px-3 pt-2 eyebrow !mb-1">what is happening</p>
+          <ol className="px-3 pb-3 flex flex-col gap-1 max-h-40 overflow-y-auto font-mono text-[10px] leading-relaxed">
+            {trace.length === 0 ? <li className="text-muted">nothing yet</li> : null}
+            {[...trace].reverse().map((e, i) => (
+              <li key={e.at + "-" + i} className="text-[#53605a]">
+                <span className="text-muted">{new Date(e.at).toLocaleTimeString()} </span>
+                {e.text}
+              </li>
+            ))}
+          </ol>
+        </div>
+
         <p className="eyebrow !mb-0">
           {phase === "live" ? `${agentConnected ? agentState : "waiting for the agent's audio"} · ${elapsed}s` : phase}
         </p>
