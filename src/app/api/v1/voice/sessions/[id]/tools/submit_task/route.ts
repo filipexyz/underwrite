@@ -25,6 +25,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  console.log("[voice-tool] submit_task invoked");
   const expected = String(env.agora.certificate ?? "").trim();
   if (!expected) return jsonError(503, "agora is not configured");
   const presented = (request.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
@@ -38,6 +39,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   }
   // Agora renders `{{args.x}}` preserving types, but a numeric argument can still arrive as a string, so
   // coerce before validating rather than rejecting a usable call.
+  console.log("[voice-tool] raw body", JSON.stringify(body));
   const coerced = coerceNumbers(body);
   const parsed = VoiceTaskBrief.safeParse(coerced);
   if (!parsed.success) {
@@ -55,6 +57,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   try {
     const submitted = await submitVoiceBrief(db, { session, brief: parsed.data });
+    console.log("[voice-tool] submitted", JSON.stringify({ session: id, request_id: submitted.requestId }));
     return NextResponse.json({
       ok: true,
       request_id: submitted.requestId,
