@@ -42,6 +42,21 @@ export const DEMO_REQUEST: RequestInput = {
   selection_timeout_s: 5,
 };
 
+/**
+ * Requests this buyer created, newest first.
+ *
+ * The console's `listRequests` is deliberately global and admin-only; a buyer needs their own list, and
+ * scoping it by `buyerWalletId` is what keeps one person's orders out of another's view.
+ */
+export async function listRequestsForBuyer(db: Db, buyerWalletId: string, limit = 50): Promise<RequestRow[]> {
+  return db
+    .select()
+    .from(requests)
+    .where(eq(requests.buyerWalletId, buyerWalletId))
+    .orderBy(desc(requests.createdAt))
+    .limit(limit);
+}
+
 export async function createRequest(
   db: Db,
   input: RequestInput,

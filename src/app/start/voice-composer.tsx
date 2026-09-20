@@ -200,6 +200,38 @@ export function VoiceComposer({ startPath }: { startPath: string }) {
     [finish],
   );
 
+  /**
+   * Notice the task being posted by *anyone* and go straight to it.
+   *
+   * The MCP tool files the task server-side, so the browser may never see the brief itself — the agent's
+   * tool call bypasses the transcript path entirely. Polling the session is therefore what tells the client
+   * the work is done, and it is the only signal that covers both routes: the tool call and the transcript
+   * fallback.
+   *
+   * On completion: stop the call (mic, RTC, RTM) and navigate to the delivery, which is what was asked for
+   * — "assim que ele finaliza, que ele faz a postagem, eu preciso que o chat encerre e ele vá para a tela
+   * daquela entrega".
+   */
+  useEffect(() => {
+    if (!sessionId || phase !== "live") return;
+    const timer = window.setInterval(async () => {
+      try {
+        const res = await fetch(`/api/v1/voice/sessions/${sessionId}`, { cache: "no-store" });
+        if (!res.ok) return;
+        const body = (await res.json()) as { status?: string; request_id?: string | null };
+        if (body.status !== "completed" || !body.request_id) return;
+        log("session completed -> " + body.request_id + " (ending call)");
+        finishing.current = true;
+        await cleanup();
+        setPhase("done");
+        router.replace(`/tasks/${body.request_id}`);
+      } catch {
+        /* keep polling; a failed tick is not a failed call */
+      }
+    }, 2500);
+    return () => window.clearInterval(timer);
+  }, [cleanup, log, phase, router, sessionId]);
+
   const start = useCallback(async () => {
     if (starting.current) return;
     starting.current = true;
