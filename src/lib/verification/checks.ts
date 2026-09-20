@@ -125,8 +125,27 @@ export const CHECK_RUNNERS: Record<string, { name: string; run: CheckRunner }> =
   page_count: {
     name: "Page count",
     run: (f, s) => {
-      const ok = Math.abs(f.pages - s.expected_pages) <= 1;
-      return { passed: ok, detail: `${f.pages} page(s), expected ~${s.expected_pages} at A4 / ${s.margins_cm}cm margins` };
+      /*
+       * Two different things were being compared, and conflating them is what produced a false pass:
+       *
+       *   - the brief states a page count -> that is a *requirement* -> exact comparison
+       *   - it does not -> `expected_pages` is a heuristic from the source length (chars / 3000) -> a
+       *     measurement against an estimate, where +/-1 is honest tolerance
+       *
+       * A live run asked for a four-page translation, delivered one page, and passed — because a requirement
+       * was compared to an estimate with a tolerance. It was never a tolerance problem; it was a
+       * "which number is this" problem.
+       */
+      const delta = f.pages - s.expected_pages;
+      const stated = s.pages_stated === true;
+      const ok = stated ? delta === 0 : Math.abs(delta) <= 1;
+      const gap = delta === 0 ? "as required" : delta > 0 ? `${delta} over` : `${Math.abs(delta)} short of`;
+      return {
+        passed: ok,
+        detail: stated
+          ? `${f.pages} page(s), ${gap} the ${s.expected_pages} the brief requires`
+          : `${f.pages} page(s), ${gap} ~${s.expected_pages} estimated from source length`,
+      };
     },
   },
   text_matches_source: {
