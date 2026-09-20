@@ -65,8 +65,7 @@ describe("test fixture specialty", () => {
       description: "Gera relatórios de alocação e risco.",
     });
     expect(built.category).toBe("analista de investimentos");
-    expect(built.task.requirement).toMatch(/Carteira Alpha/);
-    expect(built.task.requirement).toMatch(/executor/);
+    expect(built.task.requirement).toMatch(/Carteira Alpha, an executor/);
     expect(built.task.requirement).toMatch(/analista de investimentos/);
     expect(built.task.requirement).toMatch(/Gera relatórios de alocação e risco/);
     expect(built.task.files[0]?.content).toContain("analista de investimentos");

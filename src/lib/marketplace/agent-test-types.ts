@@ -98,10 +98,14 @@ function escapeHtml(text: string): string {
     .replace(/"/g, "&quot;");
 }
 
+function articleFor(word: string): "a" | "an" {
+  return /^[aeiou]/i.test(word.trim()) ? "an" : "a";
+}
+
 export function specialtyRequirement(source: TestFixtureSource, category: string): string {
   const role = source.role?.trim() || "executor";
   const name = source.name?.trim();
-  const who = name ? `${name}, a ${role}` : `a ${role}`;
+  const who = name ? `${name}, ${articleFor(role)} ${role}` : `${articleFor(role)} ${role}`;
   const desc = source.description?.trim().replace(/\s+/g, " ");
   const mission = desc
     ? desc.replace(/\.?$/, ".")
