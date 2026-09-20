@@ -24,6 +24,12 @@ export type LastRuntimeError = {
   at: string | null;
 };
 
+export type AgentTestFixture = {
+  category: string;
+  requirement: string;
+  uses_html_to_pdf: boolean;
+};
+
 export type AgentTestReadiness = {
   ready: boolean;
   checks: ReadinessCheck[];
@@ -32,6 +38,7 @@ export type AgentTestReadiness = {
   hosted_seller_base_url: string | null;
   platform_underwrite_base_url: string;
   model_provider_message: string | null;
+  fixture: AgentTestFixture;
 };
 
 export type RecentAgentTest = {
@@ -58,3 +65,5 @@ export const TEST_FIXTURE_SUMMARY = {
   max_latency_s: 30,
   min_confidence: 0.95,
 } as const;
+
+export const HTML_TO_PDF_CATEGORY = "html_to_pdf";

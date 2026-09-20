@@ -49,20 +49,34 @@ Underwrite (Next.js):
 | `HOSTED_SELLER_BASE_URL` | This Worker’s public origin |
 | `UNDERWRITE_HOSTED_RUNTIME_SECRET` | Shared with the Worker |
 | `UNDERWRITE_SECRETS_KEY` | AES-256-GCM for `agent_runtime_secrets` |
-| `UNDERWRITE_BASE_URL` | Origin the Worker calls back |
+| `UNDERWRITE_BASE_URL` | Origin this Next.js process advertises to the Worker |
 
-Worker secrets (CI deploy does **not** inject user keys):
+Worker **var** (set by `wrangler.jsonc` on every CI deploy — this overwrites the
+dashboard value with the same name):
+
+| Worker var | Production value |
+|------------|------------------|
+| `UNDERWRITE_BASE_URL` | `https://underwrite-gamma.vercel.app` (or the live APP URL) |
+
+Do **not** put `http://localhost:3000` in `wrangler.jsonc` `vars`. That is what
+clobbered production after `wrangler deploy`. Localhost belongs only in
+`.dev.vars` for `wrangler dev`.
+
+Worker **secret** (CI deploy does **not** inject this; set once):
 
 ```bash
 cd workers/cloudflare-seller
 npx wrangler secret put UNDERWRITE_HOSTED_RUNTIME_SECRET
-npx wrangler secret put UNDERWRITE_BASE_URL
 ```
 
 | Worker secret | Why |
 |---------------|-----|
 | `UNDERWRITE_HOSTED_RUNTIME_SECRET` | `PUT /internal/agents/:id` + pull from Underwrite |
-| `UNDERWRITE_BASE_URL` | Production Underwrite origin |
+
+Do not `wrangler secret put UNDERWRITE_BASE_URL` while it is also a `vars` key —
+same-name secret + var conflict. To use a different production origin, change
+`wrangler.jsonc` (CI will set it) or remove the var and set the origin once in
+the dashboard / as a secret that CI does not pass.
 
 **Deprecated** (single-tenant fallback only): `UNDERWRITE_SELLER_API_KEY`, `NEURALAKE_API_KEY`,
 `UNDERWRITE_WEBHOOK_SECRET`, `SELLER_INSTANCE_NAME=default`. Do not use these for new agents.
@@ -159,9 +173,13 @@ Unchanged: one Worker, path-filtered workflow
 GitHub secrets: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`. **Do not** put user seller keys
 or BYOK in GitHub Actions.
 
-After deploy, set `UNDERWRITE_HOSTED_RUNTIME_SECRET` and `UNDERWRITE_BASE_URL` once on the Worker
-(dashboard or `wrangler secret put`). Set the same runtime secret + `HOSTED_SELLER_BASE_URL` on
-the Next.js app.
+`pnpm run deploy` applies `wrangler.jsonc` `vars`, including
+`UNDERWRITE_BASE_URL=https://underwrite-gamma.vercel.app`. After deploy, `GET /health`
+must show that origin (or unset until set once) — never `http://localhost:3000`.
+
+Set `UNDERWRITE_HOSTED_RUNTIME_SECRET` once on the Worker (dashboard or
+`wrangler secret put`). Set the same runtime secret + `HOSTED_SELLER_BASE_URL` +
+`UNDERWRITE_BASE_URL=https://underwrite-gamma.vercel.app` on the Next.js app.
 
 ## Scripts
 

@@ -1,4 +1,4 @@
-import { readSellerConfig, type SellerConfig } from "./config";
+import { readSellerConfig, resolveUnderwriteBaseUrl, type SellerConfig } from "./config";
 
 export type TenantCredentials = {
   sellerApiKey?: string;
@@ -46,7 +46,7 @@ export function mergeSellerConfig(env: Env, tenant: TenantCredentials | undefine
 
 export async function pullHostedCredentials(env: Env, agentId: string): Promise<TenantCredentials | null> {
   const secret = (env.UNDERWRITE_HOSTED_RUNTIME_SECRET ?? "").trim();
-  const base = (env.UNDERWRITE_BASE_URL || "http://localhost:3000").replace(/\/+$/, "");
+  const base = resolveUnderwriteBaseUrl(env.UNDERWRITE_BASE_URL);
   if (!secret) return null;
   const res = await fetch(`${base}/api/internal/hosted-agents/${encodeURIComponent(agentId)}`, {
     headers: {

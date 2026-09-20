@@ -62,12 +62,17 @@ pulls `GET /api/internal/hosted-agents/:id` with `UNDERWRITE_HOSTED_RUNTIME_SECR
 | `HOSTED_SELLER_BASE_URL` | Public Worker origin. Create-agent sets `webhook_url` from this. |
 | `UNDERWRITE_HOSTED_RUNTIME_SECRET` | Shared secret, Worker ↔ Underwrite (not a user key). |
 | `UNDERWRITE_SECRETS_KEY` | AES-256-GCM for the secrets table. |
-| `UNDERWRITE_BASE_URL` | Origin advertised to the Worker for plans/deliverables. |
-| `UNDERWRITE_WEBHOOK_SECRET` | **Deprecated fallback** for seed / self-hosted agents with no runtime row. |
+| `UNDERWRITE_BASE_URL` | Origin advertised to the Worker for plans/deliverables. Production: `https://underwrite-gamma.vercel.app`. |
 
-Worker secrets: `UNDERWRITE_HOSTED_RUNTIME_SECRET`, `UNDERWRITE_BASE_URL`. The old trio
-(`UNDERWRITE_SELLER_API_KEY`, `NEURALAKE_API_KEY`, `UNDERWRITE_WEBHOOK_SECRET`) is a single-tenant
-fallback only.
+Worker **var** (CI): `UNDERWRITE_BASE_URL` in
+[`workers/cloudflare-seller/wrangler.jsonc`](../workers/cloudflare-seller/wrangler.jsonc)
+is `https://underwrite-gamma.vercel.app`. `wrangler deploy` overwrites the
+dashboard value with that name — localhost in that file breaks hosted plan POSTs.
+Localhost is only for [`.dev.vars.example`](../workers/cloudflare-seller/.dev.vars.example).
+
+Worker **secret**: `UNDERWRITE_HOSTED_RUNTIME_SECRET` (set once; CI does not
+overwrite it). The old trio (`UNDERWRITE_SELLER_API_KEY`, `NEURALAKE_API_KEY`,
+`UNDERWRITE_WEBHOOK_SECRET`) is a single-tenant fallback only.
 
 ## Auth
 
@@ -107,8 +112,12 @@ list and detail pages). That page:
    callbacks to localhost, BYOK is missing, the agent is disabled, or
    `MODEL_PROVIDER_*` is missing (same **503** text as `POST /api/v1/requests`).
 3. Runs a **real** marketplace job: session wallet + `execution_mode: "push"` +
-   `invite_agent_ids: [this agent]`. This is Option A — not a signed test
-   webhook that skips Underwrite.
+   `invite_agent_ids: [this agent]`. The HTML→PDF fixture is used when the
+   agent lists `html_to_pdf`; otherwise the test picks a fixture for the
+   agent’s first specialty (or an override) so a non-PDF agent is not dropped
+   as `specialty_mismatch:html_to_pdf`. Add `html_to_pdf` on the agent page
+   to use the PDF demo. This is Option A — not a signed test webhook that
+   skips Underwrite.
 4. Streams the ledger (`received → plans → selected → delivered / failed`) and
    links to `/console/requests/{id}`.
 

@@ -9,7 +9,12 @@ import { LOCAL_DEV_USER_ID } from "@/lib/auth/session";
 import { getDb, type Db } from "@/lib/db/client";
 import { TASK_CATEGORY } from "@/lib/db/seed";
 import { MODEL_PROVIDER_REQUIRED_MESSAGE } from "@/lib/observability/inference";
-import { isLoopbackHost, looksRemoteOrigin } from "@/lib/marketplace/agent-test";
+import {
+  isLoopbackHost,
+  looksRemoteOrigin,
+  resolveTestCategory,
+  testTaskForCategory,
+} from "@/lib/marketplace/agent-test";
 import { resolveInvitees } from "@/lib/marketplace/push";
 import { DEMO_REQUEST } from "@/lib/marketplace/requests";
 import { registerSellerAgent } from "@/lib/marketplace/sellers";
@@ -38,6 +43,16 @@ beforeAll(async () => {
 function params(id: string) {
   return { params: Promise.resolve({ id }) };
 }
+
+describe("test fixture specialty", () => {
+  it("prefers html_to_pdf when listed, otherwise the first executable specialty", () => {
+    expect(resolveTestCategory(["analista de investimentos", "html_to_pdf"])).toBe("html_to_pdf");
+    expect(resolveTestCategory(["analista de investimentos"])).toBe("analista de investimentos");
+    expect(resolveTestCategory(["judge:html_to_pdf", "research"], "research")).toBe("research");
+    expect(testTaskForCategory("html_to_pdf").files[0]?.name).toBe("input.html");
+    expect(testTaskForCategory("analista de investimentos").files[0]?.name).toBe("brief.txt");
+  });
+});
 
 describe("invite targeting helpers", () => {
   it("detects localhost callbacks", () => {
@@ -152,6 +167,69 @@ describe("account agent test API", () => {
     expect(job.targeted).toBe(true);
     expect(job.invited_agent_ids).toEqual([mine.agent.agentId]);
     expect(job.links.console).toBe(`/console/requests/${job.request_id}`);
+  });
+
+  it("invites a non-html_to_pdf agent with a matching fixture instead of 422", async () => {
+    const mine = await registerSellerAgent(db, LOCAL_DEV_USER_ID, {
+      ...draft,
+      name: "analista de investimentos",
+      specialties: ["analista de investimentos"],
+    });
+
+    const diagnosed = await getAgentTest(new Request("http://local/api/account/agents/x/test"), params(mine.agent.agentId));
+    expect(diagnosed.status).toBe(200);
+    const diagnosis = (await diagnosed.json()) as {
+      readiness: {
+        ready: boolean;
+        fixture: { category: string; uses_html_to_pdf: boolean };
+        checks: Array<{ id: string; ok: boolean; severity: string }>;
+      };
+      selection: { category: string };
+    };
+    expect(diagnosis.readiness.fixture).toEqual({
+      category: "analista de investimentos",
+      uses_html_to_pdf: false,
+      requirement: expect.stringMatching(/analista de investimentos/) as unknown as string,
+    });
+    expect(diagnosis.selection.category).toBe("analista de investimentos");
+    const specialty = diagnosis.readiness.checks.find((c) => c.id === "specialty");
+    expect(specialty?.severity).toBe("warn");
+    expect(specialty?.ok).toBe(false);
+
+    const posted = await postAgentTest(
+      new Request("http://local/api/account/agents/x/test", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({}),
+      }),
+      params(mine.agent.agentId),
+    );
+    expect(posted.status).toBe(202);
+    const job = (await posted.json()) as {
+      invited_agent_ids: string[];
+      targeted: boolean;
+      category: string;
+    };
+    expect(job.targeted).toBe(true);
+    expect(job.category).toBe("analista de investimentos");
+    expect(job.invited_agent_ids).toEqual([mine.agent.agentId]);
+  });
+
+  it("422s when the category override is not one of the agent specialties", async () => {
+    const mine = await registerSellerAgent(db, LOCAL_DEV_USER_ID, {
+      ...draft,
+      name: "Override denied",
+      specialties: ["analista de investimentos"],
+    });
+    const posted = await postAgentTest(
+      new Request("http://local/api/account/agents/x/test", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ category: "html_to_pdf" }),
+      }),
+      params(mine.agent.agentId),
+    );
+    expect(posted.status).toBe(422);
   });
 
   it("409s when the agent is disabled", async () => {

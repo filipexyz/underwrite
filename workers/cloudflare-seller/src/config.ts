@@ -2,6 +2,10 @@
 export const NEURALAKE_DEFAULT_BASE_URL = "https://api.neuralake.cloud/v1";
 export const NEURALAKE_DEFAULT_MODEL = "auto";
 export const UNDERWRITE_WEBHOOK_STUB_SECRET = "underwrite-webhook-stub";
+/** Production app origin. Used when the Worker env var is unset — never localhost. */
+export const PRODUCTION_UNDERWRITE_BASE_URL = "https://underwrite-gamma.vercel.app";
+/** Local `wrangler dev` only — set via `.dev.vars`, not wrangler.jsonc vars. */
+export const LOCAL_UNDERWRITE_BASE_URL = "http://localhost:3000";
 
 export type SellerConfig = {
   underwriteBaseUrl: string;
@@ -17,8 +21,12 @@ function trimSlash(value: string): string {
   return value.replace(/\/+$/, "");
 }
 
+export function resolveUnderwriteBaseUrl(raw: string | undefined | null): string {
+  return trimSlash((raw ?? "").trim() || PRODUCTION_UNDERWRITE_BASE_URL);
+}
+
 export function readSellerConfig(env: Env): SellerConfig {
-  const underwriteBaseUrl = trimSlash(env.UNDERWRITE_BASE_URL || "http://localhost:3000");
+  const underwriteBaseUrl = resolveUnderwriteBaseUrl(env.UNDERWRITE_BASE_URL);
   const neuralakeBaseUrl = trimSlash(env.NEURALAKE_BASE_URL || NEURALAKE_DEFAULT_BASE_URL);
   return {
     underwriteBaseUrl,

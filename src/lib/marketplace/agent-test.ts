@@ -11,6 +11,8 @@ import { env } from "@/lib/env";
 import { MODEL_PROVIDER_REQUIRED_MESSAGE } from "@/lib/observability/inference";
 import type { PublicAgentRuntime } from "./agent-runtime";
 import {
+  HTML_TO_PDF_CATEGORY,
+  type AgentTestFixture,
   type AgentTestReadiness,
   type LastRuntimeError,
   type ReadinessCheck,
@@ -24,6 +26,7 @@ import { getOwnedAgent, listOwnedAgents } from "./sellers";
 import { PushJobError, startPushJob, type InviteDelivery, type InviteSkip } from "./push";
 
 export type {
+  AgentTestFixture,
   AgentTestReadiness,
   LastRuntimeError,
   ReadinessCheck,
@@ -49,8 +52,49 @@ export const AgentTestInput = z.object({
   max_latency_s: z.number().positive().max(120).optional(),
   min_confidence: z.number().min(0).max(1).optional(),
   failure_policy: FailurePolicy.optional(),
+  /** Override the invite/fixture specialty. Must be one of the agent’s specialties. */
+  category: z.string().trim().min(1).max(80).optional(),
 });
 export type AgentTestInput = z.infer<typeof AgentTestInput>;
+
+export function executableSpecialties(specialties: string[]): string[] {
+  return specialties.map((s) => s.trim()).filter((s) => s.length > 0 && !s.startsWith("judge:"));
+}
+
+/** Prefer html_to_pdf when listed; otherwise the first executable specialty. */
+export function resolveTestCategory(specialties: string[], override?: string | null): string {
+  const cleaned = (override ?? "").trim();
+  if (cleaned) return cleaned;
+  const executable = executableSpecialties(specialties);
+  if (executable.includes(DEFAULT_CATEGORY)) return DEFAULT_CATEGORY;
+  return executable[0] ?? DEFAULT_CATEGORY;
+}
+
+export function testTaskForCategory(category: string) {
+  if (category === DEFAULT_CATEGORY || category === HTML_TO_PDF_CATEGORY) {
+    return DEMO_REQUEST.task;
+  }
+  return {
+    requirement: `Complete a ${category} task from the attached brief. Produce a structured written result the buyer can verify.`,
+    files: [
+      {
+        name: "brief.txt",
+        media_type: "text/plain" as const,
+        content: `Specialty: ${category}\nProduce a concise, structured deliverable matching this specialty.`,
+      },
+    ],
+  };
+}
+
+export function testFixtureForAgent(specialties: string[], override?: string | null): AgentTestFixture {
+  const category = resolveTestCategory(specialties, override);
+  const task = testTaskForCategory(category);
+  return {
+    category,
+    requirement: task.requirement,
+    uses_html_to_pdf: category === DEFAULT_CATEGORY,
+  };
+}
 
 export function isLoopbackHost(value: string | null | undefined): boolean {
   if (!value) return false;
@@ -158,7 +202,9 @@ export async function diagnoseAgentTest(
   const hostedBase = env.hostedSellerBaseUrl ?? null;
   const platformCallback = env.publicBaseUrl;
   const providerOk = env.modelProvider.enabled;
-  const specialtyOk = agent.specialties.includes(DEFAULT_CATEGORY);
+  const fixture = testFixtureForAgent(agent.specialties);
+  const executable = executableSpecialties(agent.specialties);
+  const htmlFixtureOk = executable.length > 0 && fixture.uses_html_to_pdf;
   const enabled = agent.status !== "disabled";
   const funded = wallet.capitalUsd >= DEMO_REQUEST.max_cost_usd;
   const localhostMismatch =
@@ -184,12 +230,14 @@ export async function diagnoseAgentTest(
     ),
     check(
       "specialty",
-      specialtyOk,
-      "block",
-      "Specialty html_to_pdf",
-      specialtyOk
-        ? "Matches the marketplace category used by the test fixture."
-        : `This agent’s specialties are ${agent.specialties.join(", ") || "—"}. Push jobs only invite html_to_pdf executors.`,
+      htmlFixtureOk,
+      executable.length === 0 ? "block" : fixture.uses_html_to_pdf ? "info" : "warn",
+      fixture.uses_html_to_pdf ? "Specialty html_to_pdf" : `Fixture specialty ${fixture.category}`,
+      executable.length === 0
+        ? "This agent has no executable specialty. Add one on the agent page (html_to_pdf for the PDF demo)."
+        : fixture.uses_html_to_pdf
+          ? "Matches the marketplace category used by the HTML→PDF test fixture."
+          : `This agent does not list html_to_pdf (${agent.specialties.join(", ") || "—"}). The test job will invite it as ${fixture.category} instead of dropping it. Add html_to_pdf on the agent page to use the PDF fixture.`,
     ),
     check(
       "wallet",
@@ -281,6 +329,7 @@ export async function diagnoseAgentTest(
     hosted_seller_base_url: hostedBase,
     platform_underwrite_base_url: platformCallback,
     model_provider_message: providerOk ? null : MODEL_PROVIDER_REQUIRED_MESSAGE,
+    fixture,
   };
 }
 
@@ -321,6 +370,7 @@ export async function startOwnedAgentTest(
   skipped: InviteSkip[];
   plan_deadline_at: string;
   targeted: boolean;
+  category: string;
   links: { console: string; events: string };
 }> {
   const agent = await getOwnedAgent(db, agentId, ownerUserId);
@@ -328,8 +378,14 @@ export async function startOwnedAgentTest(
   if (agent.status === "disabled") {
     throw new AgentTestError(409, "agent is disabled — enable it before running a test job");
   }
-  if (!agent.specialties.includes(DEFAULT_CATEGORY)) {
-    throw new AgentTestError(422, `agent specialties must include ${DEFAULT_CATEGORY}`, {
+  const category = resolveTestCategory(agent.specialties, input.category);
+  if (input.category && !agent.specialties.includes(category)) {
+    throw new AgentTestError(422, `category ${category} is not one of this agent’s specialties`, {
+      specialties: agent.specialties,
+    });
+  }
+  if (executableSpecialties(agent.specialties).length === 0) {
+    throw new AgentTestError(422, "agent has no executable specialty — add one on the agent page", {
       specialties: agent.specialties,
     });
   }
@@ -350,7 +406,7 @@ export async function startOwnedAgentTest(
   const row = await createRequest(
     db,
     {
-      task: input.task ?? DEMO_REQUEST.task,
+      task: input.task ?? testTaskForCategory(category),
       max_cost_usd: maxCost,
       max_latency_s: input.max_latency_s ?? DEMO_REQUEST.max_latency_s,
       min_confidence: input.min_confidence ?? DEMO_REQUEST.min_confidence,
@@ -359,7 +415,13 @@ export async function startOwnedAgentTest(
       execution_mode: "push",
       invite_agent_ids: [agent.agentId],
     },
-    { actor: "human", source: "agent-test-area", buyerWalletId: ownerUserId, executionMode: "push" },
+    {
+      actor: "human",
+      source: "agent-test-area",
+      buyerWalletId: ownerUserId,
+      executionMode: "push",
+      category,
+    },
   );
 
   try {
@@ -375,6 +437,7 @@ export async function startOwnedAgentTest(
       skipped: started.skipped,
       plan_deadline_at: started.plan_deadline_at,
       targeted: started.invited.includes(agent.agentId),
+      category,
       links: {
         console: `/console/requests/${row.requestId}`,
         events: `/console/requests/${row.requestId}/events`,
