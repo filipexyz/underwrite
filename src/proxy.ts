@@ -15,6 +15,7 @@ import { getAuth0 } from "@/lib/auth0";
 
 const PROTECTED_PREFIXES = [
   "/start",
+  "/tasks",
   "/console",
   "/admin",
   "/keys",

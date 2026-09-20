@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { parseRtmMessage, upsertTranscript, type TranscriptTurn } from "@/lib/agora/rtm";
 import { VoiceTaskBrief } from "@/lib/voice/types";
@@ -54,6 +55,7 @@ export function VoiceComposer({ startPath }: { startPath: string }) {
   const [elapsed, setElapsed] = useState(0);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [result, setResult] = useState<{ requestId: string; summary: string } | null>(null);
+  const router = useRouter();
 
   const rtcRef = useRef<import("agora-rtc-sdk-ng").IAgoraRTCClient | null>(null);
   const micRef = useRef<import("agora-rtc-sdk-ng").IMicrophoneAudioTrack | null>(null);
@@ -150,6 +152,9 @@ export function VoiceComposer({ startPath }: { startPath: string }) {
         await cleanup();
         setResult({ requestId: body.request_id, summary: body.summary ?? "" });
         setPhase("done");
+        // Straight to following it — the agreement is readable there, so nothing is lost by not
+        // lingering on a summary card.
+        router.replace(`/tasks/${body.request_id}`);
       } catch (err) {
         finishing.current = false;
         setPhase("live");
@@ -160,18 +165,30 @@ export function VoiceComposer({ startPath }: { startPath: string }) {
   );
 
   /**
-   * The happy path: the agent's closing turn mentioned nothing structured, so a brief is only available
-   * if it *happened* to be parseable. When it is, skip the server-side extraction.
+   * The happy path is fully automatic: the agent's closing sentence is the trigger.
+   *
+   * The prompt standardises that sentence ("I have everything and am posting the task"), so matching it
+   * is a contract with our own instruction rather than a guess at the model's phrasing. A false positive
+   * is safe: the server extracts the brief from the transcript and answers 409 if it is not actually
+   * complete, which puts the call back to `live` and tells the person what is still missing.
+   *
+   * There is deliberately **no button**. A human step between the conversation and the market would undo
+   * the point of the surface, and it is the only thing that would make `human_interventions` non-zero.
    */
   const maybeFinish = useCallback(
     (turns: TranscriptTurn[]) => {
       const lastAssistant = [...turns].reverse().find((t) => t.role === "assistant" && t.turn_id !== -1);
       if (!lastAssistant) return;
+
+      // If the agent happened to emit parseable structure, use it and skip the extraction call.
       const parsed = extractBriefJson(lastAssistant.text);
-      if (!parsed) return;
-      const brief = VoiceTaskBrief.safeParse(parsed);
-      if (!brief.success) return;
-      void finish(turns, brief.data);
+      const structured = parsed ? VoiceTaskBrief.safeParse(parsed) : null;
+      if (structured?.success) {
+        void finish(turns, structured.data);
+        return;
+      }
+
+      if (isWrapUp(lastAssistant.text)) void finish(turns);
     },
     [finish],
   );
@@ -297,35 +314,11 @@ export function VoiceComposer({ startPath }: { startPath: string }) {
     return (
       <section className="border border-ink bg-paper p-6 flex flex-col gap-4 text-left">
         <p className="eyebrow !mb-0 !text-ink">task posted</p>
-        <h2 className="font-sans text-xl font-semibold">Agents are bidding now.</h2>
+        <h2 className="font-sans text-xl font-semibold">Agents are bidding. Opening the task…</h2>
         <p className="font-sans text-sm text-[#53605a] leading-relaxed">{result.summary}</p>
-        <p className="font-mono text-xs">
-          request{" "}
-          <Link href={`/console/requests/${result.requestId}`} className="text-teal hover:underline">
-            {result.requestId}
-          </Link>
-        </p>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            className="btn-ink"
-            onClick={() => {
-              setResult(null);
-              setTranscript([]);
-              setElapsed(0);
-              pushedRef.current = 0;
-              setSessionId(null);
-              starting.current = false;
-              void start();
-            }}
-          >
-            <span>Start another</span>
-            <strong>→</strong>
-          </button>
-          <Link href={`/console/requests/${result.requestId}`} className="btn-ghost">
-            Open the ledger
-          </Link>
-        </div>
+        <Link href={`/tasks/${result.requestId}`} className="mono text-xs text-teal hover:underline">
+          {result.requestId}
+        </Link>
       </section>
     );
   }
@@ -391,22 +384,36 @@ export function VoiceComposer({ startPath }: { startPath: string }) {
         ) : null}
 
         {/*
-         * Demo safety net, and the only human step anywhere in this flow. It appears only once the
-         * conversation has substance, and posts what was agreed without needing the agent's timing to
-         * be perfect — the server reads the transcript, so this cannot produce a task from nothing.
+         * No human control here. Completion is detected from the agent's own closing sentence and the
+         * server decides whether the brief is complete — a manual "post" step would put a human between
+         * the conversation and the market, which is the one thing this surface exists to remove.
          */}
-        {phase === "live" && transcript.filter((t) => t.role === "assistant" && t.turn_id !== -1).length >= 3 ? (
-          <button
-            type="button"
-            onClick={() => void finish(transcriptRef.current)}
-            className="btn-ghost w-full"
-          >
-            Post the task with what we agreed
-          </button>
-        ) : null}
       </div>
     </section>
   );
+}
+
+/**
+ * Closing phrases the prompt asks the agent to use, plus the obvious Portuguese equivalents.
+ *
+ * A phrase list is a blunt instrument, and it is acceptable here **only** because a wrong answer is not
+ * destructive: the server decides whether the brief is actually complete and rejects it if not, putting
+ * the call back to `live` with the missing terms named. The alternative — never detecting completion —
+ * needs a human press, which is the thing being removed.
+ */
+const WRAP_UP_MARKERS = [
+  "posting the task",
+  "post the task",
+  "i have everything",
+  "vou publicar a tarefa",
+  "publicando a tarefa",
+  "tenho tudo",
+  "postando a tarefa",
+];
+
+export function isWrapUp(text: string): boolean {
+  const lower = text.toLowerCase();
+  return WRAP_UP_MARKERS.some((marker) => lower.includes(marker));
 }
 
 /**
