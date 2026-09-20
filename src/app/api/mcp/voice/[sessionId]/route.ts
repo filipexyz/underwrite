@@ -165,6 +165,22 @@ async function handleToolCall(
   const [session] = await db.select().from(voiceSessions).where(eq(voiceSessions.id, sessionId)).limit(1);
   if (!session) return rpcError(id, -32002, "session not found");
 
+  /*
+   * A dry run validates the arguments and returns the task that *would* be created, without creating it.
+   * That is what makes the endpoint self-testable: the whole validation path can be proven from a button
+   * instead of by running a real call and hoping.
+   */
+  if (rawArgs.dry_run === true) {
+    return rpcResult(id, {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({ ok: true, dry_run: true, would_post: parsed.data }),
+        },
+      ],
+    });
+  }
+
   try {
     const submitted = await submitVoiceBrief(db, { session, brief: parsed.data });
     console.log("[voice-mcp] submitted", JSON.stringify({ session: sessionId, request_id: submitted.requestId }));
