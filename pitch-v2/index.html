@@ -1,0 +1,588 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Underwrite — pitch</title>
+    <meta name="description" content="Um marketplace A2A onde o comprador não compra um modelo: compra um SLA de confiança." />
+    <link rel="stylesheet" href="deck.css" />
+  </head>
+  <body>
+    <div id="stage">
+      <div class="deck" id="deck">
+        <!-- ============================================================ 01 -->
+        <section
+          class="slide"
+          data-title="Capa"
+          data-time="0:15"
+          data-notes="Boa tarde. Somos a Underwrite.&#10;Uma frase só: é o Fiverr, exceto que ninguém escolhe.&#10;Pega o relógio: 4 minutos, e 1min30 disso é demo ao vivo."
+        >
+          <div class="brandline" style="margin-bottom: 52px">
+            <span class="dot"></span><span class="wordmark">underwrite</span>
+          </div>
+
+          <h1 style="font-size: 82px">
+            O comprador não compra<br />
+            um modelo. Compra um<br />
+            <em>SLA de confiança.</em>
+          </h1>
+
+          <p class="lede" style="margin-top: 30px; max-width: 54ch">
+            Um marketplace onde agentes contratam agentes — e o vendedor só recebe quando a
+            verificação independente bate o número que ele prometeu.
+          </p>
+
+          <p class="lede" style="margin-top: 18px; max-width: 54ch">
+            <b>Fiverr, exceto que ninguém escolhe.</b> O agente do comprador decide, o vendedor que ele
+            contrata pode contratar outro, e o dinheiro só anda quando o trabalho sobrevive a uma
+            verificação independente.
+          </p>
+
+          <div class="cover-meta" style="margin-top: auto">
+            <div>
+              <b>Evento</b>
+              NeuraLake · 5 Desafios do Lançamento<br />
+              São Paulo · 19–20 set 2026
+            </div>
+            <div>
+              <b>Desafio</b>
+              all in — os cinco, não um
+            </div>
+            <div>
+              <b>Time</b>
+              Luís Filipe · Giovanni Saboya · Gabriel<br />
+              Renan Jato · Suhuai Chen
+            </div>
+            <div style="margin-left: auto; text-align: right">
+              <b>Na tela o tempo todo</b>
+              <span class="pill" style="color: var(--ink)">human_interventions: 0</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================ 02 -->
+        <section
+          class="slide"
+          data-title="O cliente é um agente"
+          data-time="0:30"
+          data-notes="A pergunta-guia do evento. Respondemos ao pé da letra.&#10;Um humano testa e vê — não precisa de nós.&#10;Um agente não consegue amostrar, não sabe quando 'parece bom', e não pode auditar a si mesmo.&#10;Frase de efeito: Underwrite só existe porque o cliente é um agente. Não é feature, é a tese."
+        >
+          <p class="eyebrow">A pergunta-guia do evento, respondida ao pé da letra</p>
+          <h2 style="max-width: 24ch">
+            “Seu produto ficaria mais valioso se o cliente principal fosse um agente?”
+          </h2>
+
+          <div class="cols c-2" style="margin-top: 26px">
+            <div class="pane">
+              <p class="tag">Um humano comprando hoje</p>
+              <h3>Ele testa e vê.</h3>
+              <ul class="plain" style="margin-top: 14px">
+                <li>Abre dez abas, lê avaliações, pede indicação.</li>
+                <li>Bate o olho no arquivo e sabe se está torto.</li>
+                <li>Se der errado, liga para alguém e reclama.</li>
+              </ul>
+              <p class="kicker" style="font-size: 20px">
+                Para esse cliente, a gente não faz falta.
+              </p>
+            </div>
+
+            <div class="pane" style="border-width: 2px">
+              <p class="tag">Um agente comprando</p>
+              <h3>Ele não tem nenhuma dessas três coisas.</h3>
+              <ul class="plain" style="margin-top: 14px">
+                <li>Não amostra quarenta vendedores — paga por cada tentativa.</li>
+                <li>Não enxerga quando a saída só <em>parece</em> boa.</li>
+                <li>Não pode auditar a si mesmo, e ninguém vai atender o telefone.</li>
+              </ul>
+              <p class="kicker" style="font-size: 20px">
+                <strong>Ele precisa comprar uma garantia, não um serviço.</strong>
+              </p>
+            </div>
+          </div>
+
+          <p class="kicker">
+            Underwrite só existe porque o cliente é um agente.
+            <strong>Isso não é uma funcionalidade nossa — é a tese do evento.</strong>
+          </p>
+        </section>
+
+        <!-- ============================================================ 03 -->
+        <section
+          class="slide"
+          data-title="O problema"
+          data-time="0:50"
+          data-notes="O problema em uma imagem: 0.98 auto-declarado contra 0.41 apurado.&#10;Todo vendedor se auto-avalia — a nota é marketing.&#10;A cadeia tem três saltos: o erro aparece no último, mas a culpa é de quem contratou.&#10;Sem custódia o dinheiro sai antes de alguém abrir o arquivo. Sem trilha nenhum banco assina.&#10;Fechar com: é exatamente aqui que A2A trava."
+        >
+          <p class="eyebrow">O buraco no meio da cadeia</p>
+          <h2 style="max-width: 20ch">Quando um agente paga outro agente, quem confere?</h2>
+
+          <div class="cols c-2" style="margin-top: 22px; align-items: start">
+            <div>
+              <div class="statpair" style="margin: 10px 0 34px">
+                <div class="stat">
+                  <p class="k">O vendedor declarou</p>
+                  <p class="bignum" style="color: var(--muted)">0.98</p>
+                </div>
+                <div class="stat">
+                  <p class="k">A verificação apurou</p>
+                  <p class="bignum danger">0.41</p>
+                </div>
+              </div>
+              <p class="lede" style="font-size: 24px">
+                Mesmo arquivo. Mesmo minuto. A diferença é que um dos dois números foi medido.
+              </p>
+
+              <blockquote>
+                Um humano abriria o PDF e veria o texto vazando da página em dois segundos.
+                O agente comprador não abriu nada — <strong>ele já tinha pago.</strong>
+              </blockquote>
+            </div>
+
+            <ul class="rows">
+              <li><b>auto-nota</b>O produtor pontua o próprio trabalho. Isso é marketing, não medição.</li>
+              <li><b>cadeia</b>A entrega passa por três agentes. O defeito aparece no último — a culpa é de quem contratou.</li>
+              <li><b>pagamento</b>Sem custódia, o dinheiro sai antes de alguém abrir o arquivo.</li>
+              <li><b>auditoria</b>Sem trilha, nenhum banco autoriza a máquina a gastar sozinha.</li>
+            </ul>
+          </div>
+
+          <p class="kicker">
+            <strong>É aqui que a economia A2A trava:</strong> não na inteligência, na hora de pagar.
+          </p>
+        </section>
+
+        <!-- ============================================================ 04 -->
+        <section
+          class="slide"
+          data-title="A solução — 4 campos"
+          data-time="1:10"
+          data-notes="A solução cabe em quatro campos mais uma política de falha.&#10;Tarefa, teto de preço, prazo, confiança mínima. Nada de escolher fornecedor, modelo ou prompt.&#10;Do outro lado sai um certificado: o que foi prometido, o que foi apurado, quem entregou, quanto custou.&#10;A regra que inventamos: o vendedor só recebe se o SLA for cumprido."
+        >
+          <p class="eyebrow">O contrato</p>
+          <h2>Quatro campos. Mais nada.</h2>
+
+          <div class="cols c-media" style="margin-top: 14px">
+            <div style="display: flex; flex-direction: column; min-height: 0">
+              <pre class="req">
+POST /api/v1/requests
+
+{
+  <span class="key">"task"</span>: { "requirement": "compile input.html → PDF,
+             A4, 2cm, fontes embutidas", "files": [...] },
+  <span class="key">"max_cost_usd"</span>:    0.05,
+  <span class="key">"max_latency_s"</span>:   30,
+  <span class="key">"min_confidence"</span>:  0.95,
+  <span class="key">"failure_policy"</span>: "refund"
+}</pre
+              >
+              <ul class="plain" style="margin-top: 26px">
+                <li>O humano não escolhe fornecedor, modelo nem prompt.</li>
+                <li>Descobrir, avaliar, contratar, delegar, verificar e pagar: tudo entre agentes.</li>
+                <li>O mesmo endpoint serve humano e agente. Não existe tela obrigatória.</li>
+              </ul>
+            </div>
+
+            <div class="media">
+              <img src="assets/certificate.png" alt="Certificado de confiança emitido ao fim de um pedido: SLA cumprido, custódia liberada, 0.96 apurado contra 0.95 exigido." />
+            </div>
+          </div>
+
+          <p class="kicker">
+            <strong>O vendedor só recebe se o SLA for cumprido.</strong>
+            Essa regra é a invenção — ela coloca pele em jogo em quem vende.
+          </p>
+        </section>
+
+        <!-- ============================================================ 04b — auth.md + MCP -->
+        <section
+          class="slide"
+          data-title="Um agente entra sozinho"
+          data-time="1:15"
+          data-notes="O slide que quero que eles entendam.&#10;Três passos: busca o skill, ganha identidade, pergunta quais tools existem. Nenhum humano, nenhum dashboard, nenhum consentimento.&#10;E o tools/list JÁ VEM FILTRADO pela chave: olha a lista — quatro acesas, duas apagadas. Uma chave de comprador nunca VÊ submit_deliverable. Ele não descobre a capacidade errada tomando um 403.&#10;Frase de fecho: capabilities are discovered, not documented."
+        >
+          <p class="eyebrow">Sem humano · sem integração</p>
+          <h2 style="margin-bottom: 0">
+            Um agente entra sozinho.<br />
+            <em>E descobre o que a chave dele permite.</em>
+          </h2>
+
+          <!-- three steps -->
+          <div style="display: flex; gap: 12px; align-items: stretch; margin-top: 40px">
+            <div style="flex: 1; border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px">
+              <p class="mono" style="font-size: 11px; color: var(--teal); letter-spacing: 0.12em">01</p>
+              <p class="mono" style="font-size: 18px; margin-top: 10px">GET /auth.md</p>
+              <p style="color: var(--muted); font-size: 15px; line-height: 1.5; margin-top: 8px">
+                o protocolo em prosa. um skill, não um portal de docs.
+              </p>
+            </div>
+            <div style="display: flex; align-items: center; color: var(--dim); font-size: 24px">→</div>
+            <div style="flex: 1; border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px">
+              <p class="mono" style="font-size: 11px; color: var(--teal); letter-spacing: 0.12em">02</p>
+              <p class="mono" style="font-size: 18px; margin-top: 10px">POST /agent/identity</p>
+              <p style="color: var(--muted); font-size: 15px; line-height: 1.5; margin-top: 8px">
+                uma identidade — reivindicável por um humano depois, sem travar o agente agora.
+              </p>
+            </div>
+            <div style="display: flex; align-items: center; color: var(--dim); font-size: 24px">→</div>
+            <div style="flex: 1; border: 1px solid var(--teal); border-radius: 14px; padding: 18px 20px; background: rgba(61,220,151,0.05)">
+              <p class="mono" style="font-size: 11px; color: var(--teal); letter-spacing: 0.12em">03</p>
+              <p class="mono" style="font-size: 18px; margin-top: 10px">POST /api/mcp</p>
+              <p style="color: var(--muted); font-size: 15px; line-height: 1.5; margin-top: 8px">
+                ele pergunta quais tools existem — e chama.
+              </p>
+            </div>
+          </div>
+
+          <!-- the key, and what it lights up -->
+          <div style="display: flex; gap: 44px; margin-top: 44px; align-items: flex-start; flex-wrap: wrap">
+            <div style="flex: 1 1 430px; min-width: 340px">
+              <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 18px">
+                <span class="pill" style="color: var(--ink)">uw_buyer_…</span>
+                <span class="mono" style="font-size: 12px; color: var(--muted); letter-spacing: 0.1em">
+                  tools/list
+                </span>
+              </div>
+              <ul style="list-style: none; font-family: var(--mono); font-size: 17px; line-height: 2">
+                <li><span style="color: var(--teal)">✓</span>&nbsp; post_task</li>
+                <li><span style="color: var(--teal)">✓</span>&nbsp; get_task</li>
+                <li><span style="color: var(--teal)">✓</span>&nbsp; watch_task</li>
+                <li><span style="color: var(--teal)">✓</span>&nbsp; discover_agents</li>
+                <li style="opacity: 0.28; text-decoration: line-through">&nbsp;&nbsp; submit_deliverable</li>
+                <li style="opacity: 0.28; text-decoration: line-through">&nbsp;&nbsp; post_plan</li>
+              </ul>
+            </div>
+
+            <div style="flex: 1 1 320px; min-width: 280px">
+              <p class="mono" style="font-size: 12px; color: var(--muted); letter-spacing: 0.14em">A DIFERENÇA</p>
+              <p style="font-size: 17px; line-height: 1.7; margin-top: 16px; color: var(--muted)">
+                Um humano integra assim<br />
+                <span style="font-size: 16px">lê a doc · cria um projeto · clica no consentimento · gera a chave no
+                dashboard · escreve o cliente HTTP</span>
+              </p>
+              <p style="font-size: 17px; line-height: 1.7; margin-top: 18px">
+                Um agente integra assim<br />
+                <b style="font-size: 18px">busca o skill · pergunta quais tools existem · chama</b>
+              </p>
+            </div>
+          </div>
+
+          <p style="margin-top: 42px; font-size: 23px; letter-spacing: -0.02em; line-height: 1.45">
+            <b>Capabilities are discovered, not documented.</b><br />
+            <span style="color: var(--muted); font-size: 18px">
+              A lista já vem com o que a chave permite — ele nunca vê uma tool que seria recusada.
+            </span>
+          </p>
+        </section>
+
+        <!-- ============================================================ 05 -->
+        <section
+          class="slide bleed"
+          data-title="A cadeia + custódia por salto"
+          data-time="1:30"
+          data-notes="Aqui está a cadeia rodando. A vence o leilão e delega para B. B contrata o mais barato sem olhar histórico.&#10;C1 entrega com overflow: 0.41. Custódia retida em todos os saltos abaixo.&#10;O ponto raro: a atribuição não culpa C1 por ser ruim — culpa B por ter contratado. bad_selection → b-mid.&#10;A confiança par a par cai a zero e A escala DENTRO do próprio orçamento para C2.&#10;Frase: C entregou lixo, a falha foi de B, A pagou por isso — e ninguém auditou nada."
+        >
+          <video src="assets/chain.mp4" poster="assets/chain-poster.png" muted loop playsinline preload="auto"></video>
+        </section>
+
+        <!-- ============================================================ 06 -->
+        <section
+          class="slide bleed"
+          data-title="Verificação"
+          data-time="1:50"
+          data-notes="Confiança nunca é auto-declarada. Ordem de autoridade: checagem determinística primeiro.&#10;Se a checagem falha, os juízes nem são chamados — não gastamos token para ouvir opinião sobre algo já reprovado.&#10;Os juízes são de outra família de modelo e recebem só os critérios no escopo da tarefa.&#10;J1 diferente de J2 é sinal, não ruído: divergência derruba o SLA e retém a custódia."
+        >
+          <video src="assets/verdict.mp4" poster="assets/verdict-poster.png" muted loop playsinline preload="auto"></video>
+        </section>
+
+        <!-- ============================================================ 07 -->
+        <section
+          class="slide bleed"
+          data-title="Confiança é um vetor"
+          data-time="2:00"
+          data-notes="Reputação que um auditor entende. Confiança não é uma estrelinha — é um vetor de seis eixos.&#10;B executa bem e ainda assim é um péssimo contratante: selection 0.12.&#10;underwriting = entregue dividido por prometido. É o eixo que pega o mentiroso sozinho.&#10;Isso é o que permite culpar o salto certo em vez de culpar o último."
+        >
+          <img src="assets/axes.png" alt="Perfil de confiança do agente B: execution 0.94, selection 0.12, underwriting 0.42, latency 0.88, cost_honesty 0.91, judgment 0.97." />
+        </section>
+
+        <!-- ============================================================ 08 -->
+        <section
+          class="slide dark"
+          data-title="DEMO AO VIVO"
+          data-time="2:10 → 3:30"
+          data-notes="TROCA PARA O APP AGORA. 90 segundos, três janelas já abertas.&#10;1) pnpm loop — narrar: 41 vermelho, atribuição em B, 96 verde, custódia libera.&#10;2) /start — falar a tarefa em voz alta e mostrar o request nascendo sem formulário.&#10;3) /agents/[id]/test — registrar vendedor, convite por webhook, entrega de bytes reais.&#10;Se atrasar, corta o 3. NÃO corta o 1.&#10;Voltar para o slide 09 assim que a custódia liberar."
+        >
+          <p class="eyebrow">Sai o slide</p>
+          <h1 style="font-size: 116px">Ao vivo.</h1>
+          <p class="lede" style="margin: 22px 0 34px; max-width: 58ch">
+            Três caminhos, o mesmo ledger e a mesma máquina de custódia. Nada gravado, nada simulado —
+            sem chave da NeuraLake o endpoint devolve <code>503</code> em vez de fingir.
+          </p>
+
+          <div class="cols c-3">
+            <div class="demo-card">
+              <p class="cmd">pnpm loop</p>
+              <p class="what">A cena A → B → C1 → C2</p>
+              <p class="how">
+                Workflow Mastra em processo, sobre o mesmo motor de custódia que a API usa. Um pedido,
+                quatro contratações, duas decisões de pagamento.
+              </p>
+              <p class="watch">
+                O que olhar: <b class="danger">0.41</b> e a custódia travando, a atribuição caindo em
+                <b class="warn">b-mid</b>, e <b style="color: var(--cyan)">0.96</b> liberando o pagamento.
+              </p>
+            </div>
+            <div class="demo-card">
+              <p class="cmd">/start</p>
+              <p class="what">Eu falo a tarefa. O agente posta.</p>
+              <p class="how">
+                O composer de voz escuta, monta o pedido e faz o <code>POST /api/v1/requests</code>.
+                Daí em diante eu só assisto.
+              </p>
+              <p class="watch">
+                O que olhar: os 4+1 campos sendo preenchidos por voz. Nenhum formulário, nenhuma escolha
+                de fornecedor.
+              </p>
+            </div>
+            <div class="demo-card">
+              <p class="cmd">/agents/[id]/test</p>
+              <p class="what">Um vendedor novo entra no mercado</p>
+              <p class="how">
+                Registro na plataforma, chave e segredo emitidos uma vez, um Durable Object
+                provisionado. Sem Wrangler, sem chave compartilhada.
+              </p>
+              <p class="watch">
+                O que olhar: convite por webhook, um plano e um preço, bytes reais saindo de um Worker —
+                e a verificação decidindo.
+              </p>
+            </div>
+          </div>
+
+          <p class="kicker">
+            <strong>human_interventions: 0</strong> na tela o tempo inteiro — derivado do ledger, nunca
+            armazenado.
+          </p>
+        </section>
+
+        <!-- ============================================================ 09 -->
+        <section
+          class="slide"
+          data-title="Recap pós-demo"
+          data-time="3:30"
+          data-notes="Voltando do demo. Reforçar que nada foi encenado: está tudo no ledger.&#10;Apontar os dois números: inferência queimada e valor pago ao vendedor. São dinheiros diferentes.&#10;Dizer: um auditor humano lê essa lista de cima a baixo e reconstrói cada decisão — quem foi contratado, qual modelo, por quê, a que custo."
+        >
+          <p class="eyebrow">O que você acabou de ver</p>
+          <h2 style="max-width: 20ch">Nada foi encenado. Está tudo no ledger.</h2>
+
+          <div class="cols c-media" style="margin-top: 14px">
+            <div style="display: flex; flex-direction: column">
+              <ul class="rows">
+                <li><b>decisões</b>Leilão, contratação, escalada e liberação: todas tomadas por agentes.</li>
+                <li><b>bytes</b>A plataforma nunca inventa o artefato. As checagens leem o PDF que o vendedor produziu.</li>
+                <li><b>dinheiro</b>Custódia por salto. Só o salto que entregou recebe.</li>
+                <li><b>culpa</b>A atribuição aponta o contratante, não o último da fila.</li>
+                <li><b>memória</b>A confiança par a par cai e a próxima contratação já muda de rota.</li>
+              </ul>
+              <p class="kicker" style="font-size: 20px">
+                <strong>Um auditor lê essa lista de cima a baixo</strong> e reconstrói qual agente foi
+                contratado, qual modelo rodou, por quê e a que custo.
+              </p>
+            </div>
+
+            <div class="media">
+              <video src="assets/ledger.mp4" poster="assets/ledger-poster.png" muted loop playsinline preload="auto"></video>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================ 10 -->
+        <section
+          class="slide"
+          data-title="Os 5 desafios"
+          data-time="3:40"
+          data-notes="O slide do all-in. Entramos no 02 e entregamos os cinco — e não como promessa: cada coluna tem o artefato que você acabou de ver rodando.&#10;Falar rápido, apontando: negócio inteiro operado por agentes, marketplace de verdade, orçamento como restrição dura, interface que é uma API, e a camada de confiança.&#10;Se só sobrar tempo para um slide depois da demo, é este."
+        >
+          <p class="eyebrow">Escolhemos um desafio. Entregamos os cinco.</p>
+          <h2>Não por ambição — por consequência.</h2>
+          <p class="lede" style="margin-bottom: 26px; max-width: 78ch">
+            Construímos um fluxo só. Os outros quatro desafios caem fora do mesmo artefato, porque um
+            marketplace A2A que paga de verdade já exige todos eles.
+          </p>
+
+          <div class="chalgrid">
+            <div class="chal">
+              <p class="n">01</p>
+              <h3>The Autonomous Business</h3>
+              <p>O negócio inteiro roda por agentes. O humano entrega objetivo e teto, e sai.</p>
+              <p class="cst">Restrição do desafio: humanos definem o objetivo, agentes executam o fluxo.</p>
+              <p class="ev">/start por voz → leilão → entrega, sem uma tela no meio</p>
+            </div>
+            <div class="chal ours">
+              <p class="n">02 · declarado</p>
+              <h3>Agent Marketplace</h3>
+              <p>Registro, convite Top-K, um plano e um preço por convidado, seleção por melhor nota.</p>
+              <p class="cst">Restrição do desafio: nenhum humano escolhe qual agente executa cada tarefa.</p>
+              <p class="ev">vendedores hospedados, um Durable Object por agente</p>
+            </div>
+            <div class="chal">
+              <p class="n">03</p>
+              <h3>Agent-to-Agent Economy</h3>
+              <p>Preço e prazo são restrições duras. Gasto por evento, ao vivo, no ledger.</p>
+              <p class="cst">Desafio: maximizar valor por dólar gasto, com o gasto exibido em tempo real.</p>
+              <p class="ev">escalada dentro do saldo restante, não recomeço do zero</p>
+            </div>
+            <div class="chal">
+              <p class="n">04</p>
+              <h3>Agent-First Product</h3>
+              <p>A interface é o pedido de quatro campos. O agente se credencia sozinho e chama a API.</p>
+              <p class="cst">Restrição do desafio: o humano nunca toca na interface depois de definir o objetivo.</p>
+              <p class="ev">/auth.md · /api/v1 · nenhum onboarding humano</p>
+            </div>
+            <div class="chal ours">
+              <p class="n">05 · construído</p>
+              <h3>Agent Trust &amp; Verification</h3>
+              <p>Certificado, custódia por salto, atribuição causal e trilha reproduzível.</p>
+              <p class="cst">Desafio: toda decisão registrada e explicável a um auditor humano.</p>
+              <p class="ev">checagem determinística + J1/J2 de outra família</p>
+            </div>
+          </div>
+
+          <p class="kicker">
+            Profundidade antes de cobertura.
+            <strong>Se tivesse que cortar, cortaríamos um desafio — nunca o que roda ao vivo.</strong>
+          </p>
+        </section>
+
+        <!-- ============================================================ 11 -->
+        <section
+          class="slide"
+          data-title="Onde isso pontua"
+          data-time="3:50 (cortável)"
+          data-notes="SLIDE CORTÁVEL se o relógio apertar — pular direto para o fecho.&#10;Se der tempo: ler só as duas primeiras linhas, 30% e 25%, e apontar que o 503 sem chave é a prova de que não simulamos."
+        >
+          <p class="eyebrow">Os critérios do evento, um por um</p>
+          <h2>Onde isso pontua.</h2>
+
+          <div class="weights">
+            <div class="weight">
+              <span class="pct">30%</span>
+              <span class="what">Grau de autonomia A2A</span>
+              <span class="how"
+                >Descobrir, avaliar, contratar, delegar, verificar e pagar sem humano.
+                <code>human_interventions</code> é derivado do ledger, não declarado por nós.</span
+              >
+            </div>
+            <div class="weight">
+              <span class="pct">25%</span>
+              <span class="what">Funciona de verdade</span>
+              <span class="how"
+                >Três caminhos ao vivo, PDF real, bytes de um Worker real. Sem chave da NeuraLake o
+                endpoint devolve <code>503</code> — não existe caminho simulado.</span
+              >
+            </div>
+            <div class="weight">
+              <span class="pct">15%</span>
+              <span class="what">Valor por token</span>
+              <span class="how"
+                ><code>model="auto"</code> na NeuraLake, custo por evento no ledger, e escalada dentro do
+                orçamento restante em vez de refazer o pedido.</span
+              >
+            </div>
+            <div class="weight">
+              <span class="pct">15%</span>
+              <span class="what">Valor de negócio</span>
+              <span class="how"
+                >SLA é o que uma empresa já sabe comprar. É o único formato em que um agente pode gastar
+                dinheiro sem alguém olhando.</span
+              >
+            </div>
+            <div class="weight">
+              <span class="pct">10%</span>
+              <span class="what">Pitch e clareza</span>
+              <span class="how">Problema, demo ao vivo e próximo passo em quatro minutos.</span>
+            </div>
+            <div class="weight">
+              <span class="pct">5%</span>
+              <span class="what">Confiança e explicabilidade</span>
+              <span class="how"
+                >Todo evento carrega agente, modelo, custo e rationale. A decisão é reconstruível por um
+                auditor humano.</span
+              >
+            </div>
+          </div>
+
+          <p class="kicker">
+            Nenhuma dessas linhas pede o benefício da dúvida.
+            <strong>Todas têm um artefato rodando atrás.</strong>
+          </p>
+        </section>
+
+        <!-- ============================================================ 12 -->
+        <section
+          class="slide dark"
+          data-title="Fecho"
+          data-time="4:00"
+          data-notes="Fecho. Pausa antes da última frase.&#10;'A próxima trilhão de usuários não é humana — e ela não vai gastar um centavo enquanto ninguém responder pelo trabalho.'&#10;'A gente responde. Obrigado.'&#10;Próximos passos se vier no Q&A: trilhos de pagamento reais, disputa com contraprova, e catálogo aberto de vendedores."
+        >
+          <div class="brandline" style="margin-bottom: 46px">
+            <span class="dot"></span><span class="wordmark">underwrite</span>
+          </div>
+
+          <h1 style="max-width: 24ch; font-size: 84px">
+            O próximo trilhão de usuários não é humano.<br />
+            <em>E não gasta um centavo sem alguém responder pelo trabalho.</em>
+          </h1>
+
+          <div class="cols c-3" style="flex: initial; margin-top: auto; gap: 40px">
+            <div>
+              <p class="eyebrow">Rodando hoje</p>
+              <p class="lede" style="font-size: 20px">
+                Leilão, custódia por salto, verificação com escopo, atribuição causal e vendedores
+                hospedados.
+              </p>
+            </div>
+            <div>
+              <p class="eyebrow">Próximo passo</p>
+              <p class="lede" style="font-size: 20px">
+                Trilhos de pagamento reais, disputa com contraprova e catálogo aberto — qualquer agente
+                entra e é medido do mesmo jeito.
+              </p>
+            </div>
+            <div>
+              <p class="eyebrow">Onde ver</p>
+              <p class="lede" style="font-size: 20px; font-family: var(--mono)">
+                /docs · /auth.md<br />
+                POST /api/v1/requests
+              </p>
+            </div>
+          </div>
+
+          <p class="kicker"><strong>Obrigado.</strong> Perguntas.</p>
+        </section>
+
+        <!-- rails are injected per slide by deck.js -->
+      </div>
+    </div>
+
+    <aside id="notes" aria-live="polite">
+      <h4 id="notes-head">Notas</h4>
+      <div id="notes-body"></div>
+      <div class="next" id="notes-next"></div>
+    </aside>
+
+    <div id="hud">
+      <span id="clock">0:00</span>
+      <span>·</span>
+      <span>← →  navegar</span>
+      <span>·</span>
+      <span>N notas</span>
+      <span>·</span>
+      <span>G grade</span>
+      <span>·</span>
+      <span>T timer</span>
+      <span>·</span>
+      <span>F tela cheia</span>
+    </div>
+
+    <script src="deck.js"></script>
+  </body>
+</html>

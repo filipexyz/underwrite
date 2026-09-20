@@ -1,0 +1,827 @@
+/* ------------------------------------------------------------------ *
+ * Underwrite — pitch deck
+ * Tokens mirror src/app/globals.css so the deck and the product are
+ * visibly the same object.
+ * ------------------------------------------------------------------ */
+
+@import url("assets/fonts.css");
+
+:root {
+  --ink: #0b1017;
+  --paper: #eef0ea;
+  --line: #cbd1c8;
+  --acid: #d6ff45;
+  --cyan: #82f1e0;
+  --orange: #ff9d4d;
+  --muted: #737d79;
+  --teal: #197567;
+  --forest: #4d746c;
+  --panel: #f8f9f5;
+  --result: #e4e9e2;
+  --danger: #b85035;
+  --warn: #a75e2d;
+  --body: #46514d;
+
+  --sans: "Manrope", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --mono: "DM Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --display: "Playfair Display", ui-serif, Georgia, serif;
+
+  --w: 1600;
+  --h: 900;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: #05080c;
+  color: var(--ink);
+  font-family: var(--sans);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------------------------------------------------------------- stage */
+
+#stage {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+
+.deck {
+  position: relative;
+  width: calc(var(--w) * 1px);
+  height: calc(var(--h) * 1px);
+  transform: scale(var(--k, 1));
+  transform-origin: center;
+  box-shadow: 0 40px 120px rgba(0, 0, 0, 0.55);
+}
+
+.slide {
+  position: absolute;
+  inset: 0;
+  background: var(--paper);
+  padding: 62px 76px 84px;
+  display: flex;
+  flex-direction: column;
+  opacity: 0;
+  visibility: hidden;
+  overflow: hidden;
+}
+
+.slide.is-on {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 160ms linear;
+}
+
+.slide.dark {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+/* Film grain, same treatment as the product surface. */
+.slide::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  opacity: 0.045;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ------------------------------------------------------------ type kit */
+
+.eyebrow {
+  font: 500 13px/1 var(--mono);
+  letter-spacing: 2.2px;
+  text-transform: uppercase;
+  color: #52605b;
+  margin: 0 0 22px;
+}
+
+.dark .eyebrow {
+  color: #7d8a83;
+}
+
+h1 {
+  font: 600 88px/1.02 var(--display);
+  letter-spacing: -2.5px;
+  margin: 0;
+}
+
+h1 em {
+  font-style: italic;
+  color: var(--teal);
+}
+
+.dark h1 em {
+  color: var(--acid);
+}
+
+h2 {
+  font: 800 62px/1.06 var(--sans);
+  letter-spacing: -2.6px;
+  margin: 0 0 18px;
+}
+
+h2 em {
+  font: italic 600 62px/1.06 var(--display);
+  letter-spacing: -2px;
+  color: var(--teal);
+}
+
+h3 {
+  font: 700 27px/1.2 var(--sans);
+  letter-spacing: -0.9px;
+  margin: 0 0 10px;
+}
+
+p {
+  margin: 0;
+}
+
+.lede {
+  font: 400 27px/1.5 var(--sans);
+  color: var(--body);
+  max-width: 62ch;
+}
+
+.dark .lede {
+  color: #aab4ad;
+}
+
+.kicker {
+  margin-top: auto;
+  padding-top: 22px;
+  border-top: 1px solid var(--line);
+  font: 400 22px/1.45 var(--sans);
+  color: var(--body);
+  display: flex;
+  align-items: baseline;
+  gap: 18px;
+}
+
+.dark .kicker {
+  border-top-color: #22303a;
+  color: #aab4ad;
+}
+
+.kicker strong {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.dark .kicker strong {
+  color: var(--paper);
+}
+
+code,
+.mono {
+  font-family: var(--mono);
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  border: 1.5px solid currentColor;
+  padding: 7px 13px;
+  font: 500 15px/1 var(--mono);
+  letter-spacing: 0.4px;
+  white-space: nowrap;
+}
+
+.pill.solid {
+  border-color: transparent;
+  color: var(--paper);
+}
+
+.pill.teal.solid {
+  background: var(--teal);
+}
+.pill.danger.solid {
+  background: var(--danger);
+}
+.pill.warn.solid {
+  background: var(--warn);
+}
+.teal {
+  color: var(--teal);
+}
+.danger {
+  color: var(--danger);
+}
+.warn {
+  color: var(--warn);
+}
+
+/* ---------------------------------------------------------------- brand */
+
+.brandline {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.dot {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--acid);
+  box-shadow: 0 0 0 6px var(--ink);
+  flex: none;
+}
+
+.dark .dot {
+  box-shadow: 0 0 0 6px var(--paper);
+}
+
+.wordmark {
+  font: 700 30px/1 var(--mono);
+  letter-spacing: -1.5px;
+}
+
+/* -------------------------------------------------------------- layouts */
+
+.cols {
+  display: grid;
+  gap: 44px;
+  flex: 1;
+  min-height: 0;
+}
+
+.c-2 {
+  grid-template-columns: 1fr 1fr;
+}
+.c-media {
+  grid-template-columns: 1fr 1.05fr;
+}
+.c-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.pane {
+  border: 1px solid var(--ink);
+  background: var(--panel);
+  padding: 30px 32px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.dark .pane {
+  border-color: #2a3540;
+  background: #101922;
+}
+
+.pane .tag {
+  font: 500 12px/1 var(--mono);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 16px;
+}
+
+.media {
+  position: relative;
+  background: var(--ink);
+  overflow: hidden;
+  display: flex;
+}
+
+.media video,
+.media img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.full-media {
+  flex: 1;
+  min-height: 0;
+  margin-bottom: 20px;
+}
+
+/* ------------------------------------------------------------ list kits */
+
+.rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.rows > li {
+  list-style: none;
+  border-top: 1px solid var(--line);
+  padding: 15px 0;
+  font: 400 21px/1.42 var(--sans);
+  color: var(--body);
+  display: flex;
+  gap: 16px;
+  align-items: baseline;
+}
+
+.dark .rows > li {
+  border-top-color: #22303a;
+  color: #aab4ad;
+}
+
+.rows > li:first-child {
+  border-top: none;
+}
+
+.rows b {
+  font: 500 16px/1.5 var(--mono);
+  letter-spacing: 0.5px;
+  color: var(--ink);
+  flex: none;
+  min-width: 128px;
+}
+
+.dark .rows b {
+  color: var(--acid);
+}
+
+ul.plain {
+  margin: 0;
+  padding: 0;
+}
+
+ul.plain > li {
+  list-style: none;
+  padding: 0 0 0 26px;
+  margin-bottom: 15px;
+  position: relative;
+  font: 400 23px/1.45 var(--sans);
+  color: var(--body);
+}
+
+ul.plain > li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 13px;
+  width: 11px;
+  height: 2px;
+  background: var(--teal);
+}
+
+.dark ul.plain > li {
+  color: #aab4ad;
+}
+.dark ul.plain > li::before {
+  background: var(--acid);
+}
+
+/* ------------------------------------------------------------ specials */
+
+.bignum {
+  font: 800 132px/0.88 var(--sans);
+  letter-spacing: -7px;
+}
+
+.statpair {
+  display: flex;
+  align-items: flex-end;
+  gap: 40px;
+}
+
+.stat .k {
+  font: 500 13px/1 var(--mono);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 12px;
+}
+
+pre.req {
+  margin: 0;
+  background: #d8dfd8;
+  padding: 22px 24px;
+  font: 400 18px/1.7 var(--mono);
+  color: var(--ink);
+  white-space: pre;
+  overflow: hidden;
+}
+
+pre.req .key {
+  color: var(--teal);
+}
+pre.req .cmt {
+  color: var(--muted);
+}
+
+.chalgrid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0;
+  flex: 1;
+  min-height: 0;
+  border-left: 1px solid var(--line);
+}
+
+.chal {
+  border-right: 1px solid var(--line);
+  padding: 24px 22px;
+  display: flex;
+  flex-direction: column;
+}
+
+.chal .n {
+  font: 500 14px/1 var(--mono);
+  letter-spacing: 2px;
+  color: var(--muted);
+  margin-bottom: 14px;
+}
+
+.chal h3 {
+  font: 700 25px/1.14 var(--sans);
+  letter-spacing: -0.9px;
+  margin-bottom: 14px;
+}
+
+.chal p {
+  font: 400 17px/1.45 var(--sans);
+  color: var(--body);
+}
+
+.chal .ev {
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+  font: 400 15px/1.5 var(--mono);
+  color: var(--teal);
+}
+
+.chal.ours {
+  background: var(--ink);
+  color: var(--paper);
+  border-right-color: var(--ink);
+}
+
+.chal.ours .n {
+  color: var(--acid);
+}
+.chal.ours p {
+  color: #aab4ad;
+}
+.chal.ours .ev {
+  border-top-color: #2a3540;
+  color: var(--acid);
+}
+
+.weights {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.weight {
+  display: grid;
+  grid-template-columns: 104px 260px 1fr;
+  gap: 26px;
+  align-items: center;
+  border-top: 1px solid var(--line);
+  padding: 17px 0;
+}
+
+.weight:first-child {
+  border-top: none;
+}
+
+.weight .pct {
+  font: 800 40px/1 var(--sans);
+  letter-spacing: -2px;
+  color: var(--ink);
+}
+
+.weight .what {
+  font: 700 21px/1.25 var(--sans);
+  letter-spacing: -0.5px;
+}
+
+.weight .how {
+  font: 400 19px/1.4 var(--sans);
+  color: var(--body);
+}
+
+.demo-card {
+  border: 1px solid #2a3540;
+  background: #101922;
+  padding: 26px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.demo-card .cmd {
+  font: 500 21px/1.3 var(--mono);
+  color: var(--acid);
+  letter-spacing: -0.5px;
+}
+
+.demo-card .what {
+  font: 700 22px/1.25 var(--sans);
+  color: var(--paper);
+  letter-spacing: -0.6px;
+}
+
+.demo-card .watch {
+  font: 400 17px/1.5 var(--sans);
+  color: #aab4ad;
+  margin-top: auto;
+  padding-top: 14px;
+  border-top: 1px solid #22303a;
+}
+
+.cover-meta {
+  display: flex;
+  align-items: flex-end;
+  gap: 40px;
+  border-top: 1px solid var(--line);
+  padding-top: 22px;
+}
+
+.cover-meta div {
+  font: 400 17px/1.6 var(--mono);
+  color: var(--muted);
+}
+
+.cover-meta b {
+  display: block;
+  font: 500 13px/1 var(--mono);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: #52605b;
+  margin-bottom: 9px;
+}
+
+/* ----------------------------------------------------------- slide rail */
+
+.rail {
+  position: absolute;
+  left: 76px;
+  right: 76px;
+  bottom: 34px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  z-index: 50;
+  font: 500 12px/1 var(--mono);
+  letter-spacing: 1.6px;
+  color: var(--muted);
+}
+
+.dark .rail {
+  color: #6d7a73;
+}
+
+.rail .seg {
+  flex: 1;
+  height: 3px;
+  background: var(--line);
+}
+
+.dark .rail .seg {
+  background: #22303a;
+}
+
+.rail .seg.done {
+  background: #9aa79f;
+}
+
+.dark .rail .seg.done {
+  background: #46545e;
+}
+
+.rail .seg.now {
+  background: var(--ink);
+}
+
+.dark .rail .seg.now {
+  background: var(--acid);
+}
+
+/* -------------------------------------------------------------- chrome */
+
+#notes {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  width: 460px;
+  max-height: 62vh;
+  overflow: auto;
+  background: #0f1720;
+  color: #d5dcd6;
+  border: 1px solid #2a3540;
+  padding: 20px 22px;
+  font: 400 15px/1.6 var(--sans);
+  z-index: 100;
+  display: none;
+}
+
+#notes.on {
+  display: block;
+}
+
+#notes h4 {
+  margin: 0 0 12px;
+  font: 500 11px/1 var(--mono);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--acid);
+}
+
+#notes .next {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid #22303a;
+  font: 400 13px/1.5 var(--mono);
+  color: #7d8a83;
+}
+
+#notes ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+#hud {
+  position: fixed;
+  left: 18px;
+  bottom: 18px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  z-index: 100;
+  font: 500 12px/1 var(--mono);
+  letter-spacing: 1.4px;
+  color: #6d7a73;
+  opacity: 0;
+  transition: opacity 200ms;
+}
+
+#hud.on {
+  opacity: 1;
+}
+
+#clock {
+  color: var(--acid);
+  font-variant-numeric: tabular-nums;
+}
+
+#clock.over {
+  color: var(--orange);
+}
+
+/* Grid overview — `zoom` (not transform) so the thumbnails take real layout space */
+#stage.grid .deck {
+  transform: none;
+  width: auto;
+  height: auto;
+  box-shadow: none;
+  display: grid;
+  grid-template-columns: repeat(4, auto);
+  gap: 20px;
+}
+
+#stage.grid .slide {
+  position: relative;
+  inset: auto;
+  opacity: 1;
+  visibility: visible;
+  zoom: 0.19;
+  outline: 10px solid #22303a;
+  cursor: pointer;
+}
+
+#stage.grid .slide.is-on {
+  outline: 22px solid var(--acid);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .slide.is-on {
+    transition: none;
+  }
+}
+
+/* --------------------------------------------------------------- print */
+
+@media print {
+  @page {
+    size: 1600px 900px;
+    margin: 0;
+  }
+
+  html,
+  body {
+    overflow: visible;
+    background: #fff;
+  }
+
+  #stage {
+    position: static;
+    display: block;
+  }
+
+  .deck {
+    transform: none;
+    width: auto;
+    height: auto;
+    box-shadow: none;
+  }
+
+  .slide {
+    position: relative;
+    inset: auto;
+    opacity: 1;
+    visibility: visible;
+    width: calc(var(--w) * 1px);
+    height: calc(var(--h) * 1px);
+    break-after: page;
+  }
+
+  #notes,
+  #hud {
+    display: none !important;
+  }
+
+  /* The grain overlay rasterises per page and bloats the export. */
+  .slide::after {
+    display: none;
+  }
+}
+
+/* ----------------------------------------------------------- full bleed */
+
+/*
+ * The motion slides are rendered at exactly 1600x900 and carry their own
+ * headline, so the deck gets out of the way and lets them fill the screen.
+ */
+.slide.bleed {
+  padding: 0;
+  background: var(--paper);
+}
+
+.slide.bleed > video,
+.slide.bleed > img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.slide.bleed .rail {
+  left: 56px;
+  right: 56px;
+  bottom: 30px;
+}
+
+.chal .cst {
+  margin-top: 14px;
+  padding-left: 13px;
+  border-left: 2px solid var(--line);
+  font: 400 15px/1.45 var(--sans);
+  color: var(--muted);
+}
+
+.chal.ours .cst {
+  border-left-color: #3a4650;
+  color: #8d978f;
+}
+
+.weights {
+  justify-content: space-between;
+}
+
+blockquote {
+  margin: 38px 0 0;
+  padding: 22px 26px;
+  border-left: 4px solid var(--danger);
+  background: var(--result);
+  font: 400 23px/1.45 var(--sans);
+  color: var(--body);
+  max-width: 44ch;
+}
+
+blockquote strong {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.demo-card .how {
+  font: 400 17px/1.5 var(--sans);
+  color: #8d978f;
+}
+
+.demo-card .how code {
+  color: #aab4ad;
+}
