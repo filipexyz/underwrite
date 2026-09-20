@@ -47,6 +47,8 @@ export function VoiceComposer({ startPath }: { startPath: string }) {
    */
   const [remoteCount, setRemoteCount] = useState(0);
   const [connState, setConnState] = useState("idle");
+  /** Full provider error text from the agent, kept separately so it is never truncated by layout. */
+  const [agentError, setAgentError] = useState<string | null>(null);
   const [micOn, setMicOn] = useState(true);
   const [transcript, setTranscript] = useState<TranscriptTurn[]>([]);
   const [elapsed, setElapsed] = useState(0);
@@ -243,7 +245,15 @@ export function VoiceComposer({ startPath }: { startPath: string }) {
       rtm.addEventListener("message", (event: { message: unknown }) => {
         const parsed = parseRtmMessage(event.message);
         if (parsed.kind === "state") setAgentState(parsed.state);
-        if (parsed.kind === "error") setError(parsed.message);
+        if (parsed.kind === "error") {
+          /*
+           * The agent's failure arrives here and nowhere else — the server's `session.start()` already
+           * resolved, so this message is the only account of *why* the agent never joined. Keep the full
+           * text on screen and persist it, instead of a truncated line nobody can act on.
+           */
+          setError(`agent error: ${parsed.message}`);
+          setAgentError(parsed.message);
+        }
         if (parsed.kind === "transcript") {
           // Both sides are kept. Filtering to the agent's turns made the conversation look like
           // questions with no answers, which reads as a frozen call.
@@ -339,6 +349,11 @@ export function VoiceComposer({ startPath }: { startPath: string }) {
           </p>
         ) : null}
         {error ? <p className="font-sans text-sm text-danger max-w-sm">{error}</p> : null}
+        {agentError ? (
+          <pre className="mono text-[10px] text-danger text-left w-full overflow-x-auto whitespace-pre-wrap border border-danger/40 p-2">
+            {agentError}
+          </pre>
+        ) : null}
       </div>
 
       <div className="flex flex-col items-center gap-4 px-6 pb-6">
