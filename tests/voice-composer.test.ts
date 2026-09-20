@@ -110,13 +110,13 @@ describe("prompt guidance", () => {
     expect(prompt).toContain("empty market");
   });
 
-  it("forbids the agent from speaking structured data", () => {
+  it("asks for the structured completion turn, exactly like the interview prompt", () => {
     const prompt = buildVoiceComposerPrompt();
-    // Dictated JSON is mangled by TTS/ASR and never parses: the brief is extracted from the transcript
-    // server-side instead. If this instruction disappears, the failure returns.
-    expect(prompt).toContain("NEVER speak structured data");
-    expect(prompt).not.toContain('"failure_policy"');
-    expect(prompt).toContain("stop asking questions");
+    // This is the mechanism: the client detects completion by reading these fields out of the transcript,
+    // so the prompt must ask for them. Removing this instruction is what broke automatic posting.
+    expect(prompt).toContain('"failure_policy"');
+    expect(prompt).toContain("single JSON object");
+    expect(prompt).toContain("stop talking");
   });
 
   it("greets with the first question instead of silence", () => {

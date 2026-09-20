@@ -56,11 +56,13 @@ Conversation rules:
 
 Finishing:
 - When — and only when — you have a concrete deliverable AND all four terms, say one short sentence
-  that you have everything and are posting the task, then stop asking questions.
-- NEVER speak structured data. Do not dictate JSON, braces, brackets, field names, or a list of
-  key/value pairs out loud. It cannot be read back reliably and it sounds absurd on a call.
-- After that closing sentence, say nothing further. The system files the task from this conversation.
-- Do not say you are posting the task and then keep talking. Do not ask a follow-up after it.`;
+  that you have everything, then immediately output a single JSON object and nothing else after it.
+- Shape:
+  {"requirement":"<what to deliver, specific enough to be checked>","max_cost_usd":<number>,"max_latency_s":<number>,"min_confidence":<number between 0 and 1>,"failure_policy":"refund|discount|accept_flagged","category":"<optional specialty>","notes":"<optional, one line>"}
+- Do not wrap that JSON in markdown fences and do not comment on it.
+- After emitting it, stop talking. Do not ask a follow-up and do not offer another question.
+- If speech recognition garbles the JSON, say nothing further — the system also reads this conversation
+  and will recover the terms from what was said.`;
 
 export function buildVoiceComposerPrompt(): string {
   return `${MARKET_CONTEXT}
