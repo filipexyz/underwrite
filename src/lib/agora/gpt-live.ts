@@ -96,6 +96,14 @@ export type StartGptLiveAgentArgs = {
   agentUid: string;
 };
 
+/**
+ * Start a GPT Live agent.
+ *
+ * Note on failure modes: `session.start()` resolves as soon as the agent session is *accepted*, so a
+ * later provider rejection (an invalid model, key or request) does not throw here — the agent simply
+ * never joins the channel. That is why callers must not treat a resolved start as "the agent is live":
+ * the browser sees `remotes 0` and the only evidence is an RTM error message.
+ */
 export async function startGptLiveAgent(args: StartGptLiveAgentArgs): Promise<{ agentId: string; agentUid: string }> {
   const { AgoraClient, Agent, ExpiresIn, OpenAIGPTLive } = await import("agora-agents");
   const appId = env.agora.appId;
@@ -116,7 +124,12 @@ export async function startGptLiveAgent(args: StartGptLiveAgentArgs): Promise<{ 
     client,
     advancedFeatures: { enable_rtm: true, enable_tools: false },
     parameters: {
-      audio_scenario: "chorus",
+      /*
+       * `audio_scenario: "chorus"` was inherited from the interview module and is the one non-standard
+       * parameter in this config — it selects chorus/karaoke audio processing, and neither the official
+       * Agora recipe nor the ConvoAI quickstart sets it. Removed here; if a surface ever needs it, pass
+       * it explicitly rather than defaulting every agent into it.
+       */
       data_channel: "rtm",
       enable_error_message: true,
       enable_metrics: true,
