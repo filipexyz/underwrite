@@ -2,14 +2,15 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Badge, Empty, Money, PageIntro, Panel, Stat, Td, Th } from "@/app/console/ui";
 import { listApiKeys, toPublicApiKey } from "@/lib/auth/api-keys";
-import { peekIssuedSellerSecret } from "@/lib/auth/issued-secret";
+import { peekIssuedAgentSecrets } from "@/lib/auth/issued-secret";
 import { requireSignedInPage } from "@/lib/auth/session";
 import { SecretBanner } from "@/components/secret-banner";
 import { getDb } from "@/lib/db/client";
+import { getPublicAgentRuntime } from "@/lib/marketplace/agent-runtime";
 import { ensureAgentWallet } from "@/lib/marketplace/credits";
 import { getOwnedAgent, toPublicAgent } from "@/lib/marketplace/sellers";
 import { revokeOwnedSellerKey, setOwnedAgentDisabled } from "./actions";
-import { EditAgentForm, MintSellerKeyForm } from "./manage";
+import { EditAgentForm, MintSellerKeyForm, RuntimeForm } from "./manage";
 
 export const dynamic = "force-dynamic";
 
@@ -20,10 +21,11 @@ export default async function AgentDetailPage({ params }: { params: Promise<{ id
   const row = await getOwnedAgent(db, id, userId);
   if (!row) notFound();
 
-  const [wallet, keyRows, issuedSecret] = await Promise.all([
+  const [wallet, keyRows, issued, runtime] = await Promise.all([
     ensureAgentWallet(db, row.agentId),
     listApiKeys(db, { ownerClerkUserId: userId, agentId: row.agentId }),
-    peekIssuedSellerSecret(row.agentId),
+    peekIssuedAgentSecrets(row.agentId),
+    getPublicAgentRuntime(db, row.agentId, row.webhookUrl),
   ]);
   const agent = toPublicAgent(row);
   const keys = keyRows.map(toPublicApiKey);
@@ -38,7 +40,7 @@ export default async function AgentDetailPage({ params }: { params: Promise<{ id
         <PageIntro
           eyebrow="PROVIDER DETAIL / MANIFEST"
           title={agent.name}
-          lede="Owner management for this hireable agent. Disabled agents are excluded from auction invites and bids. The seller wallet starts at $0 and earns when hired."
+          lede="This agent’s identity, seller key, webhook, and BYOK are isolated from every other user. Disabled agents drop out of marketplace invites."
           action={
             <div className="flex flex-col items-end gap-2">
               <span className="mono text-xs text-muted">{agent.agent_id}</span>
@@ -51,7 +53,8 @@ export default async function AgentDetailPage({ params }: { params: Promise<{ id
         />
       </div>
 
-      {issuedSecret ? <SecretBanner secret={issuedSecret} label="seller secret" /> : null}
+      {issued.seller ? <SecretBanner secret={issued.seller} label="seller secret" /> : null}
+      {issued.webhook ? <SecretBanner secret={issued.webhook} label="webhook HMAC secret" /> : null}
 
       <div className="grid gap-4 md:grid-cols-2">
         <Panel title="Wallet" eyebrow="EARNINGS" aside={<Badge value="agent" />}>
@@ -97,14 +100,26 @@ export default async function AgentDetailPage({ params }: { params: Promise<{ id
           <Stat label="contact" value={agent.contact ?? "—"} />
           <Stat label="webhook url" value={<span className="break-all">{agent.webhook_url ?? "—"}</span>} />
           <Stat label="description" value={agent.description ?? "—"} />
-          <Stat label="owner" value={<span className="mono text-xs">{agent.owner_clerk_user_id ?? "—"}</span>} />
+          <Stat label="owner" value={<span className="mono text-xs">{agent.owner_user_id ?? "—"}</span>} />
           <Stat label="created" value={new Date(agent.created_at).toLocaleString()} />
           <Stat label="updated" value={new Date(agent.updated_at).toLocaleString()} />
         </dl>
       </Panel>
 
+      <Panel title="Hosted runtime" eyebrow="PER-AGENT IDENTITY" aside={<Badge value={runtime.kind} />}>
+        <dl className="grid gap-4 md:grid-cols-2 text-sm mb-6">
+          <Stat label="kind" value={runtime.kind} />
+          <Stat label="webhook" value={<span className="break-all">{runtime.webhook_url ?? "inbox fallback"}</span>} />
+          <Stat label="HMAC secret" value={runtime.webhook_secret_configured ? "configured" : "missing"} />
+          <Stat label="BYOK" value={runtime.byok_configured ? "configured" : "not set"} />
+          <Stat label="BYOK base" value={runtime.byok_base_url ?? "NeuraLake default"} />
+          <Stat label="provisioned" value={runtime.provisioned ? "yes" : "pending / inbox"} />
+        </dl>
+        <RuntimeForm agentId={agent.agent_id} runtime={runtime} />
+      </Panel>
+
       <Panel title="Edit" eyebrow="UPDATE MANIFEST">
-        <EditAgentForm agent={agent} />
+        <EditAgentForm agent={agent} hosted={runtime.kind === "hosted"} />
       </Panel>
 
       <Panel title="Seller keys" eyebrow="PREFIXES ONLY" aside={<span className="eyebrow !mb-0">shown once</span>}>

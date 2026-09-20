@@ -1,6 +1,7 @@
 /**
  * Platform outbound webhook (`src/lib/marketplace/webhooks.ts`):
- * HMAC-SHA256 of `${timestamp}.${body}` with UNDERWRITE_WEBHOOK_SECRET.
+ * HMAC-SHA256 of `${timestamp}.${body}` with the *agent* webhook secret
+ * (hosted) or the deprecated global UNDERWRITE_WEBHOOK_SECRET (self-hosted).
  * Headers: x-underwrite-signature, x-underwrite-timestamp, x-underwrite-agent-id.
  */
 

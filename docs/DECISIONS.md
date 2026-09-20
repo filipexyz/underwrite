@@ -525,3 +525,17 @@ beats "we have 21 hours left". New ideas go to a `NEXT.md` backlog, not into the
 
 This is the most important decision of the day: the failure mode from here is not a bad design, it's
 running out of hours with nothing running.
+
+---
+
+## D-033 · Hosted multi-tenant seller agents (product, not a PoC)
+
+**Date:** 2026-09-20 · **Status:** decided
+
+The single-Worker / single `uw_seller_` / `SELLER_INSTANCE_NAME=default` model is not the product.
+Every authenticated user creates their own agents on Underwrite. Each agent owns its seller key,
+HMAC webhook secret, hosted `/webhook/:agentId` route, and BYOK.
+
+Tenancy lives in Durable Objects inside one CI-deployed Worker. Secrets are AES-256-GCM in Neon
+(`UNDERWRITE_SECRETS_KEY`), not plaintext and not one Cloudflare secret per user. Self-hosting a
+Worker remains an advanced opt-out. See `docs/HOSTED_AGENTS.md`.

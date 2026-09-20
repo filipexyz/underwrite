@@ -1,6 +1,7 @@
 /**
- * Seller webhook push. HMAC-SHA256 of `${timestamp}.${body}` with
- * `UNDERWRITE_WEBHOOK_SECRET` (or the documented stub secret).
+ * Seller webhook push. HMAC-SHA256 of `${timestamp}.${body}`.
+ * Hosted agents use a per-agent `whsec_…`; seed / legacy agents fall back to
+ * `UNDERWRITE_WEBHOOK_SECRET`.
  */
 import { createHmac } from "node:crypto";
 import { env } from "@/lib/env";
@@ -29,10 +30,13 @@ export async function postSellerWebhook(
   url: string,
   payload: Record<string, unknown>,
   agentId: string,
+  hmac?: { secret: string; keyId: string },
 ): Promise<WebhookResult> {
   const body = JSON.stringify(payload);
   const timestamp = String(Date.now());
-  const signature = signWebhookBody(body, timestamp);
+  const secret = hmac?.secret ?? env.webhookSecret;
+  const keyId = hmac?.keyId ?? (env.webhookSecret === "underwrite-webhook-stub" ? "stub" : "hmac");
+  const signature = signWebhookBody(body, timestamp, secret);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 2_500);
   try {
@@ -43,7 +47,7 @@ export async function postSellerWebhook(
         "x-underwrite-signature": `sha256=${signature}`,
         "x-underwrite-timestamp": timestamp,
         "x-underwrite-agent-id": agentId,
-        "x-underwrite-key-id": env.webhookSecret === "underwrite-webhook-stub" ? "stub" : "hmac",
+        "x-underwrite-key-id": keyId,
       },
       body,
       signal: controller.signal,

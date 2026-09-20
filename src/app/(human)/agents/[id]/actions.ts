@@ -4,9 +4,16 @@ import { revalidatePath } from "next/cache";
 import { issueApiKey, listApiKeys, revokeApiKey } from "@/lib/auth/api-keys";
 import { requireSignedInPage } from "@/lib/auth/session";
 import { getDb } from "@/lib/db/client";
+import {
+  bindHostedSellerKey,
+  provisionHostedAgent,
+  rotateWebhookSecret,
+  setRuntimeKind,
+  updateAgentByok,
+} from "@/lib/marketplace/agent-runtime";
 import { AgentOwnerPatchInput, getOwnedAgent, parseSpecialties, patchOwnedAgent } from "@/lib/marketplace/sellers";
 
-export type AgentFormState = { error?: string; secret?: string } | null;
+export type AgentFormState = { error?: string; secret?: string; webhook_secret?: string } | null;
 
 function revalidateAgent(agentId: string) {
   revalidatePath("/agents");
@@ -66,8 +73,47 @@ export async function mintOwnedSellerKey(_prev: AgentFormState, formData: FormDa
     agentId,
     scopes: ["agents:me"],
   });
+  await bindHostedSellerKey(db, agentId, issued.secret, issued.row.id);
   revalidateAgent(agentId);
   return { secret: issued.secret };
+}
+
+export async function updateOwnedRuntime(_prev: AgentFormState, formData: FormData): Promise<AgentFormState> {
+  const { userId } = await requireSignedInPage();
+  const agentId = String(formData.get("agent_id") ?? "").trim();
+  if (!agentId) return { error: "missing agent" };
+  const { db } = await getDb();
+  const agent = await getOwnedAgent(db, agentId, userId);
+  if (!agent) return { error: "you do not own that agent" };
+
+  const kind = String(formData.get("kind") ?? "").trim();
+  if (kind === "hosted" || kind === "self_hosted") {
+    const webhookUrl = String(formData.get("webhook_url") ?? "").trim();
+    await setRuntimeKind(db, agentId, kind, webhookUrl || null);
+  }
+
+  const clearByok = formData.get("clear_byok") === "1";
+  const byok = String(formData.get("byok_api_key") ?? "").trim();
+  const byokBase = String(formData.get("byok_base_url") ?? "").trim();
+  const byokModel = String(formData.get("byok_model") ?? "").trim();
+  if (clearByok || byok || byokBase || byokModel) {
+    await updateAgentByok(db, agentId, {
+      apiKey: byok || undefined,
+      baseUrl: byokBase || undefined,
+      model: byokModel || undefined,
+      clear: clearByok,
+    });
+  }
+
+  let webhookSecret: string | undefined;
+  if (formData.get("rotate_webhook_secret") === "1") {
+    webhookSecret = (await rotateWebhookSecret(db, agentId)) ?? undefined;
+  }
+  if (formData.get("re_provision") === "1") {
+    await provisionHostedAgent(db, agentId);
+  }
+  revalidateAgent(agentId);
+  return webhookSecret ? { webhook_secret: webhookSecret } : null;
 }
 
 export async function revokeOwnedSellerKey(formData: FormData): Promise<void> {

@@ -9,6 +9,7 @@ import { jsonError } from "@/lib/api/http";
 import { issueApiKey, listApiKeys, toPublicApiKey } from "@/lib/auth/api-keys";
 import { requireSignedInApi } from "@/lib/auth/session";
 import { getDb } from "@/lib/db/client";
+import { bindHostedSellerKey } from "@/lib/marketplace/agent-runtime";
 import { getAgentRow } from "@/lib/marketplace/sellers";
 
 export const runtime = "nodejs";
@@ -57,12 +58,15 @@ export async function POST(request: Request) {
     agentId: parsed.data.role === "seller" ? parsed.data.agent_id : null,
     scopes: parsed.data.role === "seller" ? ["agents:me"] : ["requests"],
   });
+  if (parsed.data.role === "seller" && parsed.data.agent_id) {
+    await bindHostedSellerKey(db, parsed.data.agent_id, issued.secret, issued.row.id);
+  }
 
   return NextResponse.json(
     {
       key: toPublicApiKey(issued.row),
       secret: issued.secret,
-      warning: "copy this secret now — it is not stored and will not be shown again",
+      warning: "copy this secret now — the UI will not show it again",
     },
     { status: 201 },
   );

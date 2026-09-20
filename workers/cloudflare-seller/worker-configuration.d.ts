@@ -5,10 +5,12 @@
 interface Env {
   SellerAgent: DurableObjectNamespace<import("./src/seller-agent").SellerAgent>;
   UNDERWRITE_BASE_URL: string;
-  UNDERWRITE_SELLER_API_KEY: string;
-  UNDERWRITE_WEBHOOK_SECRET: string;
-  NEURALAKE_API_KEY: string;
+  UNDERWRITE_SELLER_API_KEY?: string;
+  UNDERWRITE_WEBHOOK_SECRET?: string;
+  UNDERWRITE_HOSTED_RUNTIME_SECRET?: string;
+  NEURALAKE_API_KEY?: string;
   NEURALAKE_BASE_URL?: string;
   NEURALAKE_MODEL?: string;
+  /** @deprecated single-tenant fallback when a webhook has no agent id */
   SELLER_INSTANCE_NAME?: string;
 }

@@ -6,6 +6,7 @@ import { jsonError } from "@/lib/api/http";
 import { listApiKeys, toPublicApiKey } from "@/lib/auth/api-keys";
 import { requireSignedInApi } from "@/lib/auth/session";
 import { getDb } from "@/lib/db/client";
+import { getPublicAgentRuntime } from "@/lib/marketplace/agent-runtime";
 import { getWallet } from "@/lib/marketplace/credits";
 import { AgentOwnerPatchInput, getOwnedAgent, patchOwnedAgent, toPublicAgent } from "@/lib/marketplace/sellers";
 
@@ -19,12 +20,14 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const { db } = await getDb();
   const agent = await getOwnedAgent(db, id, auth.identity.userId);
   if (!agent) return jsonError(404, `agent not found: ${id}`);
-  const [wallet, keyRows] = await Promise.all([
+  const [wallet, keyRows, runtime] = await Promise.all([
     getWallet(db, agent.agentId),
     listApiKeys(db, { ownerClerkUserId: auth.identity.userId, agentId: agent.agentId }),
+    getPublicAgentRuntime(db, agent.agentId, agent.webhookUrl),
   ]);
   return NextResponse.json({
     agent: toPublicAgent(agent),
+    runtime,
     wallet: {
       owner_id: agent.agentId,
       balance_usd: wallet?.capitalUsd ?? 0,

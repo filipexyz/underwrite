@@ -7,6 +7,7 @@ import { jsonError } from "@/lib/api/http";
 import { issueApiKey, toPublicApiKey } from "@/lib/auth/api-keys";
 import { requireSignedInApi } from "@/lib/auth/session";
 import { getDb } from "@/lib/db/client";
+import { bindHostedSellerKey } from "@/lib/marketplace/agent-runtime";
 import { getOwnedAgent } from "@/lib/marketplace/sellers";
 
 export const runtime = "nodejs";
@@ -44,11 +45,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     agentId: agent.agentId,
     scopes: ["agents:me"],
   });
+  await bindHostedSellerKey(db, agent.agentId, issued.secret, issued.row.id);
   return NextResponse.json(
     {
       key: toPublicApiKey(issued.row),
       secret: issued.secret,
-      warning: "copy this seller secret now — it is not stored and will not be shown again",
+      warning: "copy this seller secret now — the UI will not show it again",
     },
     { status: 201 },
   );

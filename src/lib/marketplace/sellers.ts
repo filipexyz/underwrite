@@ -9,10 +9,25 @@ import type { Db } from "@/lib/db/client";
 import { agents, trustAxes, wallets, type AgentRow, type AgentStatus } from "@/lib/db/schema";
 import { issueApiKey, type PublicApiKey, toPublicApiKey } from "@/lib/auth/api-keys";
 import { newId } from "@/lib/ids";
+import {
+  createAgentRuntime,
+  getPublicAgentRuntime,
+  hostedWebhookUrl,
+  provisionHostedAgent,
+  setRuntimeKind,
+  type PublicAgentRuntime,
+} from "./agent-runtime";
 import { STARTING_AGENT_CREDITS_USD, ensureAgentWallet } from "./credits";
 import type { AgentPolicy, QuotePolicy } from "./types";
 
 const optionalText = z
+  .string()
+  .trim()
+  .max(500)
+  .optional()
+  .transform((value) => (value && value.length > 0 ? value : undefined));
+
+const optionalSecret = z
   .string()
   .trim()
   .max(500)
@@ -35,6 +50,17 @@ export const AgentRegisterInput = z.object({
 });
 export type AgentRegisterInput = z.input<typeof AgentRegisterInput>;
 export type AgentRegisterParsed = z.output<typeof AgentRegisterInput>;
+
+/** Create-agent body: manifest plus hosted runtime / BYOK. */
+export const AgentCreateInput = AgentRegisterInput.extend({
+  /** Default: hosted unless a custom `webhook_url` is supplied. */
+  hosted: z.boolean().optional(),
+  byok_api_key: optionalSecret,
+  byok_base_url: optionalText,
+  byok_model: optionalText,
+});
+export type AgentCreateInput = z.input<typeof AgentCreateInput>;
+export type AgentCreateParsed = z.output<typeof AgentCreateInput>;
 
 export const AgentPatchInput = AgentRegisterInput.partial();
 export type AgentPatchInput = z.infer<typeof AgentPatchInput>;
@@ -141,21 +167,29 @@ export function toPublicAgent(row: AgentRow) {
     webhook_url: row.webhookUrl,
     description: row.description,
     policy: row.policy,
+    /** Auth0-ready alias. Same value as `owner_clerk_user_id` on main (Clerk). */
+    owner_user_id: row.ownerClerkUserId,
     owner_clerk_user_id: row.ownerClerkUserId,
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),
   };
 }
 
-export type PublicOwnedAgent = ReturnType<typeof toPublicAgent> & { wallet_usd: number };
+export type PublicOwnedAgent = ReturnType<typeof toPublicAgent> & {
+  wallet_usd: number;
+  runtime: PublicAgentRuntime;
+};
 
 export async function toOwnedAgentView(db: Db, row: AgentRow): Promise<PublicOwnedAgent> {
-  const wallet = await ensureAgentWallet(db, row.agentId);
-  return { ...toPublicAgent(row), wallet_usd: wallet.capitalUsd };
+  const [wallet, runtime] = await Promise.all([
+    ensureAgentWallet(db, row.agentId),
+    getPublicAgentRuntime(db, row.agentId, row.webhookUrl),
+  ]);
+  return { ...toPublicAgent(row), wallet_usd: wallet.capitalUsd, runtime };
 }
 
-export async function listOwnedAgents(db: Db, ownerClerkUserId: string): Promise<AgentRow[]> {
-  return db.select().from(agents).where(eq(agents.ownerClerkUserId, ownerClerkUserId)).orderBy(desc(agents.createdAt));
+export async function listOwnedAgents(db: Db, ownerUserId: string): Promise<AgentRow[]> {
+  return db.select().from(agents).where(eq(agents.ownerClerkUserId, ownerUserId)).orderBy(desc(agents.createdAt));
 }
 
 export async function listAllAgents(db: Db): Promise<AgentRow[]> {
@@ -167,24 +201,32 @@ export async function getAgentRow(db: Db, agentId: string): Promise<AgentRow | n
   return row ?? null;
 }
 
-export function isOwnedBy(row: AgentRow, clerkUserId: string): boolean {
-  return row.ownerClerkUserId === clerkUserId;
+export function isOwnedBy(row: AgentRow, ownerUserId: string): boolean {
+  return row.ownerClerkUserId === ownerUserId;
 }
 
 /** Owner-only fetch. Returns null when the agent is missing or belongs to someone else. */
-export async function getOwnedAgent(db: Db, agentId: string, clerkUserId: string): Promise<AgentRow | null> {
+export async function getOwnedAgent(db: Db, agentId: string, ownerUserId: string): Promise<AgentRow | null> {
   const row = await getAgentRow(db, agentId);
-  if (!row || !isOwnedBy(row, clerkUserId)) return null;
+  if (!row || !isOwnedBy(row, ownerUserId)) return null;
   return row;
 }
 
 export async function registerSellerAgent(
   db: Db,
-  ownerClerkUserId: string,
-  draft: AgentRegisterInput,
-): Promise<{ agent: AgentRow; secret: string; key: PublicApiKey }> {
-  const input: AgentRegisterParsed = AgentRegisterInput.parse(draft);
+  ownerUserId: string,
+  draft: AgentCreateInput | AgentRegisterInput,
+): Promise<{
+  agent: AgentRow;
+  secret: string;
+  key: PublicApiKey;
+  webhook_secret: string;
+  runtime: PublicAgentRuntime;
+}> {
+  const input: AgentCreateParsed = AgentCreateInput.parse(draft);
   const agentId = newId("agt");
+  const hosted = input.hosted ?? !input.webhook_url;
+  const webhookUrl = hosted ? (hostedWebhookUrl(agentId) ?? input.webhook_url ?? null) : (input.webhook_url ?? null);
   const policy = defaultRegisteredPolicy(input);
   const [agent] = await db
     .insert(agents)
@@ -201,9 +243,9 @@ export async function registerSellerAgent(
       riskTolerance: input.risk_tolerance,
       policy,
       status: "registered",
-      ownerClerkUserId,
+      ownerClerkUserId: ownerUserId,
       contact: input.contact ?? null,
-      webhookUrl: input.webhook_url ?? null,
+      webhookUrl,
       description: input.description ?? null,
     })
     .returning();
@@ -245,12 +287,33 @@ export async function registerSellerAgent(
   const issued = await issueApiKey(db, {
     name: `${input.name} seller key`,
     role: "seller",
-    ownerClerkUserId,
+    ownerClerkUserId: ownerUserId,
     agentId,
     scopes: ["agents:me"],
   });
 
-  return { agent, secret: issued.secret, key: toPublicApiKey(issued.row) };
+  const runtimeCreated = await createAgentRuntime(db, {
+    agentId,
+    kind: hosted ? "hosted" : "self_hosted",
+    sellerApiKey: issued.secret,
+    sellerKeyId: issued.row.id,
+    byokApiKey: input.byok_api_key,
+    byokBaseUrl: input.byok_base_url,
+    byokModel: input.byok_model,
+  });
+  if (hosted) {
+    await provisionHostedAgent(db, agentId);
+  }
+  const fresh = (await getAgentRow(db, agentId)) ?? agent;
+  const runtime = await getPublicAgentRuntime(db, agentId, fresh.webhookUrl);
+
+  return {
+    agent: fresh,
+    secret: issued.secret,
+    key: toPublicApiKey(issued.row),
+    webhook_secret: runtimeCreated.webhookSecret,
+    runtime,
+  };
 }
 
 export async function patchAgentProfile(
@@ -314,16 +377,21 @@ export async function setAgentStatus(db: Db, agentId: string, status: AgentStatu
 export async function patchOwnedAgent(
   db: Db,
   agentId: string,
-  clerkUserId: string,
+  ownerUserId: string,
   patch: AgentOwnerPatchInput,
 ): Promise<AgentRow | null> {
-  const existing = await getOwnedAgent(db, agentId, clerkUserId);
+  const existing = await getOwnedAgent(db, agentId, ownerUserId);
   if (!existing) return null;
 
   const { status, ...profile } = patch;
   const updated = await patchAgentProfile(db, agentId, profile);
   const row = updated ?? existing;
+  if (profile.webhook_url !== undefined) {
+    const hostedUrl = hostedWebhookUrl(agentId);
+    const kind = profile.webhook_url && profile.webhook_url !== hostedUrl ? "self_hosted" : "hosted";
+    await setRuntimeKind(db, agentId, kind, profile.webhook_url ?? null);
+  }
   if (status === "disabled") return setAgentStatus(db, agentId, "disabled");
   if (status === "registered") return setAgentStatus(db, agentId, enableStatusFor(row));
-  return row;
+  return (await getAgentRow(db, agentId)) ?? row;
 }

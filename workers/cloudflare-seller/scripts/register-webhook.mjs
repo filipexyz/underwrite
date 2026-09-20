@@ -4,12 +4,21 @@
  *
  *   UNDERWRITE_BASE_URL=http://localhost:3000 \
  *   UNDERWRITE_SELLER_API_KEY=uw_seller_… \
- *   WEBHOOK_URL=https://underwrite-cloudflare-seller.<account>.workers.dev/webhook \
+ * Advanced / self-hosted only. The happy path is Create agent in Underwrite
+ * (hosted webhook is set automatically).
+ *
+ *   WEBHOOK_URL=https://underwrite-cloudflare-seller.<account>.workers.dev/webhook/<agentId> \
  *     node scripts/register-webhook.mjs
  */
 const base = (process.env.UNDERWRITE_BASE_URL ?? "http://localhost:3000").replace(/\/+$/, "");
 const key = (process.env.UNDERWRITE_SELLER_API_KEY ?? "").trim();
-const webhookUrl = (process.env.WEBHOOK_URL ?? "").trim();
+const agentId = (process.env.AGENT_ID ?? "").trim();
+const webhookUrl = (
+  process.env.WEBHOOK_URL ??
+  (agentId && process.env.WORKER_URL
+    ? `${process.env.WORKER_URL.replace(/\/+$/, "")}/webhook/${encodeURIComponent(agentId)}`
+    : "")
+).trim();
 
 if (!key || !webhookUrl) {
   console.error("UNDERWRITE_SELLER_API_KEY and WEBHOOK_URL are required");

@@ -1,13 +1,16 @@
 "use client";
 
-import { useActionState, type ReactNode } from "react";
+import { useActionState, useState, type ReactNode } from "react";
 import { inputClass } from "@/app/console/ui";
 import { registerAgentAction, type RegisterFormState } from "./actions";
 
 export function RegisterAgentForm() {
   const [state, action, pending] = useActionState(registerAgentAction, null as RegisterFormState);
+  const [hosted, setHosted] = useState(true);
+  const [advanced, setAdvanced] = useState(false);
   return (
     <form action={action} className="flex flex-col gap-4">
+      <input type="hidden" name="hosted" value={hosted ? "1" : "0"} />
       <div className="grid gap-4 md:grid-cols-2">
         <Field label="name">
           <input name="name" required className={inputClass} placeholder="Northwind renderer" />
@@ -20,7 +23,7 @@ export function RegisterAgentForm() {
             <option value="judge">judge</option>
           </select>
         </Field>
-        <Field label="specialties" hint="comma-separated · use html_to_pdf to sit in the demo auction">
+        <Field label="specialties" hint="comma-separated · use html_to_pdf to sit in the demo marketplace">
           <input name="specialties" required className={inputClass} defaultValue="html_to_pdf" />
         </Field>
         <Field label="model family">
@@ -52,15 +55,61 @@ export function RegisterAgentForm() {
         <Field label="contact" hint="optional">
           <input name="contact" className={inputClass} placeholder="ops@example.com" />
         </Field>
-        <Field label="webhook url" hint="optional · plan invites later">
-          <input name="webhook_url" className={inputClass} placeholder="https://…" />
-        </Field>
         <Field label="description" hint="optional">
           <textarea name="description" rows={3} className={inputClass} placeholder="What this agent does" />
         </Field>
       </div>
+
+      <div className="border border-line bg-paper/60 p-4 flex flex-col gap-3">
+        <p className="eyebrow !mb-0">hosted runtime</p>
+        <label className="flex items-start gap-3 text-sm text-[#46514d]">
+          <input
+            type="checkbox"
+            checked={hosted}
+            onChange={(event) => setHosted(event.target.checked)}
+            className="mt-1"
+          />
+          <span>
+            <strong className="text-ink">Run on Underwrite&apos;s Cloudflare worker.</strong> We mint a seller key
+            bound only to this agent, a per-agent webhook HMAC secret, and point{" "}
+            <code className="text-ink">webhook_url</code> at{" "}
+            <code className="text-ink">/webhook/&lt;agent_id&gt;</code>. You do not need a Cloudflare account.
+          </span>
+        </label>
+        <Field label="NeuraLake / OpenAI-compatible API key" hint="BYOK · stored encrypted · never shown again">
+          <input name="byok_api_key" type="password" autoComplete="off" className={inputClass} placeholder="sk-… or nl-…" />
+        </Field>
+        <Field label="BYOK base URL" hint="optional · defaults to NeuraLake">
+          <input name="byok_base_url" className={inputClass} placeholder="https://api.neuralake.cloud/v1" />
+        </Field>
+        <Field label="BYOK model" hint="optional · default auto">
+          <input name="byok_model" className={inputClass} placeholder="auto" />
+        </Field>
+        {!hosted ? (
+          <Field label="webhook url" hint="your own worker · HMAC uses this agent’s secret">
+            <input name="webhook_url" className={inputClass} placeholder="https://your-worker.example/webhook" />
+          </Field>
+        ) : null}
+      </div>
+
+      <button
+        type="button"
+        className="text-left font-mono text-[10px] tracking-wider uppercase text-muted hover:text-ink"
+        onClick={() => setAdvanced((value) => !value)}
+      >
+        {advanced ? "hide advanced manifest" : "show advanced manifest notes"}
+      </button>
+      {advanced ? (
+        <p className="text-sm text-[#53605a] leading-relaxed">
+          Self-hosting (uncheck hosted) is the advanced path: you deploy{" "}
+          <code>workers/cloudflare-seller</code> yourself and paste its URL. House / team agents are ordinary user
+          agents — there is no global <code>uw_seller_</code> and no shared{" "}
+          <code>SELLER_INSTANCE_NAME=default</code>.
+        </p>
+      ) : null}
+
       <button type="submit" disabled={pending} className="btn-ink mt-2 w-full md:w-auto">
-        <span>{pending ? "Registering…" : "Register agent + mint seller key"}</span>
+        <span>{pending ? "Creating…" : "Create agent"}</span>
         <strong>→</strong>
       </button>
       {state?.error ? <p className="text-sm text-danger">{state.error}</p> : null}

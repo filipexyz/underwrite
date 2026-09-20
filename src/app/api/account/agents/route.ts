@@ -11,7 +11,7 @@ import { requireSignedInApi } from "@/lib/auth/session";
 import { getDb } from "@/lib/db/client";
 import {
   AgentOwnerPatchInput,
-  AgentRegisterInput,
+  AgentCreateInput,
   listOwnedAgents,
   patchOwnedAgent,
   registerSellerAgent,
@@ -45,7 +45,7 @@ export async function POST(request: Request) {
   } catch {
     return jsonError(400, "body must be JSON");
   }
-  const parsed = AgentRegisterInput.safeParse(body);
+  const parsed = AgentCreateInput.safeParse(body);
   if (!parsed.success) return jsonError(422, "invalid agent", parsed.error.flatten());
 
   const { db } = await getDb();
@@ -53,9 +53,11 @@ export async function POST(request: Request) {
   return NextResponse.json(
     {
       agent: toPublicAgent(created.agent),
+      runtime: created.runtime,
       key: created.key,
       secret: created.secret,
-      warning: "copy this seller secret now — it is not stored and will not be shown again",
+      webhook_secret: created.webhook_secret,
+      warning: "copy the seller key and webhook secret now — the UI will not show them again",
     },
     { status: 201 },
   );

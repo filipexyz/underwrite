@@ -39,14 +39,14 @@ export function sanitizeInstanceName(raw: string): string {
 
 export function requireSellerKey(config: SellerConfig): string {
   if (!config.sellerApiKey) {
-    throw new Error("UNDERWRITE_SELLER_API_KEY is not set (wrangler secret / .dev.vars)");
+    throw new Error("seller API key missing — provision this agent Durable Object (or set deprecated UNDERWRITE_SELLER_API_KEY)");
   }
   return config.sellerApiKey;
 }
 
 export function requireNeuralakeKey(config: SellerConfig): string {
   if (!config.neuralakeApiKey) {
-    throw new Error("NEURALAKE_API_KEY is not set (seller BYOK — wrangler secret / .dev.vars)");
+    throw new Error("NeuraLake BYOK missing — paste a key on the agent in Underwrite (or set deprecated NEURALAKE_API_KEY)");
   }
   return config.neuralakeApiKey;
 }
