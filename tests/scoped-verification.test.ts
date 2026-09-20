@@ -129,6 +129,7 @@ function pdfFacts(overrides: Partial<ArtifactFacts> = {}): ArtifactFacts {
     data_payload_nonempty: true,
     has_sources_section: false,
     broken_required_assets: [],
+    zip_entries: [],
     ...overrides,
   };
 }
@@ -179,7 +180,7 @@ describe("scopeChecks", () => {
       artifact_kind: "html",
     });
     expect(checkIds(spec)).not.toEqual(
-      expect.arrayContaining(["pdf_valid", "text_matches_source", "fonts_embedded", "no_layout_overflow", "page_count"]),
+      expect.arrayContaining(["pdf_valid", "text_matches_source", "fonts_embedded", "no_layout_overflow", "page_count", "zip_valid"]),
     );
     expect(checkIds(spec)).toEqual(expect.arrayContaining(["artifact_exists", "has_structure", "covers_brief_topics"]));
   });
@@ -274,7 +275,7 @@ describe("specialty HTML report", () => {
     });
     const result = runChecks(spec, facts, source);
     expect(result.checks.map((c) => c.check_id)).not.toEqual(
-      expect.arrayContaining(["pdf_valid", "text_matches_source", "fonts_embedded"]),
+      expect.arrayContaining(["pdf_valid", "text_matches_source", "fonts_embedded", "zip_valid"]),
     );
     expect(result.checks.every((c) => c.passed)).toBe(true);
   });

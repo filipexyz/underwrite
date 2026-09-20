@@ -42,6 +42,8 @@ export const DASHBOARD_CHECK_IDS = [
 
 export const RESEARCH_CHECK_IDS = ["has_structure", "covers_brief_topics", "has_sources_section", "min_length"] as const;
 
+export const ZIP_CHECK_IDS = ["zip_valid", "expected_entries_present"] as const;
+
 export const HTML_TO_PDF_RUBRIC: VerificationSpec = {
   rubric_version: "html_to_pdf@v0",
   /** Weighted share of checks that must pass. 1 = every check. */
@@ -58,11 +60,11 @@ export const HTML_TO_PDF_RUBRIC: VerificationSpec = {
 
 const sharedChecks: DeclaredCheck[] = [
   { check_id: "artifact_exists", weight: 1, description: "A deliverable artifact is present." },
-  { check_id: "artifact_renders", weight: 1, description: "The artifact parses as the expected kind (HTML, PDF, or Markdown)." },
+  { check_id: "artifact_renders", weight: 1, description: "The artifact parses as the expected kind (HTML, PDF, Markdown, or ZIP)." },
   { check_id: "artifact_not_empty", weight: 1, description: "The artifact contains extractable content." },
 ];
 
-/** Content rubric for custom specialties (HTML or Markdown — not a PDF compile). */
+/** Content rubric for custom specialties (HTML, Markdown, or ZIP — not a PDF compile). */
 export const SPECIALTY_REPORT_RUBRIC: VerificationSpec = {
   rubric_version: "specialty_report@v0",
   required_passing: 1,
@@ -189,6 +191,10 @@ export function impliedCheckIds(taskRequirement: string, constraints: ScopeConst
   if (kind === "pdf" || category === "html_to_pdf" || /\bpdf\b/.test(text)) implied.add("pdf_valid");
   if (kind === "html" || category === "landing_page" || category === "dashboard") implied.add("html_valid");
   if (kind === "md" || category === "research_report" || /\bmarkdown\b|\.md\b/.test(text)) implied.add("md_valid");
+  if (kind === "zip" || /\bzip\b|\.zip\b/.test(text) || (taskRequirement.match(/\b[\w.-]+\.(?:md|html?|json|csv|txt|png|svg)\b/gi) ?? []).length >= 2) {
+    implied.add("zip_valid");
+    implied.add("expected_entries_present");
+  }
 
   const allowPdfGeometry =
     category === "html_to_pdf" ||
@@ -247,11 +253,13 @@ function kindSupports(checkId: string, kind: ArtifactKind | undefined): boolean 
   if (checkId === "pdf_valid" || PDF_GEOMETRY_CHECK_IDS.includes(checkId as (typeof PDF_GEOMETRY_CHECK_IDS)[number])) {
     return kind === "pdf";
   }
-  if (checkId === "html_valid" || LANDING_CHECK_IDS.includes(checkId as (typeof LANDING_CHECK_IDS)[number])) {
-    return kind === "html" || checkId === "screenshots_present";
-  }
+  if (ZIP_CHECK_IDS.includes(checkId as (typeof ZIP_CHECK_IDS)[number])) return kind === "zip";
+  if (checkId === "html_valid") return kind === "html";
   if (checkId === "md_valid") return kind === "md";
-  if (DASHBOARD_CHECK_IDS.includes(checkId as (typeof DASHBOARD_CHECK_IDS)[number])) return kind === "html";
+  if (LANDING_CHECK_IDS.includes(checkId as (typeof LANDING_CHECK_IDS)[number])) {
+    return kind === "html" || kind === "zip" || checkId === "screenshots_present";
+  }
+  if (DASHBOARD_CHECK_IDS.includes(checkId as (typeof DASHBOARD_CHECK_IDS)[number])) return kind === "html" || kind === "zip";
   return true;
 }
 
@@ -286,6 +294,18 @@ function dropPdfOnlyChecks(
  * implied by TASK_SPEC. Unknown / specialty categories keep their content
  * rubric but never inherit PDF-only checks unless TASK_SPEC asked for a PDF.
  */
+const ZIP_RUBRIC_CHECKS: DeclaredCheck[] = [
+  { check_id: "zip_valid", weight: 2, description: "The artifact parses as a ZIP archive with at least one entry." },
+  { check_id: "expected_entries_present", weight: 1, description: "Named files from the brief are present in the ZIP." },
+];
+
+function mergeZipChecks(spec: VerificationSpec): VerificationSpec {
+  const ids = new Set(spec.checks.map((c) => c.check_id));
+  const extra = ZIP_RUBRIC_CHECKS.filter((c) => !ids.has(c.check_id));
+  const checks = [...spec.checks.filter((c) => kindSupports(c.check_id, "zip")), ...extra];
+  return { ...spec, checks };
+}
+
 export function scopeChecks(
   specOrMap: VerificationSpec | string,
   taskRequirement: string,
@@ -293,6 +313,9 @@ export function scopeChecks(
 ): VerificationSpec {
   const spec = asSpec(specOrMap);
   const category = constraints.category ?? categoryFromRubric(spec.rubric_version);
+  if (constraints.artifact_kind === "zip") {
+    return dropPdfOnlyChecks(mergeZipChecks(spec), taskRequirement, { ...constraints, category });
+  }
   if (!isKnownCategory(category)) return dropPdfOnlyChecks(spec, taskRequirement, { ...constraints, category });
 
   const map = defaultRubricFor(category);

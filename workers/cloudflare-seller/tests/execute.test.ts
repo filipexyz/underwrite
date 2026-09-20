@@ -18,7 +18,7 @@ vi.mock("../src/pdf", async () => {
   return { ...actual, renderHtmlToPdf };
 });
 
-import { extractHtmlDocument } from "../src/neuralake";
+import { extractFileBundle, extractHtmlDocument } from "../src/neuralake";
 import {
   estimateSelfReport,
   isExecutableJobHtml,
@@ -26,7 +26,9 @@ import {
   resolveJobCategory,
   runAcceptedJob,
   shouldCompileProvidedHtml,
+  wantsZipBundle,
 } from "../src/execute";
+import { isZipBytes } from "../src/zip";
 import type { AcceptedEvent, PlanRequestEvent } from "../src/protocol";
 
 const MODEL_HTML = `<!doctype html>
@@ -84,6 +86,10 @@ describe("execute path selection", () => {
     expect(isPdfDeliverableCategory("analista de investimentos")).toBe(false);
     expect(isPdfDeliverableCategory("landing_page")).toBe(false);
     expect(resolveJobCategory(undefined)).toBe("html_to_pdf");
+    expect(wantsZipBundle("analista de investimentos", "Deliver an HTML briefing with findings.")).toBe(false);
+    expect(wantsZipBundle("research_report", "Ship report.md and data.json as a zip.")).toBe(true);
+    expect(wantsZipBundle("dashboard", "Build a dashboard with a json dataset.")).toBe(true);
+    expect(wantsZipBundle("landing_page", "Ship a landing page.")).toBe(false);
   });
 
   it("rejects the tiny Underwrite-job wrapper as executable HTML", () => {
@@ -107,6 +113,15 @@ describe("extractHtmlDocument", () => {
     expect(extractHtmlDocument("```html\n" + MODEL_HTML + "\n```")).toContain("<h1>Investment briefing</h1>");
     expect(extractHtmlDocument("```html\n\n```")).toBeNull();
     expect(extractHtmlDocument("just a note about the PDF")).toBeNull();
+  });
+});
+
+describe("extractFileBundle", () => {
+  it("reads a files array from raw or fenced JSON", () => {
+    const bundle = { files: [{ name: "report.md", content: "# Hold" }, { name: "data.json", content: "{}" }] };
+    expect(extractFileBundle(JSON.stringify(bundle))?.map((f) => f.name)).toEqual(["report.md", "data.json"]);
+    expect(extractFileBundle("```json\n" + JSON.stringify(bundle) + "\n```")?.length).toBe(2);
+    expect(extractFileBundle("no files here")).toBeNull();
   });
 });
 
@@ -234,5 +249,60 @@ describe("runAcceptedJob", () => {
     expect(result.artifact.kind).toBe("html");
     expect(result.artifact.html).toContain("<h1>Investment briefing</h1>");
     expect(result.artifact.html).not.toContain("```");
+  });
+
+  it("delivers a ZIP when the specialty brief asks for multiple named files", async () => {
+    const bundle = {
+      files: [
+        {
+          name: "report.md",
+          content: "# Findings\n\nYields remain above the cost of capital.\n\n## Risks\n\nFX.\n\n## Recommendation\n\nHold.\n",
+        },
+        { name: "data.json", content: '{"hold":true,"names":["PETR4"]}' },
+      ],
+    };
+    chatCompletion.mockResolvedValue(completion(JSON.stringify(bundle)));
+
+    const result = await runAcceptedJob({
+      baseUrl: "https://api.neuralake.cloud/v1",
+      apiKey: "nl_test",
+      model: "auto",
+      brief: {
+        requirement: "Produce report.md and data.json for this analista de investimentos assignment.",
+        files: [],
+      },
+      accepted: accepted(),
+    });
+
+    expect(renderHtmlToPdf).not.toHaveBeenCalled();
+    expect(result.artifact.kind).toBe("zip");
+    expect(result.artifact.zip_base64).toBeTruthy();
+    expect(result.artifact.pdf_base64).toBeUndefined();
+    const bytes = Uint8Array.from(Buffer.from(result.artifact.zip_base64 ?? "", "base64"));
+    expect(isZipBytes(bytes)).toBe(true);
+    expect(result.self_confidence).toBeLessThanOrEqual(0.9);
+  });
+
+  it("delivers a single markdown file when the zip-shaped brief only yields one artifact", async () => {
+    chatCompletion.mockResolvedValue(
+      completion(JSON.stringify({ files: [{ name: "report.md", content: "# Findings\n\nHold the book.\n\n## Risks\n\nFX.\n" }] })),
+    );
+
+    const result = await runAcceptedJob({
+      baseUrl: "https://api.neuralake.cloud/v1",
+      apiKey: "nl_test",
+      model: "auto",
+      brief: {
+        requirement: "Produce report.md and data.json for this assignment.",
+        files: [],
+      },
+      accepted: accepted(),
+    });
+
+    expect(renderHtmlToPdf).not.toHaveBeenCalled();
+    expect(result.artifact.kind).toBe("md");
+    expect(result.artifact.markdown).toContain("# Findings");
+    expect(result.artifact.zip_base64).toBeUndefined();
+    expect(result.artifact.pdf_base64).toBeUndefined();
   });
 });

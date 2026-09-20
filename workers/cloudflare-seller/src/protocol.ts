@@ -72,7 +72,8 @@ export type JobDeliverableInput = {
     html?: string;
     markdown?: string;
     md?: string;
-    kind?: "pdf" | "html" | "md" | "markdown";
+    zip_base64?: string;
+    kind?: "pdf" | "html" | "md" | "markdown" | "zip";
     artifact_ref?: string;
     observed_latency_ms?: number;
     declared_latency_ms?: number;

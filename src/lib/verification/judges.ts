@@ -32,7 +32,10 @@ function applicableIds(spec: VerificationSpec): Set<string> {
 }
 
 function kindLabel(kind: ArtifactFacts["kind"]): string {
-  return kind === "html" ? "HTML" : kind === "md" ? "Markdown" : "PDF";
+  if (kind === "html") return "HTML";
+  if (kind === "md") return "Markdown";
+  if (kind === "zip") return "ZIP";
+  return "PDF";
 }
 
 /**
@@ -119,6 +122,7 @@ export async function runJudges(
       `word_count=${args.facts.word_count}`,
       `title=${args.facts.title ?? ""}`,
       `cta=${args.facts.cta_selectors_found.length}`,
+      `zip_entries=${args.facts.zip_entries.join("|")}`,
       `source_chars=${args.source.text.length}`,
     ].join(", ");
     const inference = await runInference({

@@ -23,4 +23,13 @@ describe("JobDeliverableInput", () => {
     });
     expect(parsed.artifact.kind).toBe("md");
   });
+
+  it("accepts a ZIP without pdf_base64", () => {
+    const parsed = JobDeliverableInput.parse({
+      artifact: { kind: "zip", zip_base64: "UEsDBBQAAAAAA" + "A".repeat(20) },
+    });
+    expect(parsed.artifact.kind).toBe("zip");
+    expect(parsed.artifact.zip_base64).toBeTruthy();
+    expect(parsed.artifact.pdf_base64).toBeUndefined();
+  });
 });

@@ -24,6 +24,7 @@ import { env } from "@/lib/env";
 import { newId } from "@/lib/ids";
 import { inspectArtifact } from "@/lib/verification/inspect";
 import type { DeliveryArtifact } from "./artifact";
+import { isZipBytes } from "./zip";
 import { buildContext, RULES, setRequestStatus, type EngineContext } from "./context";
 import { finalizeRequest, verifyDelivery, settleChain } from "./engine";
 import {
@@ -712,6 +713,7 @@ function artifactFromInput(agent: RegistryAgent, input: JobDeliverableInput): De
   const html = raw.html?.trim();
   const markdown = (raw.markdown ?? raw.md)?.trim();
   const pdf_base64 = raw.pdf_base64?.replace(/\s+/g, "");
+  const zip_base64 = raw.zip_base64?.replace(/\s+/g, "");
   const kind = raw.kind === "markdown" ? "md" : raw.kind;
   const self =
     input.self_confidence ?? raw.self_report ?? agent.policy.execution?.self_report ?? agent.baselineConfidence;
@@ -726,13 +728,19 @@ function artifactFromInput(agent: RegistryAgent, input: JobDeliverableInput): De
     url: raw.url,
   };
 
-  if (kind === "html" || (html && kind !== "pdf" && kind !== "md")) {
+  if (kind === "html" || (html && kind !== "pdf" && kind !== "md" && kind !== "zip")) {
     if (!html) throw new PushJobError(422, "artifact.html is required for html deliverables");
     return { ...base, kind: "html", html };
   }
-  if (kind === "md" || (markdown && kind !== "pdf")) {
+  if (kind === "md" || (markdown && kind !== "pdf" && kind !== "zip")) {
     if (!markdown) throw new PushJobError(422, "artifact.markdown is required for markdown deliverables");
     return { ...base, kind: "md", markdown };
+  }
+  if (kind === "zip" || (zip_base64 && kind !== "pdf")) {
+    if (!zip_base64) throw new PushJobError(422, "artifact.zip_base64 is required for zip deliverables");
+    const zipBytes = new Uint8Array(Buffer.from(zip_base64, "base64"));
+    if (!isZipBytes(zipBytes)) throw new PushJobError(422, "artifact.zip_base64 is not a ZIP");
+    return { ...base, kind: "zip", zip_base64 };
   }
   if (!pdf_base64) throw new PushJobError(422, "artifact.pdf_base64 is not a PDF");
   const header = Buffer.from(pdf_base64, "base64").subarray(0, 5).toString("latin1");
@@ -781,6 +789,7 @@ export async function submitDeliverable(
       bytes: facts.bytes,
       text_chars: facts.text.length,
       links: facts.links.length,
+      zip_entries: facts.zip_entries,
       declared_latency_ms: artifact.declared_latency_ms,
       observed_latency_ms: artifact.observed_latency_ms,
       self_report: artifact.self_report,

@@ -9,8 +9,9 @@
 import { newId } from "@/lib/ids";
 import type { ExecutionPolicy } from "./types";
 import { renderHtmlToPdf } from "./pdf/render";
+import { impliedZipEntries } from "./zip";
 
-export type ArtifactKind = "pdf" | "html" | "md";
+export type ArtifactKind = "pdf" | "html" | "md" | "zip";
 
 export type ArtifactScreenshot = {
   name?: string;
@@ -33,6 +34,8 @@ export type SourceDocument = {
   expected_topics?: string[];
   expected_metrics?: string[];
   min_word_count?: number;
+  /** Entry names implied by TASK_SPEC when the deliverable is a ZIP. */
+  expected_entries?: string[];
 };
 
 export type DeliveryArtifact = {
@@ -46,6 +49,7 @@ export type DeliveryArtifact = {
   pdf_base64?: string;
   html?: string;
   markdown?: string;
+  zip_base64?: string;
   url?: string;
   screenshots?: ArtifactScreenshot[];
 };
@@ -155,6 +159,7 @@ export function parseSource(html: string, requirement: string): SourceDocument {
     expected_topics: impliedTopics(requirement),
     expected_metrics: impliedMetrics(requirement),
     min_word_count: impliedMinWords(requirement),
+    expected_entries: impliedZipEntries(requirement),
   };
 }
 

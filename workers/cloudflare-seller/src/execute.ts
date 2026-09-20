@@ -1,5 +1,5 @@
 import { stripHtml } from "./html";
-import { chatCompletion, extractHtmlDocument } from "./neuralake";
+import { chatCompletion, extractFileBundle, extractHtmlDocument, type BundleFile } from "./neuralake";
 import { bytesToBase64, isPdfBytes, renderHtmlToPdf } from "./pdf";
 import {
   briefHasHtmlFile,
@@ -8,6 +8,7 @@ import {
   type JobDeliverableInput,
   type PlanRequestEvent,
 } from "./protocol";
+import { buildZip } from "./zip";
 
 export const HTML_TO_PDF_CATEGORY = "html_to_pdf";
 const SPECIALTY_MAX_TOKENS = 3500;
@@ -32,6 +33,16 @@ export function shouldCompileProvidedHtml(
   return isPdfDeliverableCategory(category) && briefHasHtmlFile(brief);
 }
 
+/** Multi-file jobs (named files, zip, dashboard data) prefer a ZIP over a single HTML page. */
+export function wantsZipBundle(category: string, requirement: string): boolean {
+  const text = requirement.toLowerCase();
+  if (/\bzip\b|\.zip\b/.test(text)) return true;
+  const named = requirement.match(/\b[\w.-]+\.(md|html?|json|csv|txt|png|svg)\b/gi) ?? [];
+  if (named.length >= 2) return true;
+  if (category === "dashboard" && /\b(json|data|csv|screenshot)/i.test(text)) return true;
+  return false;
+}
+
 export function isExecutableJobHtml(html: string): boolean {
   const text = stripHtml(html);
   if (text.length < MIN_EXECUTABLE_TEXT) return false;
@@ -40,11 +51,16 @@ export function isExecutableJobHtml(html: string): boolean {
   return true;
 }
 
+export function isExecutableBundle(files: BundleFile[]): boolean {
+  if (files.length === 0) return false;
+  return files.some((f) => f.content.trim().length >= MIN_EXECUTABLE_TEXT || isExecutableJobHtml(f.content));
+}
+
 /** Conservative self-score from the document itself — never copied from promised_confidence. */
 export function estimateSelfReport(html: string): number {
   const text = stripHtml(html);
-  const headingCount = (html.match(/<h[1-3]\b/gi) ?? []).length;
-  const paraCount = (html.match(/<p\b/gi) ?? []).length;
+  const headingCount = (html.match(/<h[1-3]\b|#\s+\S/gi) ?? []).length;
+  const paraCount = (html.match(/<p\b|\n\n/gi) ?? []).length;
   let score = 0.55;
   if (text.length >= 400) score += 0.1;
   if (text.length >= 1200) score += 0.08;
@@ -62,12 +78,12 @@ function reportShapeHint(category: string): string {
     return "Write a complete landing page: document title, primary heading, primary CTA, viewport meta, and the sections named in the brief.";
   }
   if (c === "dashboard") {
-    return "Write a complete dashboard page: a primary view, named metrics, a non-empty data payload or table, and filters.";
+    return "Write a complete dashboard: a primary view plus a data file (data.json) when the brief asks for metrics or a dataset.";
   }
   if (/invest|analista|analyst|research/.test(c)) {
-    return "Write an investment/research briefing as HTML: executive summary, structured findings, material risks, and a clear recommendation.";
+    return "Write an investment/research briefing: executive summary, structured findings, material risks, and a clear recommendation.";
   }
-  return "Write a complete specialty report as HTML with clear headings, findings, risks or caveats, and a recommendation or next step.";
+  return "Write a complete specialty report with clear headings, findings, risks or caveats, and a recommendation or next step.";
 }
 
 function briefFileContext(brief: PlanRequestEvent["brief"]): string {
@@ -94,6 +110,51 @@ function scoredArtifact(
     self_confidence: self,
     artifact: { ...artifact, self_report: self },
   };
+}
+
+function singleFileDeliverable(file: BundleFile, observed: number): JobDeliverableInput {
+  const name = file.name.toLowerCase();
+  if (/\.md$/.test(name) || name.endsWith(".markdown")) {
+    return scoredArtifact(
+      { kind: "md", markdown: file.content, observed_latency_ms: observed, declared_latency_ms: observed },
+      file.content,
+    );
+  }
+  return scoredArtifact(
+    { kind: "html", html: file.content, observed_latency_ms: observed, declared_latency_ms: observed },
+    file.content,
+  );
+}
+
+function zipDeliverable(files: BundleFile[], observed: number): JobDeliverableInput {
+  const bytes = buildZip(files);
+  const scoreText = files.map((f) => f.content).join("\n");
+  return scoredArtifact(
+    {
+      kind: "zip",
+      zip_base64: bytesToBase64(bytes),
+      observed_latency_ms: observed,
+      declared_latency_ms: observed,
+    },
+    scoreText,
+  );
+}
+
+async function complete(args: {
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+  messages: Array<{ role: "system" | "user" | "assistant"; content: string }>;
+  signal?: AbortSignal;
+}) {
+  return chatCompletion({
+    baseUrl: args.baseUrl,
+    apiKey: args.apiKey,
+    model: args.model,
+    signal: args.signal,
+    maxTokens: SPECIALTY_MAX_TOKENS,
+    messages: args.messages,
+  });
 }
 
 async function generateSpecialtyHtml(args: {
@@ -130,28 +191,17 @@ async function generateSpecialtyHtml(args: {
     { role: "user" as const, content: user },
   ];
 
-  const first = await chatCompletion({
-    baseUrl: args.baseUrl,
-    apiKey: args.apiKey,
-    model: args.model,
-    signal: args.signal,
-    maxTokens: SPECIALTY_MAX_TOKENS,
-    messages,
-  });
+  const first = await complete({ ...args, messages });
   const firstHtml = extractHtmlDocument(first.text);
   if (firstHtml && isExecutableJobHtml(firstHtml)) return firstHtml;
 
-  const retry = await chatCompletion({
-    baseUrl: args.baseUrl,
-    apiKey: args.apiKey,
-    model: args.model,
-    signal: args.signal,
-    maxTokens: SPECIALTY_MAX_TOKENS,
+  const retry = await complete({
+    ...args,
     messages: [
       ...messages,
-      { role: "assistant" as const, content: first.text },
+      { role: "assistant", content: first.text },
       {
-        role: "user" as const,
+        role: "user",
         content:
           "Your previous reply was empty, fenced, or not a usable HTML report. Reply again with a complete HTML document only — no markdown fences, no PDF.",
       },
@@ -163,6 +213,59 @@ async function generateSpecialtyHtml(args: {
   throw new Error(
     `NeuraLake did not return executable HTML for ${args.category} job ${args.accepted.job_id} after retry (got ${preview(retry.text || first.text) || "empty"})`,
   );
+}
+
+async function generateSpecialtyFiles(args: {
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+  category: string;
+  brief: PlanRequestEvent["brief"];
+  accepted: AcceptedEvent;
+  signal?: AbortSignal;
+}): Promise<BundleFile[] | null> {
+  const user = [
+    `Category: ${args.category}`,
+    `Requirement: ${args.brief.requirement}`,
+    briefFileContext(args.brief),
+    `Plan ${args.accepted.plan_id} was accepted at $${args.accepted.price_usd}.`,
+    reportShapeHint(args.category),
+    "Produce multiple files the buyer can unzip: typically a prose report (report.md or index.html) plus structured data (data.json) or other named files from the brief.",
+    'Reply with a single JSON object only: {"files":[{"name":"report.md","content":"..."},{"name":"data.json","content":"..."}]}',
+    "No markdown fences, no PDF, no stub page.",
+  ].join("\n\n");
+
+  const messages = [
+    {
+      role: "system" as const,
+      content: [
+        `You execute an Underwrite ${args.category} job as a hireable specialist.`,
+        "Reply with JSON only — an object with a files array of {name, content}.",
+        "Each content value is the full file. Produce at least two real files that fulfill the requirement.",
+      ].join(" "),
+    },
+    { role: "user" as const, content: user },
+  ];
+
+  const first = await complete({ ...args, messages });
+  const firstFiles = extractFileBundle(first.text);
+  if (firstFiles && isExecutableBundle(firstFiles)) return firstFiles;
+
+  const retry = await complete({
+    ...args,
+    messages: [
+      ...messages,
+      { role: "assistant", content: first.text },
+      {
+        role: "user",
+        content:
+          'Your previous reply was not a usable file bundle. Reply again with JSON only: {"files":[{"name":"...","content":"..."},{"name":"...","content":"..."}]}',
+      },
+    ],
+  });
+  const retryFiles = extractFileBundle(retry.text);
+  if (retryFiles && isExecutableBundle(retryFiles)) return retryFiles;
+  return null;
 }
 
 export async function runAcceptedJob(args: {
@@ -179,14 +282,26 @@ export async function runAcceptedJob(args: {
   const category = resolveJobCategory(args.category ?? args.accepted.constraints?.category);
   const pdfJob = isPdfDeliverableCategory(category);
 
-  let html: string;
   if (shouldCompileProvidedHtml(category, args.brief)) {
-    html = sourceHtmlFromBrief(args.brief) ?? "";
+    const html = sourceHtmlFromBrief(args.brief) ?? "";
     if (!html.trim()) {
       throw new Error(`html_to_pdf job ${args.accepted.job_id} is missing source HTML`);
     }
-  } else {
-    html = await generateSpecialtyHtml({
+    const bytes = await renderHtmlToPdf(html, args.brief.requirement);
+    if (!isPdfBytes(bytes)) throw new Error("renderer produced bytes that are not a PDF");
+    return scoredArtifact(
+      {
+        kind: "pdf",
+        pdf_base64: bytesToBase64(bytes),
+        observed_latency_ms: Date.now() - started,
+        declared_latency_ms: Date.now() - started,
+      },
+      html,
+    );
+  }
+
+  if (pdfJob) {
+    const html = await generateSpecialtyHtml({
       baseUrl: args.baseUrl,
       apiKey: args.apiKey,
       model: args.model,
@@ -195,30 +310,50 @@ export async function runAcceptedJob(args: {
       accepted: args.accepted,
       signal: args.signal,
     });
-  }
-
-  const observed = Date.now() - started;
-
-  if (!pdfJob) {
+    const bytes = await renderHtmlToPdf(html, args.brief.requirement);
+    if (!isPdfBytes(bytes)) throw new Error("renderer produced bytes that are not a PDF");
     return scoredArtifact(
       {
-        kind: "html",
-        html,
-        observed_latency_ms: observed,
-        declared_latency_ms: observed,
+        kind: "pdf",
+        pdf_base64: bytesToBase64(bytes),
+        observed_latency_ms: Date.now() - started,
+        declared_latency_ms: Date.now() - started,
       },
       html,
     );
   }
 
-  const bytes = await renderHtmlToPdf(html, args.brief.requirement);
-  if (!isPdfBytes(bytes)) throw new Error("renderer produced bytes that are not a PDF");
+  if (wantsZipBundle(category, args.brief.requirement)) {
+    const files = await generateSpecialtyFiles({
+      baseUrl: args.baseUrl,
+      apiKey: args.apiKey,
+      model: args.model,
+      category,
+      brief: args.brief,
+      accepted: args.accepted,
+      signal: args.signal,
+    });
+    const observed = Date.now() - started;
+    if (files && files.length >= 2) return zipDeliverable(files, observed);
+    if (files && files.length === 1) return singleFileDeliverable(files[0], observed);
+  }
+
+  const html = await generateSpecialtyHtml({
+    baseUrl: args.baseUrl,
+    apiKey: args.apiKey,
+    model: args.model,
+    category,
+    brief: args.brief,
+    accepted: args.accepted,
+    signal: args.signal,
+  });
+  const observed = Date.now() - started;
   return scoredArtifact(
     {
-      kind: "pdf",
-      pdf_base64: bytesToBase64(bytes),
-      observed_latency_ms: Date.now() - started,
-      declared_latency_ms: Date.now() - started,
+      kind: "html",
+      html,
+      observed_latency_ms: observed,
+      declared_latency_ms: observed,
     },
     html,
   );
