@@ -7,23 +7,24 @@ import { getRequest } from "@/lib/marketplace/requests";
 export const dynamic = "force-dynamic";
 
 /**
- * `GET /api/v1/requests/[requestId]/artifact` — the thing the buyer actually paid for.
+ * `GET /api/v1/requests/[id]/artifact` — the thing the buyer actually paid for.
  *
- * The engine has always produced the bytes and kept them in the request state, but nothing ever served
- * them, so a completed task ended with a ledger and no file. The wallet that paid can fetch it; an
- * admin on `/console/requests/[id]` can too, otherwise the ops page would link at a 404 and the file
- * would look like it vanished.
+ * Lives under `[id]` (same slug as `GET /api/v1/requests/[id]`) because Next.js refuses two names
+ * for the same dynamic segment. The engine has always produced the bytes and kept them in the
+ * request state, but nothing ever served them, so a completed task ended with a ledger and no file.
+ * The wallet that paid can fetch it; an admin on `/console/requests/[id]` can too, otherwise the
+ * ops page would link at a 404 and the file would look like it vanished.
  */
 export async function GET(
   _request: Request,
-  { params }: { params: Promise<{ requestId: string }> },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const auth = await requireSignedInApi();
   if (!auth.ok) return auth.response;
 
-  const { requestId } = await params;
+  const { id } = await params;
   const { db } = await getDb();
-  const request = await getRequest(db, requestId);
+  const request = await getRequest(db, id);
   if (!request || !canReadArtifact(auth.identity, request.buyerWalletId)) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
@@ -40,7 +41,7 @@ export async function GET(
     return NextResponse.json({ error: "artifact_empty", kind: artifact.kind }, { status: 404 });
   }
 
-  const name = `deliverable-${requestId}.${encoded.spec.ext}`;
+  const name = `deliverable-${id}.${encoded.spec.ext}`;
   return new NextResponse(new Uint8Array(encoded.bytes), {
     status: 200,
     headers: {

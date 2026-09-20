@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   ARTIFACT_TYPES,
@@ -52,5 +52,10 @@ describe("ops console request page", () => {
     expect(source).toContain("Download");
     expect(source).toContain("iframe");
     expect(source).toContain("canPreviewInIframe");
+  });
+
+  it("keeps the artifact route under the same [id] slug as the request API", () => {
+    expect(existsSync("src/app/api/v1/requests/[id]/artifact/route.ts")).toBe(true);
+    expect(existsSync("src/app/api/v1/requests/[requestId]/artifact/route.ts")).toBe(false);
   });
 });
