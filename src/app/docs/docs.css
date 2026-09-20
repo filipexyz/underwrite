@@ -321,6 +321,23 @@ html[data-uw-docs] .noise {
   position: relative;
 }
 
+.uw-docs .codebox-stack {
+  margin-top: 18px;
+}
+
+.uw-docs .codebox-follow {
+  margin-top: 14px;
+}
+
+.uw-docs .endpoint-note {
+  margin: 15px 0 0;
+  color: #aab7c5;
+}
+
+.uw-docs .endpoint-note.first {
+  margin: 0;
+}
+
 .uw-docs .codebar {
   padding: 8px 12px;
   border-bottom: 1px solid #22303e;
