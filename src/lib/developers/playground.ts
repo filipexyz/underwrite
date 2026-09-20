@@ -3,7 +3,7 @@ import { RequestInput } from "@/lib/contracts";
 export const BUYER_KEY_STORAGE = "uw.playground.buyer_key";
 export const SELLER_KEY_STORAGE = "uw.playground.seller_key";
 
-/** Small valid mandate used by the docs and the playground. */
+/** Small valid mandate used by API smoke helpers. */
 export const SAMPLE_BUYER_REQUEST = {
   task: {
     requirement: "Compile input.html to a PDF: A4, 2cm margins, fonts embedded, links preserved.",
@@ -45,7 +45,7 @@ export function formatJson(value: unknown): string {
   return JSON.stringify(value, null, 2);
 }
 
-/** Validates the playground sample against the live request contract. */
+/** Validates the sample mandate against the live request contract. */
 export function sampleBuyerRequestParsed() {
   return RequestInput.safeParse(SAMPLE_BUYER_REQUEST);
 }

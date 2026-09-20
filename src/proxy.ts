@@ -3,9 +3,9 @@
  * session gate and is authorized by hashed API keys, Auth0/auth.md JWTs, or
  * the legacy `UNDERWRITE_API_KEY`. `/interviews` is the creator pool (Auth0).
  * `/i/[token]` and `/api/v1/interviews/i/*` are public — possession of the
- * invite token is auth. `/developers` is public: agent identity is the pasted
- * key or JWT, not the human session. `/auth.md`, `/.well-known/*`, `/agent/*`,
- * and `/oauth2/*` are the open auth.md surface.
+ * invite token is auth. `/docs` is public (agent API docs; `/developers` 301s
+ * there). `/auth.md`, `/.well-known/*`, `/agent/*`, and `/oauth2/*` are the
+ * open auth.md surface.
  *
  * Without Auth0 keys the proxy is a pass-through, so the loop runs locally
  * with an empty `.env`.

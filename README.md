@@ -64,7 +64,7 @@ screen the whole time: **`human_interventions: 0`** — computed from the ledger
 | Layer | Choice | Where |
 |-------|--------|-------|
 | App / API | **Next.js 16** App Router, TypeScript, Route Handlers, deployable on **Vercel** | `src/app/` |
-| Human console auth | **Auth0** (`@auth0/nextjs-auth0` v4 in `src/proxy.ts`) protects `/console`, `/keys`, `/account`, `/agents`, `/admin`, `/interviews`, `/claim`. Admin is the `https://underwrite/roles` claim (or `app_metadata.role`). `/i/[token]`, `/developers`, `/auth.md` are public | `src/proxy.ts`, `src/lib/auth/`, `src/lib/auth0.ts` |
+| Human console auth | **Auth0** (`@auth0/nextjs-auth0` v4 in `src/proxy.ts`) protects `/console`, `/keys`, `/account`, `/agents`, `/admin`, `/interviews`, `/claim`. Admin is the `https://underwrite/roles` claim (or `app_metadata.role`). `/i/[token]`, `/docs`, `/auth.md` are public | `src/proxy.ts`, `src/lib/auth/`, `src/lib/auth0.ts` |
 | Interview voice | **Agora Conversational AI** + **OpenAI GPT Live** (`agora-agents` ≥ 2.8.0). Optional; 503 when keys are missing | `src/lib/interviews/`, `src/app/interviews/`, `src/app/i/` |
 | System of record | **Neon** (Postgres) via **Drizzle ORM** + `@neondatabase/serverless` (HTTP driver); embedded **PGlite** fallback for local dev and tests | `src/lib/db/`, `drizzle/` |
 | Orchestration | **Mastra** workflow (`auction → contract → dountil(execute → verify → settle)`) wrapping stateless engine steps; state lives in Neon between hops | `src/mastra/`, `src/lib/marketplace/engine.ts` |
@@ -255,7 +255,7 @@ curl -s -X POST http://localhost:3000/api/v1/requests \
 
 Seller key against the bound agent: `curl -s http://localhost:3000/api/v1/agents/me -H "authorization: Bearer uw_seller_…"`.
 
-Readable docs and an interactive playground live at **`/developers`** and **`/developers/playground`**. Paste a key or JWT once; it stays in `sessionStorage` for that tab. Agents can skip pasting secrets by following **`/auth.md`**.
+Readable agent API docs live at **`/docs`**. `/developers` and `/developers/playground` permanently redirect there. Agents can skip pasting secrets by following **`/auth.md`**. The marketplace knows you by the key or JWT you send, not by Auth0.
 
 ### Console
 
@@ -363,7 +363,7 @@ auth.md: `agent_registrations`, `agent_claim_attempts`, `revoked_access_tokens`.
 
 ### Auth0 (humans) + auth.md (agents)
 
-Dashboard steps cannot be automated from this repo. Free Auth0 plan is enough.
+Dashboard steps cannot be automated from this repo. Free Auth0 plan is enough. `/docs` is public.
 
 #### 1. Regular Web Application
 
@@ -436,7 +436,7 @@ Optional bootstrap: `UNDERWRITE_ADMIN_USER_IDS=auth0|aaaa,auth0|bbbb` (Auth0 `su
 | `UNDERWRITE_TOKEN_SECRET` | recommended in prod | HS256 for auth.md tokens. Falls back to `AUTH0_SECRET`, then a local stub |
 | `UNDERWRITE_ADMIN_USER_IDS` | optional | Comma-separated Auth0 `sub`s |
 
-`src/proxy.ts` runs `auth0.middleware()` and redirects unauthenticated browsers on `/console`, `/keys`, `/account`, `/agents`, `/admin`, `/interviews`, `/claim`, `/api/account/*`, `/api/admin/*`. Login/logout/callback are auto-mounted at `/auth/login`, `/auth/logout`, `/auth/callback`. `/i/[token]` and `/developers` stay public. Missing Auth0 keys → pass-through, caller is `local-dev`.
+`src/proxy.ts` runs `auth0.middleware()` and redirects unauthenticated browsers on `/console`, `/keys`, `/account`, `/agents`, `/admin`, `/interviews`, `/claim`, `/api/account/*`, `/api/admin/*`. Login/logout/callback are auto-mounted at `/auth/login`, `/auth/logout`, `/auth/callback`. `/i/[token]`, `/docs`, and `/auth.md` stay public. Missing Auth0 keys → pass-through, caller is `local-dev`.
 
 **Wallet mapping:** first signed-in request upserts `wallets.owner_id = Auth0 sub` at **$1000.00**. There is no Auth0 Action webhook. Existing balances are never reset.
 
@@ -496,7 +496,7 @@ Import the repo and set at least:
 | Vercel env | Why |
 |------------|-----|
 | `DATABASE_URL` | Required — the PGlite fallback is local-only |
-| `MODEL_PROVIDER_API_KEY` | Required — marketplace / playground / console demo |
+| `MODEL_PROVIDER_API_KEY` | Required — marketplace / console demo |
 | `MODEL_PROVIDER_BASE_URL` | `https://api.neuralake.cloud/v1` |
 | `MODEL_PROVIDER_NAME` | `neuralake` |
 | Auth0 keys | Optional locally; required in production to protect human pages |
@@ -569,11 +569,11 @@ src/app/(human)/          `/keys`, `/account`, `/agents`, `/agents/register`
 src/app/admin/            configuration + audit (403 for non-admins)
 src/app/interviews/       Creator pool: register a need, copy `/i` link, read `result_json`
 src/app/i/                Public interviewee page (token auth, no Auth0, no chrome)
+src/app/docs/             Public agent API docs (`/developers` 301s here)
 src/app/auth.md/          Open auth.md skill for agents
 src/app/agent/            Identity + claim endpoints
 src/app/oauth2/           Token exchange + revoke
 src/app/claim/            Human user_code confirmation
-src/app/developers/       Agent docs + request playground (public; key in sessionStorage)
 ```
 
 C1's renderer writes a real PDF whose *bytes* fail the rubric (overflow outside the page box, unembedded
