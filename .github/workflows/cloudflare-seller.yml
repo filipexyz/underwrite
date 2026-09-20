@@ -105,7 +105,8 @@ jobs:
 
       # `pnpm deploy` is pnpm's workspace-publish command (ERR_PNPM_NOTHING_TO_DEPLOY).
       # wrangler.jsonc vars include UNDERWRITE_BASE_URL=https://underwrite-gamma.vercel.app
-      # (never localhost). That var is applied on every deploy.
+      # (never localhost). observability.enabled + logs.persist are applied too so
+      # dashboard Logs stay on after each deploy.
       - name: Wrangler deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
