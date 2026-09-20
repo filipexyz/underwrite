@@ -132,7 +132,7 @@ export async function runAuction(db: Db, requestId: string): Promise<StepResult>
   for (const agent of bidders) {
     const prime = agent.policy.prime;
     if (!prime) continue;
-    const quote = buildQuote(agent, prime, req.minConfidence, { registry: ctx.registry, ancestors: [], exclude: new Set(), depth: 0 });
+    const quote = buildQuote(agent, prime, req.minConfidence, { registry: ctx.registry, ancestors: [], exclude: new Set(), depth: 0, budget_usd: req.maxCostUsd });
     if (!quote) continue;
 
     const price = priceToBuyer(quote.price_usd);
@@ -782,6 +782,9 @@ function findEscalation(ctx: EngineContext, state: EngineState, hops: HopRecord[
     ancestors: hops.slice(0, hirerIndex).map((h) => h.agent_id),
     exclude: new Set(exclude),
     depth: hirerIndex,
+    // What the hirer can still pass down. Without it a replacement would quote its raw cost and win on price
+    // alone — the escalation is the one place a share-priced market falls back to absolute numbers if it is missed.
+    budget_usd: Math.max(0, remainingBudget(hirer)),
   });
   if (!sel.quote) return null;
   const fitsBudget = sel.quote.price_usd <= remainingBudget(hirer) + EPS;

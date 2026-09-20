@@ -22,6 +22,15 @@ export type QuotePolicy = {
   own_latency_s: number;
   /** Share this hop retains (its own work + margin). */
   own_cost_usd: number;
+  /**
+   * Price as a fraction of what the hirer can pay, instead of an absolute number.
+   *
+   * An absolute price cannot target a percentage of a budget it does not know: the same agent is called with
+   * a $0.05 ceiling (the PDF demo) and a $100 ceiling (a voiced task), which is why every bid landed in cents.
+   * A share prices against the ceiling, so the market reads in dollars at any scale — and `own_cost_usd` stays
+   * the *real* inference cost, which is what makes "charges $7.50, costs $0.006" a measurable sentence.
+   */
+  price_share?: number;
   /** For `decompose` / `outsource`: specialty it hires for. */
   subcontract_specialty?: string;
   subtask: string;

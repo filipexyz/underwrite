@@ -35,7 +35,7 @@ export const DEMO_REQUEST: RequestInput = {
     requirement: "Compile input.html to a PDF: A4, 2cm margins, fonts embedded, links preserved.",
     files: [{ name: "input.html", media_type: "text/html", content: DEMO_INPUT_HTML }],
   },
-  max_cost_usd: 0.05,
+  max_cost_usd: 10,
   max_latency_s: 30,
   min_confidence: 0.95,
   failure_policy: "refund",
