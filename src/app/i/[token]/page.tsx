@@ -54,6 +54,7 @@ export default async function PublicInterviewPage({
           <InterviewRoom
             startPath={`/api/v1/interviews/i/${token}/start`}
             finalizePath={`/api/v1/interviews/i/${token}/finalize`}
+            transcriptPath={`/api/v1/interviews/i/${token}/transcript`}
             appId={env.agora.appId ?? ""}
             requiredFields={need.brief.required_fields}
           />

@@ -6,6 +6,7 @@ import { getDb } from "@/lib/db/client";
 import { getNeedDetail } from "@/lib/interviews/store";
 import { CopyInvite } from "../copy-invite";
 import { SetupBanner } from "../setup-banner";
+import { LiveTranscript } from "./live-transcript";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +17,9 @@ export default async function InterviewNeedPage({ params }: { params: Promise<{ 
   if (!detail) notFound();
   const { need, sessions } = detail;
   const invitePath = `/i/${need.publicToken}`;
+  // Prefer the session in flight; otherwise the most recent one, so a finished call still shows its
+  // transcript rather than an empty panel.
+  const activeSession = sessions.find((s) => s.status === "live") ?? sessions[0];
 
   return (
     <div className="flex flex-col gap-8">
@@ -86,7 +90,31 @@ export default async function InterviewNeedPage({ params }: { params: Promise<{ 
         </dl>
       </Panel>
 
+      <Panel title="Live transcript" eyebrow="AS IT HAPPENS">
+        {activeSession ? (
+          <LiveTranscript
+            sessionId={activeSession.id}
+            initialTurns={activeSession.transcriptJson ?? []}
+            initialStatus={activeSession.status}
+          />
+        ) : (
+          <Empty>No session yet. Open the interviewee link to start a call and this fills in live.</Empty>
+        )}
+      </Panel>
+
       <Panel title="Result" eyebrow="STRUCTURED ANSWERS">
+        {need.requestId ? (
+          <p className="mb-3 text-sm">
+            This interview produced a marketplace task:{" "}
+            <Link href={`/console/requests/${need.requestId}`} className="mono text-xs text-teal hover:underline">
+              {need.requestId}
+            </Link>
+          </p>
+        ) : need.status === "completed" ? (
+          <p className="mb-3 mono text-xs text-danger">
+            No task was created for this interview. Check the server log for a handoff error.
+          </p>
+        ) : null}
         {need.resultJson ? (
           <pre className="text-xs leading-relaxed overflow-x-auto bg-[#d8dfd8] p-3.5 font-mono">{JSON.stringify(need.resultJson, null, 2)}</pre>
         ) : (
