@@ -38,6 +38,8 @@ export function VoiceComposer({ startPath }: { startPath: string }) {
   const [phase, setPhase] = useState<Phase>("idle");
   const [error, setError] = useState<string | null>(null);
   const [agentState, setAgentState] = useState("idle");
+  /** Whether the agent's audio track has been subscribed to. Silence without this is a bug, not a pause. */
+  const [agentConnected, setAgentConnected] = useState(false);
   const [micOn, setMicOn] = useState(true);
   const [transcript, setTranscript] = useState<TranscriptTurn[]>([]);
   const [elapsed, setElapsed] = useState(0);
@@ -178,6 +180,22 @@ export function VoiceComposer({ startPath }: { startPath: string }) {
       micRef.current = mic;
       const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
       rtcRef.current = client;
+      /*
+       * Subscribing to the agent's tracks is what makes it audible. Without these handlers the client
+       * joins and publishes fine, RTM still delivers the transcript, and the call looks healthy while
+       * the human hears nothing — the agent's audio is never subscribed to, let alone played.
+       */
+      client.on("user-published", async (user, mediaType) => {
+        await client.subscribe(user, mediaType);
+        if (mediaType === "audio") user.audioTrack?.play();
+        if (String(user.uid) === payload.agent_uid) setAgentConnected(true);
+      });
+      client.on("user-unpublished", (user) => {
+        if (String(user.uid) === payload.agent_uid) setAgentConnected(false);
+      });
+      client.on("user-joined", (user) => {
+        if (String(user.uid) === payload.agent_uid) setAgentConnected(true);
+      });
       await client.join(payload.app_id ?? "", payload.channel, payload.token, Number(payload.uid));
       await client.publish([mic]);
 
@@ -189,10 +207,11 @@ export function VoiceComposer({ startPath }: { startPath: string }) {
         if (parsed.kind === "state") setAgentState(parsed.state);
         if (parsed.kind === "error") setError(parsed.message);
         if (parsed.kind === "transcript") {
-          if (parsed.turn.role === "user") return; // Only the agent's own words matter here.
+          // Both sides are kept. Filtering to the agent's turns made the conversation look like
+          // questions with no answers, which reads as a frozen call.
           setTranscript((prev) => {
             const next = upsertTranscript(prev, parsed.turn, parsed.inProgress);
-            if (!parsed.inProgress) maybeFinish(next);
+            if (!parsed.inProgress && parsed.turn.role === "assistant") maybeFinish(next);
             return next;
           });
         }
@@ -267,7 +286,9 @@ export function VoiceComposer({ startPath }: { startPath: string }) {
     <section className="border border-line bg-paper flex flex-col">
       <div className="flex flex-col items-center gap-3 px-6 pt-8 pb-6 text-center">
         <span className={phase === "live" ? "live-dot" : "live-dot opacity-40"} aria-hidden />
-        <p className="eyebrow !mb-0">{phase === "live" ? `${agentState} · ${elapsed}s` : phase}</p>
+        <p className="eyebrow !mb-0">
+          {phase === "live" ? `${agentConnected ? agentState : "waiting for the agent's audio"} · ${elapsed}s` : phase}
+        </p>
         {phase === "idle" ? (
           <p className="font-sans text-sm text-[#53605a] max-w-sm leading-relaxed">
             Tell the agent what you need delivered. It will ask for the price you will pay, how long you will wait,
@@ -303,7 +324,7 @@ export function VoiceComposer({ startPath }: { startPath: string }) {
             <ol className="px-3 pb-3 flex flex-col gap-2 max-h-52 overflow-y-auto">
               {transcript.map((turn, i) => (
                 <li key={`${turn.turn_id ?? i}-${turn.role}`} className="text-xs leading-relaxed">
-                  <span className="mono text-muted">Agent · </span>
+                  <span className="mono text-muted">{turn.role === "user" ? "You" : "Agent"} · </span>
                   <span>{turn.text}</span>
                 </li>
               ))}
