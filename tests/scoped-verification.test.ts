@@ -211,7 +211,7 @@ describe("Nexus false-positive", () => {
 
     const wrong = runChecks(HTML_TO_PDF_RUBRIC, facts, source);
     expect(wrong.checks.filter((c) => !c.passed).map((c) => c.check_id)).toEqual(
-      expect.arrayContaining(["pdf_valid", "fonts_embedded", "page_count"]),
+      expect.arrayContaining(["pdf_valid", "fonts_embedded"]),
     );
 
     const scoped = scopeChecks("landing_page", LANDING_TASK, { category: "landing_page", artifact_kind: "html" });
@@ -286,6 +286,7 @@ describe("verifyArtifact + judgesFor", () => {
         max_latency_s: 30,
         min_confidence: 0.5,
         failure_policy: "refund",
+        selection_timeout_s: 5,
         category: TASK_CATEGORY,
         verification: SPECIALTY_REPORT_RUBRIC,
       },

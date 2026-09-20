@@ -238,23 +238,8 @@ function categoryFromRubric(version: string): string | undefined {
   return known;
 }
 
-function asSpec(specOrMap: VerificationSpec | DeclaredCheck[] | readonly string[] | string): VerificationSpec {
-  if (typeof specOrMap === "string") return defaultRubricFor(specOrMap);
-  if (Array.isArray(specOrMap)) {
-    if (specOrMap.length === 0) {
-      return { rubric_version: "scoped@v0", required_passing: 1, checks: [...sharedChecks] };
-    }
-    if (typeof specOrMap[0] === "string") {
-      const ids = specOrMap as readonly string[];
-      return {
-        rubric_version: "scoped@v0",
-        required_passing: 1,
-        checks: ids.map((check_id) => ({ check_id, weight: 1, description: check_id })),
-      };
-    }
-    return { rubric_version: "scoped@v0", required_passing: 1, checks: specOrMap as DeclaredCheck[] };
-  }
-  return specOrMap;
+function asSpec(specOrMap: VerificationSpec | string): VerificationSpec {
+  return typeof specOrMap === "string" ? defaultRubricFor(specOrMap) : specOrMap;
 }
 
 function kindSupports(checkId: string, kind: ArtifactKind | undefined): boolean {
@@ -276,7 +261,7 @@ function kindSupports(checkId: string, kind: ArtifactKind | undefined): boolean 
  * rubric so existing fixtures stay intact.
  */
 export function scopeChecks(
-  specOrMap: VerificationSpec | DeclaredCheck[] | readonly string[] | string,
+  specOrMap: VerificationSpec | string,
   taskRequirement: string,
   constraints: ScopeConstraints = {},
 ): VerificationSpec {
