@@ -10,6 +10,7 @@
  */
 import { RtcRole, RtcTokenBuilder } from "agora-token";
 import type { AgentSession } from "agora-agents";
+import type { LlmTool } from "agora-agents";
 import { env } from "@/lib/env";
 
 const TOKEN_TTL_SECONDS = 3600;
@@ -94,66 +95,13 @@ export type StartGptLiveAgentArgs = {
   greeting: string;
   /** Distinct uid per surface, so two agents never collide if channels ever overlap. */
   agentUid: string;
+  /**
+   * Inline REST tools exposed to the model for function calling. When set, `withTools(true)` is enabled:
+   * the SDK documents the pair as required together, and Agora executes the tool's HTTP request
+   * synchronously, feeding the raw result back into the model's context.
+   */
+  tools?: LlmTool[];
 };
-
-/**
- * Start an agent on the **LLM pipeline** with our own completions endpoint as the LLM stage.
- *
- * This is the `recipe-agent-custom-llm` shape, and it is what makes real tool calling possible: Agora never
- * sees a tool call, because the tool loop runs inside the endpoint we hand it. STT and TTS stay
- * Agora-managed (`DeepgramSTT` / `MiniMaxTTS` with no provider key — the presets are covered by our Agora
- * account), so switching pipelines needs **no new credentials**.
- *
- * Kept separate from the GPT Live path on purpose: the interview stays on `withMllm`, so this cannot change
- * its behaviour.
- */
-export async function startCustomLlmAgent(args: {
-  channel: string;
-  userUid: string;
-  prompt: string;
-  greeting: string;
-  agentUid: string;
-  /** Public URL of our OpenAI-compatible completions route for this session. */
-  llmUrl: string;
-  llmApiKey: string;
-}): Promise<{ agentId: string; agentUid: string }> {
-  const { AgoraClient, Agent, CustomLLM, DeepgramSTT, ExpiresIn, MiniMaxTTS } = await import("agora-agents");
-  const appId = env.agora.appId;
-  const certificate = env.agora.certificate;
-  if (!appId || !certificate) throw new Error("Agora credentials are not set");
-
-  const client = new AgoraClient({ area: await agoraArea(), appId, appCertificate: certificate });
-
-  const agent = new Agent({
-    client,
-    advancedFeatures: { enable_rtm: true, enable_tools: false },
-    parameters: { data_channel: "rtm", enable_error_message: true, enable_metrics: true },
-  })
-    .withLlm(
-      new CustomLLM({
-        apiKey: args.llmApiKey,
-        model: "underwrite-voice",
-        url: args.llmUrl,
-        systemMessages: [{ role: "system", content: args.prompt }],
-        greetingMessage: args.greeting,
-      }),
-    )
-    .withStt(new DeepgramSTT({ model: "nova-3" }))
-    .withTts(new MiniMaxTTS({ model: "speech-2.6-turbo" }));
-
-  const session = agent.createSession({
-    name: `voice-${args.channel}`.slice(0, 64),
-    channel: args.channel,
-    agentUid: args.agentUid,
-    remoteUids: [args.userUid],
-    idleTimeout: 180,
-    expiresIn: ExpiresIn.hours(1),
-  });
-
-  const agentId = await session.start();
-  storeAgentSession(agentId, session);
-  return { agentId, agentUid: args.agentUid };
-}
 
 /**
  * Start a GPT Live agent.
@@ -179,7 +127,8 @@ export async function startGptLiveAgent(args: StartGptLiveAgentArgs): Promise<{ 
   });
 
   const agentUid = args.agentUid;
-  const agent = new Agent({
+  // `withTools` returns a new agent, so the builder result has to be reassigned.
+  let agent = new Agent({
     client,
     advancedFeatures: { enable_rtm: true, enable_tools: false },
     parameters: {
@@ -204,8 +153,10 @@ export async function startGptLiveAgent(args: StartGptLiveAgentArgs): Promise<{ 
       voice: env.agora.voice,
       prompt: args.prompt,
       greeting: args.greeting,
+      ...(args.tools?.length ? { tools: args.tools } : {}),
     }),
   );
+  if (args.tools?.length) agent = agent.withTools(true);
 
   const session = agent.createSession({
     name: `agent-${args.channel}`.slice(0, 64),

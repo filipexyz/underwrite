@@ -6,12 +6,13 @@
  * need, no invite token, and no second human.
  */
 import type { Db } from "@/lib/db/client";
+import type { LlmTool } from "agora-agents";
 import { env } from "@/lib/env";
 import {
   mintJoinToken,
   newBrowserUid,
   newChannelName,
-  startCustomLlmAgent,
+  startGptLiveAgent,
   stopGptLiveAgent,
 } from "@/lib/agora/gpt-live";
 import { publicApiBaseUrl } from "@/lib/docs/api-base";
@@ -80,17 +81,13 @@ export async function startVoiceSession(db: Db, userId: string): Promise<StartVo
   const { token, expireAt } = mintJoinToken(session.agoraChannel, uid);
 
   try {
-    // The agent's LLM stage is our own endpoint, per the Agora tool-calling recipe: the tool loop runs
-    // there, so the model's tool_call never has to travel over a data channel. STT and TTS stay
-    // Agora-managed, so switching pipelines needs no new credentials.
-    const started = await startCustomLlmAgent({
+    const started = await startGptLiveAgent({
       channel: session.agoraChannel,
       userUid: uid.toString(),
       prompt: buildVoiceComposerPrompt(),
       greeting: buildVoiceComposerGreeting(),
       agentUid: String(VOICE_AGENT_UID),
-      llmUrl: publicApiBaseUrl() + "/api/v1/voice/sessions/" + session.id + "/llm/chat/completions",
-      llmApiKey: env.agora.certificate as string,
+      tools: [buildSubmitTaskTool(session.id)],
     });
     await attachVoiceAgentId(db, session.id, started.agentId);
     return {
@@ -133,6 +130,62 @@ function sessionIdForChannel(userId: string): string {
  * our own process, against our own data. `createTaskFromVoiceBrief` is idempotent, so a model that calls
  * the tool twice — or a retried request — still produces exactly one task.
  */
+/**
+ * The end tool, declared for the model and executed by Agora.
+ *
+ * `LlmTool` with `type: "function"` plus `server` is an **inline REST tool**: Agora performs the HTTP
+ * request itself, synchronously, and feeds the raw result back into the model's context. That is why no
+ * sentence, no data channel and no timer is involved in submitting a task — the model calls a function and
+ * the marketplace is updated as part of that call.
+ *
+ * Requires `withTools(true)` on the agent; `startGptLiveAgent` sets it whenever tools are supplied.
+ */
+export const submitTaskToolName = "submit_task";
+
+function buildSubmitTaskTool(sessionId: string): LlmTool {
+  const base = publicApiBaseUrl();
+  return {
+    type: "function",
+    function: {
+      name: submitTaskToolName,
+      description:
+        "Submit the agreed task to the marketplace. Call this once — and only once — you have the deliverable and all four terms. Afterwards tell the person briefly that the task is posted.",
+      parameters: {
+        type: "object",
+        properties: {
+          requirement: {
+            type: "string",
+            description: "What must be delivered, specific enough to be objectively checked.",
+          },
+          max_cost_usd: { type: "number", description: "Maximum price the buyer agreed to pay, in US dollars." },
+          max_latency_s: { type: "number", description: "Maximum time the buyer agreed to wait, in seconds." },
+          min_confidence: { type: "number", description: "Minimum confidence required, as a fraction; 95% is 0.95." },
+          failure_policy: {
+            type: "string",
+            enum: ["refund", "discount", "accept_flagged"],
+            description: "What happens if the work fails verification.",
+          },
+        },
+        required: ["requirement", "max_cost_usd", "max_latency_s", "min_confidence", "failure_policy"],
+      },
+    },
+    server: {
+      method: "POST",
+      url: base + "/api/v1/voice/sessions/" + sessionId + "/tools/submit_task",
+      // `{{args.*}}` is not allowed in headers, so the shared secret is a constant: the Agora app
+      // certificate, which Agora's cloud already holds and is the only caller of that URL.
+      headers: { authorization: "Bearer " + String(env.agora.certificate ?? "") },
+      body: {
+        requirement: "{{args.requirement}}",
+        max_cost_usd: "{{args.max_cost_usd}}",
+        max_latency_s: "{{args.max_latency_s}}",
+        min_confidence: "{{args.min_confidence}}",
+        failure_policy: "{{args.failure_policy}}",
+      },
+    },
+  };
+}
+
 export async function submitVoiceBrief(
   db: Db,
   args: { session: { id: string; agoraAgentId: string | null }; brief: VoiceTaskBrief },
