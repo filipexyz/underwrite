@@ -186,8 +186,17 @@ export const env = {
   get agora() {
     const appId = read("NEXT_PUBLIC_AGORA_APP_ID");
     const certificate = read("AGORA_APP_CERTIFICATE") ?? read("NEXT_AGORA_APP_CERTIFICATE");
-    const openaiKey =
-      read("AGORA_OPENAI_API_KEY") ?? read("NEXT_OPENAI_API_KEY") ?? read("OPENAI_API_KEY") ?? read("MODEL_PROVIDER_API_KEY");
+    /*
+     * GPT Live opens an **OpenAI Realtime** session, so this must be an OpenAI key with Realtime access.
+     *
+     * `MODEL_PROVIDER_API_KEY` used to be in this fallback chain, and that is a trap: the marketplace's
+     * own provider key (NeuraLake) is not an OpenAI key, so a missing `AGORA_OPENAI_API_KEY` looked like a
+     * *valid* configuration, the agent was created, joined the channel, and was torn down ~2s later with
+     * `type=invalid_request_error` — in every surface, with nothing in our logs.
+     *
+     * If someone genuinely wants the provider key here, they can set AGORA_OPENAI_API_KEY to it.
+     */
+    const openaiKey = read("AGORA_OPENAI_API_KEY") ?? read("NEXT_OPENAI_API_KEY") ?? read("OPENAI_API_KEY");
     const missing: string[] = [];
     if (!appId) missing.push("NEXT_PUBLIC_AGORA_APP_ID");
     if (!certificate) missing.push("AGORA_APP_CERTIFICATE");
