@@ -5,16 +5,21 @@
  * *contract* (so composition must be deterministic and echo every agreed term), and the task is filed
  * automatically (so idempotency matters — one conversation must never produce two charged tasks).
  */
-import { beforeAll, describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { POST as finalizeRoute } from "@/app/api/v1/voice/sessions/[id]/finalize/route";
-import { GET as sessionRoute, } from "@/app/api/v1/voice/sessions/[id]/route";
+import { POST as mcpVoice } from "@/app/api/mcp/voice/[sessionId]/route";
+import { GET as sessionRoute } from "@/app/api/v1/voice/sessions/[id]/route";
 import { POST as transcriptRoute } from "@/app/api/v1/voice/sessions/[id]/transcript/route";
 import { getDb } from "@/lib/db/client";
 import { LOCAL_DEV_USER_ID } from "@/lib/auth/session";
 import { listEvents } from "@/lib/ledger/ledger";
+import { ensureUserWallet } from "@/lib/marketplace/credits";
 import { getRequest } from "@/lib/marketplace/requests";
+import { registerSellerAgent } from "@/lib/marketplace/sellers";
 import { extractBriefJson } from "@/app/start/voice-composer";
 import { composeVoiceRequirement, createTaskFromVoiceBrief, voiceBriefToRequestInput } from "@/lib/voice/handoff";
+import { flushScheduledVoicePushJobs } from "@/lib/voice/push";
 import {
   appendVoiceTranscript,
   completeVoiceSession,
@@ -155,21 +160,29 @@ describe("requirement composition", () => {
     expect(input.failure_policy).toBe("refund");
     expect(input.category).toBe("html_to_pdf");
     expect(input.task.files).toEqual([]);
+    expect(input.execution_mode).toBe("push");
+    expect(input.invite_agent_ids).toBeUndefined();
   });
 });
 
 describe("task handoff", () => {
   it("files once, attributed to the agent, and is idempotent on retry", async () => {
+    const classify = await import("@/lib/typesafe/classify");
+    const classifySpy = vi.spyOn(classify, "classifyTask");
     const { db } = await getDb();
     const session = await insertVoiceSession(db, { userId: USER, channel: "voice-test-1" });
 
     const first = await createTaskFromVoiceBrief(db, { session, brief });
     expect(first.created).toBe(true);
+    expect(classifySpy).toHaveBeenCalled();
+    classifySpy.mockRestore();
 
     const request = await getRequest(db, first.requestId);
     expect(request?.requirement).toContain("launch brief");
     expect(request?.maxCostUsd).toBe(0.35);
     expect(request?.buyerWalletId).toBe(USER);
+    expect(request?.executionMode).toBe("push");
+    expect(request?.state?.requested_invite_agent_ids ?? []).toEqual([]);
 
     const events = await listEvents(db, first.requestId);
     const received = events.find((e) => e.type === "request_received");
@@ -272,5 +285,240 @@ describe("routes", () => {
     expect(body.total).toBe(2);
     expect(body.from).toBe(1);
     expect(body.turns.map((t) => t.text)).toEqual(["second"]);
+  });
+});
+
+const PINNED_AGENT_ID = "agt_151cf";
+
+function sellerDraft(name: string, specialty: string, webhook?: string) {
+  return {
+    name,
+    role: "executor" as const,
+    specialties: [specialty],
+    model_family: "family-voice",
+    model: "auto",
+    baseline_confidence: 0.96,
+    cost_ceiling_usd: 0.04,
+    latency_class: "fast" as const,
+    risk_tolerance: "mid" as const,
+    ...(webhook ? { webhook_url: webhook } : { hosted: false as const }),
+  };
+}
+
+describe("voice finalize starts push, not the seed PDF loop", () => {
+  it("does not import runMarketplace or pin a hardcoded agent id", () => {
+    const kickoff = [
+      "src/app/api/v1/voice/sessions/[id]/finalize/route.ts",
+      "src/app/api/mcp/voice/[sessionId]/route.ts",
+      "src/app/api/v1/voice/sessions/[id]/tools/submit_task/route.ts",
+    ].map((file) => readFileSync(file, "utf8"));
+    const helpers = ["src/lib/voice/handoff.ts", "src/lib/voice/push.ts"].map((file) => readFileSync(file, "utf8"));
+    for (const source of [...kickoff, ...helpers]) {
+      expect(source).not.toMatch(/from\s+["']@\/mastra["']/);
+      expect(source).not.toContain(PINNED_AGENT_ID);
+      expect(source).not.toMatch(/invite_agent_ids:\s*\[/);
+    }
+    for (const source of kickoff) {
+      expect(source).not.toContain("runMarketplace");
+      expect(source).toContain("scheduleVoicePushJob");
+    }
+  });
+
+  it("finalizes onto a push job and invites Top-K for the category", async () => {
+    const marketplace = await import("@/mastra");
+    const runSpy = vi.spyOn(marketplace, "runMarketplace");
+    const pushMod = await import("@/lib/marketplace/push");
+    const startSpy = vi.spyOn(pushMod, "startPushJob");
+
+    const { db } = await getDb();
+    await ensureUserWallet(db, USER);
+    const specialty = "landing_page";
+    const hosted = await registerSellerAgent(
+      db,
+      "user_voice_push_hosted",
+      sellerDraft(
+        "Voice hosted landing",
+        specialty,
+        "https://underwrite-cloudflare-seller.example.workers.dev/webhook/voice-hosted",
+      ),
+    );
+    const inbox = await registerSellerAgent(db, "user_voice_push_inbox", sellerDraft("Voice inbox landing", specialty));
+
+    const session = await insertVoiceSession(db, { userId: USER, channel: "voice-push-1" });
+    const res = await finalizeRoute(
+      jsonRequest({
+        brief: { ...brief, category: specialty, requirement: "Build a one-page landing for the launch" },
+        transcript_json: [{ role: "assistant", text: "Posted." }],
+      }) as never,
+      { params: Promise.resolve({ id: session.id }) },
+    );
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { request_id: string; created: boolean };
+    expect(body.created).toBe(true);
+
+    await flushScheduledVoicePushJobs();
+
+    expect(runSpy).not.toHaveBeenCalled();
+    expect(startSpy).toHaveBeenCalled();
+    expect(startSpy.mock.calls.some((call) => call[1] === body.request_id && call[2]?.requireWebhook === true)).toBe(
+      true,
+    );
+
+    const request = await getRequest(db, body.request_id);
+    expect(request?.executionMode).toBe("push");
+    expect(request?.category).toBe(specialty);
+    expect(request?.status).toBe("planning");
+    expect(request?.state?.requested_invite_agent_ids ?? []).toEqual([]);
+    const invited = request?.state?.invited_agent_ids ?? [];
+    expect(invited).toEqual([hosted.agent.agentId]);
+    expect(invited).not.toContain(inbox.agent.agentId);
+    expect(invited).not.toContain(PINNED_AGENT_ID);
+    expect(invited).not.toContain("a-delegator");
+
+    const events = await listEvents(db, body.request_id);
+    expect(events.some((e) => e.type === "plan_request")).toBe(true);
+    expect(events.some((e) => e.type === "request_received" && e.payload.execution_mode === "push")).toBe(true);
+
+    runSpy.mockRestore();
+    startSpy.mockRestore();
+  });
+
+  it("does not invite seed catalog agents without a webhook", async () => {
+    const marketplace = await import("@/mastra");
+    const runSpy = vi.spyOn(marketplace, "runMarketplace");
+    const { db } = await getDb();
+    await ensureUserWallet(db, USER);
+    const connected = await registerSellerAgent(
+      db,
+      "user_voice_push_html",
+      sellerDraft(
+        "Voice connected pdf",
+        "html_to_pdf",
+        "https://underwrite-cloudflare-seller.example.workers.dev/webhook/voice-pdf",
+      ),
+    );
+
+    const session = await insertVoiceSession(db, { userId: USER, channel: "voice-push-seed" });
+    const res = await finalizeRoute(
+      jsonRequest({
+        brief: { ...brief, category: "html_to_pdf", requirement: "Compile the brief to a PDF" },
+        transcript_json: [{ role: "assistant", text: "Posted." }],
+      }) as never,
+      { params: Promise.resolve({ id: session.id }) },
+    );
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { request_id: string };
+    await flushScheduledVoicePushJobs();
+
+    expect(runSpy).not.toHaveBeenCalled();
+    const request = await getRequest(db, body.request_id);
+    expect(request?.executionMode).toBe("push");
+    expect(request?.status).toBe("planning");
+    expect(request?.state?.invited_agent_ids).toEqual([connected.agent.agentId]);
+    expect(request?.state?.invited_agent_ids).not.toEqual(
+      expect.arrayContaining(["a-delegator", "b-mid", "c1-cheap", "c2-honest"]),
+    );
+
+    runSpy.mockRestore();
+  });
+
+  it("fails loudly when no hireable agent matches the specialty", async () => {
+    const marketplace = await import("@/mastra");
+    const runSpy = vi.spyOn(marketplace, "runMarketplace");
+    const { db } = await getDb();
+    await ensureUserWallet(db, USER);
+    const session = await insertVoiceSession(db, { userId: USER, channel: "voice-push-empty" });
+    const res = await finalizeRoute(
+      jsonRequest({
+        brief: {
+          ...brief,
+          category: "voice_empty_specialty",
+          requirement: "Do a thing no seller is listed for",
+        },
+        transcript_json: [{ role: "user", text: "please" }],
+      }) as never,
+      { params: Promise.resolve({ id: session.id }) },
+    );
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { request_id: string };
+    await flushScheduledVoicePushJobs();
+
+    expect(runSpy).not.toHaveBeenCalled();
+    const request = await getRequest(db, body.request_id);
+    expect(request?.executionMode).toBe("push");
+    expect(request?.status).toBe("no_eligible_plan");
+    expect(request?.error).toMatch(/no connected agents/i);
+    const outcome = (request?.outcome ?? {}) as { reason?: string };
+    expect(outcome.reason).toMatch(/no connected agents/i);
+
+    const events = await listEvents(db, body.request_id);
+    const selected = events.find((e) => e.type === "plan_selected");
+    expect(selected?.payload.reason).toMatch(/no connected agents/i);
+
+    runSpy.mockRestore();
+  });
+
+  it("MCP submit_task starts push, not runMarketplace", async () => {
+    process.env.AGORA_APP_CERTIFICATE = process.env.AGORA_APP_CERTIFICATE ?? "test-voice-mcp-cert";
+    const token = process.env.AGORA_APP_CERTIFICATE;
+    const marketplace = await import("@/mastra");
+    const runSpy = vi.spyOn(marketplace, "runMarketplace");
+
+    const { db } = await getDb();
+    await ensureUserWallet(db, USER);
+    const specialty = "research_report";
+    const seller = await registerSellerAgent(
+      db,
+      "user_voice_mcp_push",
+      sellerDraft(
+        "Voice MCP researcher",
+        specialty,
+        "https://underwrite-cloudflare-seller.example.workers.dev/webhook/voice-mcp",
+      ),
+    );
+    const session = await insertVoiceSession(db, { userId: USER, channel: "voice-mcp-push" });
+
+    const res = await mcpVoice(
+      new Request(`http://localhost:3000/api/mcp/voice/${session.id}`, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "tools/call",
+          params: {
+            name: "submit_task",
+            arguments: {
+              requirement: "Write a research memo on agent marketplaces",
+              max_cost_usd: 0.2,
+              max_latency_s: 60,
+              min_confidence: 0.9,
+              failure_policy: "refund",
+              category: specialty,
+            },
+          },
+        }),
+      }),
+      { params: Promise.resolve({ sessionId: session.id }) },
+    );
+    expect(res.status).toBe(200);
+    const rpc = (await res.json()) as { result?: { isError?: boolean; content?: Array<{ text?: string }> } };
+    expect(rpc.result?.isError).not.toBe(true);
+    const posted = JSON.parse(rpc.result?.content?.[0]?.text ?? "{}") as { request_id?: string; ok?: boolean };
+    expect(posted.ok).toBe(true);
+    expect(posted.request_id).toBeTruthy();
+
+    await flushScheduledVoicePushJobs();
+    expect(runSpy).not.toHaveBeenCalled();
+
+    const request = await getRequest(db, posted.request_id as string);
+    expect(request?.executionMode).toBe("push");
+    expect(request?.category).toBe(specialty);
+    expect(request?.status).toBe("planning");
+    expect(request?.state?.requested_invite_agent_ids ?? []).toEqual([]);
+    expect(request?.state?.invited_agent_ids).toEqual([seller.agent.agentId]);
+    expect(request?.state?.invited_agent_ids).not.toContain(PINNED_AGENT_ID);
+
+    runSpy.mockRestore();
   });
 });

@@ -19,6 +19,7 @@ import { getDb } from "@/lib/db/client";
 import { voiceSessions } from "@/lib/db/schema";
 import { env } from "@/lib/env";
 import { submitVoiceBrief } from "@/lib/voice/flow";
+import { scheduleVoicePushJob } from "@/lib/voice/push";
 import { DEFAULT_VOICE_CATEGORY, VoiceTaskBrief } from "@/lib/voice/types";
 
 export const runtime = "nodejs";
@@ -57,6 +58,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   try {
     const submitted = await submitVoiceBrief(db, { session, brief: parsed.data });
+    if (submitted.created) scheduleVoicePushJob(submitted.requestId);
     console.log("[voice-tool] submitted", JSON.stringify({ session: id, request_id: submitted.requestId }));
     return NextResponse.json({
       ok: true,
