@@ -17,6 +17,7 @@ const LINKS = [
   // actions enforce it) — it just stops a new account from being offered an internal observability
   // page and a catalog-reset button it has no business seeing.
   { href: "/console", label: "console", adminOnly: true, match: (path: string) => path.startsWith("/console") },
+  { href: "/tasks", label: "tasks", match: (path: string) => path.startsWith("/tasks") },
   { href: "/interviews", label: "interviews", match: (path: string) => path.startsWith("/interviews") },
   { href: "/account", label: "account", match: (path: string) => path.startsWith("/account") },
   { href: "/keys", label: "keys", match: (path: string) => path.startsWith("/keys") },
