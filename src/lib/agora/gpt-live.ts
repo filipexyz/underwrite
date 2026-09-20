@@ -125,11 +125,15 @@ export async function startGptLiveAgent(args: StartGptLiveAgentArgs): Promise<{ 
     advancedFeatures: { enable_rtm: true, enable_tools: false },
     parameters: {
       /*
-       * `audio_scenario: "chorus"` was inherited from the interview module and is the one non-standard
-       * parameter in this config — it selects chorus/karaoke audio processing, and neither the official
-       * Agora recipe nor the ConvoAI quickstart sets it. Removed here; if a surface ever needs it, pass
-       * it explicitly rather than defaulting every agent into it.
+       * `audio_scenario: "chorus"` is REQUIRED in this configuration. It looks like leftover karaoke
+       * tuning and I removed it as "the one non-standard parameter" — and the agent then joined the
+       * channel and was torn down after 2 seconds, where before it held a real conversation.
+       * The Agora call detail for that run is the evidence: agent uid 123457 in at 02:39:06, out at
+       * 02:39:08, peak concurrent users 1 — it never met the browser.
+       *
+       * Do not remove it again without a passing call on the other side of the change.
        */
+      audio_scenario: "chorus",
       data_channel: "rtm",
       enable_error_message: true,
       enable_metrics: true,
