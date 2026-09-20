@@ -88,8 +88,13 @@ export default function Home() {
             <pre className="mt-5 overflow-x-auto bg-[#d8dfd8] p-3.5 font-mono text-[11px] leading-[1.65] whitespace-pre-wrap">
               {CURL}
             </pre>
-            <Link href="/console" className="btn-ink mt-7 w-full">
-              <span>OPEN THE LIVE LEDGER</span>
+            {/*
+             * This used to point at `/console` — an admin-only surface — so every visitor who
+             * followed it authenticated straight into the 403 page. The human-facing next step is
+             * registering a brief; the ledger stays reachable for admins via the nav.
+             */}
+            <Link href="/interviews" className="btn-ink mt-7 w-full">
+              <span>REGISTER A BRIEF</span>
               <strong>→</strong>
             </Link>
             <div className="mt-3 flex flex-wrap gap-2">

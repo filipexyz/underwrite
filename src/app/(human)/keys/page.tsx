@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Timestamp } from "@/components/timestamp";
 import { listApiKeys, toPublicApiKey } from "@/lib/auth/api-keys";
 import { requireSignedInPage } from "@/lib/auth/session";
 import { getDb } from "@/lib/db/client";
@@ -118,7 +119,7 @@ function KeyTable({
                   <Badge value={key.revoked_at ? "revoked" : "active"} />
                 </Td>
                 <Td right>
-                  <span className="mono text-xs text-muted">{new Date(key.created_at).toLocaleString()}</span>
+                  <Timestamp value={key.created_at} className="mono text-xs text-muted" />
                 </Td>
                 <Td>
                   {!key.revoked_at ? (

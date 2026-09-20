@@ -1,8 +1,10 @@
 /**
- * Console-internal ledger feed (Auth0-protected like the rest of /console,
- * never API-key gated). Same shape as /api/v1/requests/[id]/events.
+ * Console-internal ledger feed. Admin-gated in the handler, not just by the layout: route handlers
+ * do not pass through a layout, so the proxy's session check alone would leave every request's
+ * ledger readable by any signed-in account.
  */
 import { NextResponse } from "next/server";
+import { requireAdminApi } from "@/lib/auth/session";
 import { getDb } from "@/lib/db/client";
 import { deriveMetrics, listEvents } from "@/lib/ledger/ledger";
 import { getRequest } from "@/lib/marketplace/requests";
@@ -11,6 +13,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const auth = await requireAdminApi();
+  if (!auth.ok) return auth.response;
   const { id } = await params;
   const { db } = await getDb();
   const row = await getRequest(db, id);

@@ -60,7 +60,17 @@ export function SiteHeader({
       <div className="flex items-center gap-3 shrink-0">
         {variant === "ops" && hint ? <OpsHint fallback={hint} /> : null}
         {variant === "ops" ? <AuthStatus /> : null}
-        <LiveLink href="/console">{variant === "market" ? "OPEN OPS CONSOLE →" : "LIVE LEDGER →"}</LiveLink>
+        {/*
+         * The public header must not funnel signed-in humans at `/console`. It is an admin surface,
+         * so a normal account that followed this link, authenticated, and arrived was shown the
+         * 403 page — a dead end right after logging in. The market variant now points at the
+         * human-facing brief pool; only the ops variant links to the ledger.
+         */}
+        {variant === "market" ? (
+          <LiveLink href="/interviews">START A BRIEF →</LiveLink>
+        ) : (
+          <LiveLink href="/console">LIVE LEDGER →</LiveLink>
+        )}
       </div>
     </header>
   );

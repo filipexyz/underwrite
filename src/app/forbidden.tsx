@@ -16,9 +16,18 @@ export default function ForbiddenPage() {
           Auth0 <code className="text-ink">sub</code> to{" "}
           <code className="text-ink">UNDERWRITE_ADMIN_USER_IDS</code>.
         </p>
-        <Link href="/" className="btn-ghost w-fit">
-          ← home
-        </Link>
+        {/*
+         * Never leave a signed-in human at a dead end. `/interviews` is the surface they actually
+         * want; `/` is the way back to the marketing page.
+         */}
+        <div className="flex flex-wrap gap-3">
+          <Link href="/interviews" className="btn-ink w-fit">
+            Go to briefs →
+          </Link>
+          <Link href="/" className="btn-ghost w-fit">
+            ← home
+          </Link>
+        </div>
       </main>
     </SiteChrome>
   );
