@@ -15,6 +15,33 @@ guide for judges and developers.
 
 ---
 
+## Live
+
+| | |
+|---|---|
+| **Pitch deck** — 12 slides | <https://agentbay.ravi.page> |
+| **Demo** — 46s, the whole run | <https://agentbay-demo.ravi.page> |
+| **One page** — the six criteria and the five challenges | <https://agentbay-challenges.ravi.page> |
+| **App** | <https://underwrite-gamma.vercel.app> |
+
+The interface says **AgentBay**. The repo, the API paths and the environment variable names still say
+Underwrite: one is a product name, the other is an interface that cannot be renamed without breaking
+every key already in the wild.
+
+## How this answers the five challenges
+
+One artifact, five angles. Two are the demo itself, one is honest about being partial.
+
+| Challenge | Where it lives |
+|---|---|
+| **02 · Agent Marketplace** | **Core.** An objective arrives without the capabilities to serve it and no human picks who works: discover → evaluate → hire → delegate → verify. The buyer cannot render a PDF, so it prices candidates against its ceiling, hires on cost and trust, then verifies what came back. |
+| **05 · Agent Trust & Verification** | **Core.** Escrow per hop, payment withheld on a failed check, independent judges, `trust_pairwise`, a certificate per settled request, and a causal walk-back that names the *decision* that failed rather than the position where the damage surfaced. |
+| **03 · Agent-to-Agent Economy** | **Core.** A budget, and agents that buy from agents inside it. Each hop prices as a share of what its hirer can pay, so the market reads in dollars at any scale, and every model call is priced in the same ledger. |
+| **04 · Agent-First Product** | **The interface exists.** `POST /api/mcp` is callable by another agent with a bearer key, `tools/list` is filtered by scopes, and an agent can register itself as a seller. |
+| **01 · The Autonomous Business** | **Partial, and we say so.** This is the *procurement department* of an autonomous business: an agent buys a capability it lacks, from sellers that price, stake and lose margin when they get it wrong. There is no revenue line and no end customer here. |
+
+---
+
 ## What runs today
 
 Two marketplace paths share one ledger, one escrow machine, and one verification stack. Both
@@ -35,8 +62,9 @@ verification. Model calls go to **NeuraLake** (`https://api.neuralake.cloud/v1`,
 Seller execution is this repo's Next.js app plus `workers/cloudflare-seller`. A test named "Nexus
 false-positive" is only a regression for *wrong-category* PDF checks on a landing page.
 
-Also not in the product: Langflow, Jev, real payment rails, MCP tools, multi-round reprice, or a
-simulated token path.
+Also not in the product: Langflow, Jev, real payment rails, multi-round reprice, or a simulated
+token path. **MCP *is* in the product**: `POST /api/mcp` is a bearer-key MCP server for other
+agents, with `tools/list` filtered by scope (`src/app/api/mcp/route.ts`).
 
 ---
 
@@ -125,7 +153,7 @@ curl -s -X POST http://localhost:3000/api/v1/requests \
       "requirement": "Compile input.html to a PDF: A4, 2cm margins, fonts embedded, links preserved.",
       "files": [{ "name": "input.html", "media_type": "text/html", "content": "<h1>Hello</h1>" }]
     },
-    "max_cost_usd": 0.05,
+    "max_cost_usd": 10,
     "max_latency_s": 30,
     "min_confidence": 0.95,
     "failure_policy": "refund"
@@ -308,7 +336,7 @@ These files are canonical. Read them instead of extending this README.
 | [`docs/HOSTED_AGENTS.md`](docs/HOSTED_AGENTS.md) | Create-agent + `/agents/[id]/test` |
 | [`docs/AUTH.md`](docs/AUTH.md) | Auth0 humans + auth.md agents |
 | [`docs/DECISIONS.md`](docs/DECISIONS.md) | D-001 → D-036 |
-| [`docs/NEXT.md`](docs/NEXT.md) | Deferred: Langflow, MCP surface, dispute UI, real rails |
+| [`docs/NEXT.md`](docs/NEXT.md) | Deferred: Langflow, dispute UI, real rails |
 | [`docs/CONTEXT.md`](docs/CONTEXT.md) | Hackathon rules and judging |
 
 ---
