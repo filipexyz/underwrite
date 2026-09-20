@@ -141,7 +141,7 @@ export function toPublicAgent(row: AgentRow) {
     webhook_url: row.webhookUrl,
     description: row.description,
     policy: row.policy,
-    owner_clerk_user_id: row.ownerClerkUserId,
+    owner_user_id: row.ownerUserId,
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),
   };
@@ -154,8 +154,8 @@ export async function toOwnedAgentView(db: Db, row: AgentRow): Promise<PublicOwn
   return { ...toPublicAgent(row), wallet_usd: wallet.capitalUsd };
 }
 
-export async function listOwnedAgents(db: Db, ownerClerkUserId: string): Promise<AgentRow[]> {
-  return db.select().from(agents).where(eq(agents.ownerClerkUserId, ownerClerkUserId)).orderBy(desc(agents.createdAt));
+export async function listOwnedAgents(db: Db, ownerUserId: string): Promise<AgentRow[]> {
+  return db.select().from(agents).where(eq(agents.ownerUserId, ownerUserId)).orderBy(desc(agents.createdAt));
 }
 
 export async function listAllAgents(db: Db): Promise<AgentRow[]> {
@@ -167,20 +167,20 @@ export async function getAgentRow(db: Db, agentId: string): Promise<AgentRow | n
   return row ?? null;
 }
 
-export function isOwnedBy(row: AgentRow, clerkUserId: string): boolean {
-  return row.ownerClerkUserId === clerkUserId;
+export function isOwnedBy(row: AgentRow, userId: string): boolean {
+  return row.ownerUserId === userId;
 }
 
 /** Owner-only fetch. Returns null when the agent is missing or belongs to someone else. */
-export async function getOwnedAgent(db: Db, agentId: string, clerkUserId: string): Promise<AgentRow | null> {
+export async function getOwnedAgent(db: Db, agentId: string, userId: string): Promise<AgentRow | null> {
   const row = await getAgentRow(db, agentId);
-  if (!row || !isOwnedBy(row, clerkUserId)) return null;
+  if (!row || !isOwnedBy(row, userId)) return null;
   return row;
 }
 
 export async function registerSellerAgent(
   db: Db,
-  ownerClerkUserId: string,
+  ownerUserId: string,
   draft: AgentRegisterInput,
 ): Promise<{ agent: AgentRow; secret: string; key: PublicApiKey }> {
   const input: AgentRegisterParsed = AgentRegisterInput.parse(draft);
@@ -201,7 +201,7 @@ export async function registerSellerAgent(
       riskTolerance: input.risk_tolerance,
       policy,
       status: "registered",
-      ownerClerkUserId,
+      ownerUserId,
       contact: input.contact ?? null,
       webhookUrl: input.webhook_url ?? null,
       description: input.description ?? null,
@@ -245,7 +245,7 @@ export async function registerSellerAgent(
   const issued = await issueApiKey(db, {
     name: `${input.name} seller key`,
     role: "seller",
-    ownerClerkUserId,
+    ownerUserId,
     agentId,
     scopes: ["agents:me"],
   });
@@ -298,7 +298,7 @@ export async function patchAgentProfile(
 }
 
 export function enableStatusFor(row: AgentRow): Exclude<AgentStatus, "disabled"> {
-  return row.ownerClerkUserId ? "registered" : "seed";
+  return row.ownerUserId ? "registered" : "seed";
 }
 
 export async function setAgentStatus(db: Db, agentId: string, status: AgentStatus): Promise<AgentRow | null> {
@@ -314,10 +314,10 @@ export async function setAgentStatus(db: Db, agentId: string, status: AgentStatu
 export async function patchOwnedAgent(
   db: Db,
   agentId: string,
-  clerkUserId: string,
+  userId: string,
   patch: AgentOwnerPatchInput,
 ): Promise<AgentRow | null> {
-  const existing = await getOwnedAgent(db, agentId, clerkUserId);
+  const existing = await getOwnedAgent(db, agentId, userId);
   if (!existing) return null;
 
   const { status, ...profile } = patch;

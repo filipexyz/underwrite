@@ -22,7 +22,7 @@ export default async function AgentDetailPage({ params }: { params: Promise<{ id
 
   const [wallet, keyRows, issuedSecret] = await Promise.all([
     ensureAgentWallet(db, row.agentId),
-    listApiKeys(db, { ownerClerkUserId: userId, agentId: row.agentId }),
+    listApiKeys(db, { ownerUserId: userId, agentId: row.agentId }),
     peekIssuedSellerSecret(row.agentId),
   ]);
   const agent = toPublicAgent(row);
@@ -97,7 +97,7 @@ export default async function AgentDetailPage({ params }: { params: Promise<{ id
           <Stat label="contact" value={agent.contact ?? "—"} />
           <Stat label="webhook url" value={<span className="break-all">{agent.webhook_url ?? "—"}</span>} />
           <Stat label="description" value={agent.description ?? "—"} />
-          <Stat label="owner" value={<span className="mono text-xs">{agent.owner_clerk_user_id ?? "—"}</span>} />
+          <Stat label="owner" value={<span className="mono text-xs">{agent.owner_user_id ?? "—"}</span>} />
           <Stat label="created" value={new Date(agent.created_at).toLocaleString()} />
           <Stat label="updated" value={new Date(agent.updated_at).toLocaleString()} />
         </dl>

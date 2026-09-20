@@ -2,6 +2,7 @@ import Link from "next/link";
 import { desc } from "drizzle-orm";
 import { Badge, Empty, Money, PageIntro, Panel, Td, Th } from "@/app/console/ui";
 import { listApiKeys, toPublicApiKey } from "@/lib/auth/api-keys";
+import { listRegistrations, toPublicRegistration } from "@/lib/auth/auth-md";
 import { requireAdminPage } from "@/lib/auth/session";
 import { getDb } from "@/lib/db/client";
 import { ledgerEvents, wallets } from "@/lib/db/schema";
@@ -9,20 +10,22 @@ import { env } from "@/lib/env";
 import { classifyWallet } from "@/lib/marketplace/credits";
 import { listAllAgents, toPublicAgent } from "@/lib/marketplace/sellers";
 import { listRequests } from "@/lib/marketplace/requests";
-import { disableAgent, enableAgent, revokeAnyKey } from "./actions";
+import { disableAgent, enableAgent, revokeAnyKey, revokeAnyRegistration } from "./actions";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminPage() {
   await requireAdminPage();
   const { db } = await getDb();
-  const [agentRows, keyRows, requests, walletRows, events] = await Promise.all([
+  const [agentRows, keyRows, requests, walletRows, events, registrationRows] = await Promise.all([
     listAllAgents(db),
     listApiKeys(db),
     listRequests(db, 20),
     db.select().from(wallets),
     db.select().from(ledgerEvents).orderBy(desc(ledgerEvents.seq)).limit(25),
+    listRegistrations(db, 40),
   ]);
+  const registrations = registrationRows.map(toPublicRegistration);
   const agents = agentRows.map(toPublicAgent);
   const keys = keyRows.map(toPublicApiKey);
   const capital = walletRows.reduce((sum, row) => sum + row.capitalUsd, 0);
@@ -50,11 +53,11 @@ export default async function AdminPage() {
           </li>
           <li className="flex justify-between gap-4 border-t border-line py-2.5 font-mono text-[10px] tracking-wide">
             <b className="text-teal">UNDERWRITE_ADMIN_USER_IDS</b>
-            <span className="text-right text-[#5c6862]">{env.adminUserIds ? "set — bootstrap allowlist" : "unset — use Clerk publicMetadata.role=admin"}</span>
+            <span className="text-right text-[#5c6862]">{env.adminUserIds ? "set — bootstrap allowlist" : "unset — use Auth0 https://underwrite/roles"}</span>
           </li>
           <li className="flex justify-between gap-4 border-t border-line py-2.5 font-mono text-[10px] tracking-wide">
-            <b className="text-teal">Clerk public metadata</b>
-            <span className="text-right text-[#5c6862]">{`{ "role": "admin" }`} or {`{ "admin": true }`}</span>
+            <b className="text-teal">Auth0 admin claim</b>
+            <span className="text-right text-[#5c6862]">app_metadata.role=admin → https://underwrite/roles</span>
           </li>
           <li className="flex justify-between gap-4 border-t border-line py-2.5 font-mono text-[10px] tracking-wide">
             <b className="text-teal">MODEL_PROVIDER_API_KEY</b>
@@ -101,7 +104,7 @@ export default async function AdminPage() {
                     <Badge value={agent.status} />
                   </Td>
                   <Td>
-                    <span className="mono text-xs text-muted">{agent.owner_clerk_user_id ?? "—"}</span>
+                    <span className="mono text-xs text-muted">{agent.owner_user_id ?? "—"}</span>
                   </Td>
                   <Td className="text-muted text-xs">{agent.specialties.join(", ")}</Td>
                   <Td right>
@@ -160,7 +163,7 @@ export default async function AdminPage() {
                     <Badge value={key.role} />
                   </Td>
                   <Td>
-                    <span className="mono text-xs text-muted">{key.owner_clerk_user_id ?? "—"}</span>
+                    <span className="mono text-xs text-muted">{key.owner_user_id ?? "—"}</span>
                   </Td>
                   <Td>
                     <span className="mono text-xs text-muted">{key.agent_id ?? "—"}</span>
@@ -172,6 +175,58 @@ export default async function AdminPage() {
                     {!key.revoked_at ? (
                       <form action={revokeAnyKey}>
                         <input type="hidden" name="id" value={key.id} />
+                        <button type="submit" className="font-mono text-[10px] tracking-wider uppercase text-danger hover:underline">
+                          revoke
+                        </button>
+                      </form>
+                    ) : null}
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </Panel>
+
+      <Panel title={`auth.md registrations · ${registrations.length}`} eyebrow="AGENT IDENTITY">
+        {registrations.length === 0 ? (
+          <Empty>
+            No agent registrations yet. Agents start at <code>/auth.md</code>.
+          </Empty>
+        ) : (
+          <table className="w-full">
+            <thead>
+              <tr>
+                <Th>id</Th>
+                <Th>type</Th>
+                <Th>status</Th>
+                <Th>owner</Th>
+                <Th>agent</Th>
+                <Th></Th>
+              </tr>
+            </thead>
+            <tbody>
+              {registrations.map((registration) => (
+                <tr key={registration.registration_id} className="border-t border-line">
+                  <Td>
+                    <span className="mono text-xs">{registration.registration_id}</span>
+                  </Td>
+                  <Td>
+                    <Badge value={registration.registration_type} />
+                  </Td>
+                  <Td>
+                    <Badge value={registration.status} />
+                  </Td>
+                  <Td>
+                    <span className="mono text-xs text-muted">{registration.owner_user_id ?? "—"}</span>
+                  </Td>
+                  <Td>
+                    <span className="mono text-xs text-muted">{registration.agent_id ?? "—"}</span>
+                  </Td>
+                  <Td>
+                    {registration.status !== "revoked" ? (
+                      <form action={revokeAnyRegistration}>
+                        <input type="hidden" name="id" value={registration.registration_id} />
                         <button type="submit" className="font-mono text-[10px] tracking-wider uppercase text-danger hover:underline">
                           revoke
                         </button>

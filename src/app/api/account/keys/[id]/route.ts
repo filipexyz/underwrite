@@ -12,7 +12,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   if (!auth.ok) return auth.response;
   const { id } = await params;
   const { db } = await getDb();
-  const owned = await listApiKeys(db, { ownerClerkUserId: auth.identity.userId });
+  const owned = await listApiKeys(db, { ownerUserId: auth.identity.userId });
   if (!owned.some((row) => row.id === id)) return jsonError(404, "key not found");
   const row = await revokeApiKey(db, id);
   if (!row) return jsonError(404, "key not found");

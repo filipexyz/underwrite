@@ -525,3 +525,19 @@ beats "we have 21 hours left". New ideas go to a `NEXT.md` backlog, not into the
 
 This is the most important decision of the day: the failure mode from here is not a bad design, it's
 running out of hours with nothing running.
+
+---
+
+## D-033 · Clerk out; Auth0 for humans; open auth.md for agents
+
+**Date:** 2026-09-19 · **Status:** decided
+
+Human identity is Auth0 (Regular Web App + optional Resource Server). Admin is
+`https://underwrite/roles` / `app_metadata.role`, not Clerk public metadata.
+
+Agents self-onboard via the open auth.md protocol implemented on this Next app
+(PRM, `/agent/identity`, claim ceremony, jwt-bearer). No WorkOS dependency.
+Hashed seller/buyer keys stay for cutover.
+
+Wallet grant stays first-request upsert keyed by Auth0 `sub` ($1000). No Auth0
+Action webhook. Clerk users re-sign-up; old Clerk ids do not map automatically.

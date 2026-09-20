@@ -1,9 +1,11 @@
 /**
  * Hashed API keys. The plaintext secret is shown once at create time.
  *
- * Request auth accepts either the legacy env `UNDERWRITE_API_KEY` or a
- * non-revoked DB key. `/api/v1/requests*` needs a buyer (or admin_service)
- * key; `/api/v1/agents/me` needs a seller key tied to an agent.
+ * Request auth accepts the legacy env `UNDERWRITE_API_KEY`, a non-revoked
+ * DB key, an Auth0 / auth.md JWT, or (buyer routes) an Auth0 session.
+ * `/api/v1/requests*` needs a buyer (or admin_service) key, a JWT with
+ * `buyer:requests`, or stays public when nothing is presented.
+ * `/api/v1/agents/me` needs a seller key or a JWT with seller scopes.
  */
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { and, desc, eq } from "drizzle-orm";
@@ -20,7 +22,7 @@ export type PublicApiKey = {
   name: string;
   role: ApiKeyRole;
   key_prefix: string;
-  owner_clerk_user_id: string | null;
+  owner_user_id: string | null;
   agent_id: string | null;
   scopes: string[];
   revoked_at: string | null;
@@ -101,7 +103,7 @@ export async function issueApiKey(
   args: {
     name: string;
     role: ApiKeyRole;
-    ownerClerkUserId?: string | null;
+    ownerUserId?: string | null;
     agentId?: string | null;
     scopes?: string[];
   },
@@ -115,7 +117,7 @@ export async function issueApiKey(
       role: args.role,
       keyPrefix: prefix,
       keyHash: hashApiKey(secret),
-      ownerClerkUserId: args.ownerClerkUserId ?? null,
+      ownerUserId: args.ownerUserId ?? null,
       agentId: args.agentId ?? null,
       scopes: args.scopes ?? [],
     })
@@ -130,10 +132,10 @@ export async function revokeApiKey(db: Db, id: string): Promise<ApiKeyRow | null
 
 export async function listApiKeys(
   db: Db,
-  filter?: { ownerClerkUserId?: string; agentId?: string },
+  filter?: { ownerUserId?: string; agentId?: string },
 ): Promise<ApiKeyRow[]> {
   const conditions = [];
-  if (filter?.ownerClerkUserId) conditions.push(eq(apiKeys.ownerClerkUserId, filter.ownerClerkUserId));
+  if (filter?.ownerUserId) conditions.push(eq(apiKeys.ownerUserId, filter.ownerUserId));
   if (filter?.agentId) conditions.push(eq(apiKeys.agentId, filter.agentId));
   if (conditions.length === 0) {
     return db.select().from(apiKeys).orderBy(desc(apiKeys.createdAt));
@@ -151,7 +153,7 @@ export function toPublicApiKey(row: ApiKeyRow): PublicApiKey {
     name: row.name,
     role: row.role,
     key_prefix: row.keyPrefix,
-    owner_clerk_user_id: row.ownerClerkUserId,
+    owner_user_id: row.ownerUserId,
     agent_id: row.agentId,
     scopes: row.scopes,
     revoked_at: row.revokedAt ? row.revokedAt.toISOString() : null,

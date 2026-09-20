@@ -1,5 +1,5 @@
 /**
- * Clerk-session (or local-dev) self-serve key minting.
+ * Auth0-session (or local-dev) self-serve key minting.
  * GET  — list this user's keys (prefix / role / revoked; never the secret)
  * POST — create a buyer key, or a seller key bound to an agent they own
  */
@@ -24,7 +24,7 @@ export async function GET() {
   const auth = await requireSignedInApi();
   if (!auth.ok) return auth.response;
   const { db } = await getDb();
-  const rows = await listApiKeys(db, { ownerClerkUserId: auth.identity.userId });
+  const rows = await listApiKeys(db, { ownerUserId: auth.identity.userId });
   return NextResponse.json({ keys: rows.map(toPublicApiKey) });
 }
 
@@ -45,7 +45,7 @@ export async function POST(request: Request) {
   if (parsed.data.role === "seller") {
     if (!parsed.data.agent_id) return jsonError(422, "seller keys require agent_id");
     const agent = await getAgentRow(db, parsed.data.agent_id);
-    if (!agent || agent.ownerClerkUserId !== auth.identity.userId) {
+    if (!agent || agent.ownerUserId !== auth.identity.userId) {
       return jsonError(403, "you do not own that agent");
     }
   }
@@ -53,7 +53,7 @@ export async function POST(request: Request) {
   const issued = await issueApiKey(db, {
     name: parsed.data.name,
     role: parsed.data.role,
-    ownerClerkUserId: auth.identity.userId,
+    ownerUserId: auth.identity.userId,
     agentId: parsed.data.role === "seller" ? parsed.data.agent_id : null,
     scopes: parsed.data.role === "seller" ? ["agents:me"] : ["requests"],
   });

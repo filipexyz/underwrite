@@ -5,16 +5,16 @@ import type { NextResponse } from "next/server";
 export const LOCAL_DEV_USER_ID = "local-dev";
 
 /**
- * Interview APIs are a human surface. Clerk session when configured;
- * `local-dev` when Clerk is off so empty `.env` still works.
+ * Interview APIs are a human surface. Auth0 session when configured;
+ * `local-dev` when Auth0 is off so empty `.env` still works.
  * Marketplace `UNDERWRITE_API_KEY` is intentionally not required.
  */
 export async function requireInterviewUser(): Promise<{ userId: string } | { error: NextResponse }> {
-  if (!env.clerk.enabled) return { userId: LOCAL_DEV_USER_ID };
-  const { auth } = await import("@clerk/nextjs/server");
-  const { userId } = await auth();
-  if (!userId) return { error: jsonError(401, "sign in required") };
-  return { userId };
+  if (!env.auth0.enabled) return { userId: LOCAL_DEV_USER_ID };
+  const { resolveSessionIdentity } = await import("@/lib/auth/session");
+  const identity = await resolveSessionIdentity();
+  if (!identity) return { error: jsonError(401, "sign in required") };
+  return { userId: identity.userId };
 }
 
 export function agoraUnavailable(): NextResponse {

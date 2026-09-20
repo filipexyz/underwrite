@@ -2,7 +2,7 @@
  * POST /api/v1/interviews/needs — register a structured interview need.
  * GET  /api/v1/interviews/needs — list (newest first).
  *
- * Clerk session when configured; open in local-dev. Does not use
+ * Auth0 session when configured; open in local-dev. Does not use
  * UNDERWRITE_API_KEY (marketplace agent key).
  */
 import { NextResponse } from "next/server";

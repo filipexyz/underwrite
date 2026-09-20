@@ -10,8 +10,10 @@ export default function ForbiddenPage() {
           Admin <em>only.</em>
         </h1>
         <p className="text-[#53605a] text-sm leading-relaxed">
-          This surface is for configuration and audit. Ask Luís to set Clerk public metadata{" "}
-          <code className="text-ink">{`{ "role": "admin" }`}</code> on your user, or add your Clerk user id to{" "}
+          This surface is for configuration and audit. Ask Luís to set Auth0{" "}
+          <code className="text-ink">app_metadata.role = &quot;admin&quot;</code> (copied to{" "}
+          <code className="text-ink">https://underwrite/roles</code> by the Post-Login Action), or add your
+          Auth0 <code className="text-ink">sub</code> to{" "}
           <code className="text-ink">UNDERWRITE_ADMIN_USER_IDS</code>.
         </p>
         <Link href="/" className="btn-ghost w-fit">

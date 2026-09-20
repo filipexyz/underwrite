@@ -49,24 +49,24 @@ describe("hashApiKey / generateApiKeySecret", () => {
   });
 });
 
-describe("admin guard (publicMetadata + allowlist)", () => {
-  it("treats publicMetadata.role === admin as admin", () => {
-    expect(isAdminUser({ userId: "user_1", publicMetadata: { role: "admin" } }, [])).toBe(true);
+describe("admin guard (Auth0 claims + allowlist)", () => {
+  it("treats https://underwrite/roles admin as admin", () => {
+    expect(isAdminUser({ userId: "auth0|1", claims: { "https://underwrite/roles": ["admin"] } }, [])).toBe(true);
   });
 
-  it("treats publicMetadata.admin === true as admin", () => {
-    expect(isAdminUser({ userId: "user_1", publicMetadata: { admin: true } }, [])).toBe(true);
+  it("treats app_metadata.admin === true as admin", () => {
+    expect(isAdminUser({ userId: "auth0|1", claims: { app_metadata: { admin: true } } }, [])).toBe(true);
   });
 
-  it("accepts the optional Clerk user-id allowlist as a bootstrap", () => {
-    expect(isAdminUser({ userId: "user_2", publicMetadata: {} }, ["user_2"])).toBe(true);
-    expect(parseAdminAllowlist(" user_a, user_b ")).toEqual(["user_a", "user_b"]);
+  it("accepts the optional Auth0 sub allowlist as a bootstrap", () => {
+    expect(isAdminUser({ userId: "auth0|2", claims: {} }, ["auth0|2"])).toBe(true);
+    expect(parseAdminAllowlist(" auth0|a, auth0|b ")).toEqual(["auth0|a", "auth0|b"]);
   });
 
   it("rejects ordinary signed-in users", () => {
-    expect(isAdminUser({ userId: "user_1", publicMetadata: { role: "member" } }, ["user_other"])).toBe(false);
-    expect(isAdminUser({ userId: null, publicMetadata: { role: "admin" } }, [])).toBe(true);
-    expect(isAdminUser({ userId: "user_1", publicMetadata: {} }, [])).toBe(false);
+    expect(isAdminUser({ userId: "auth0|1", claims: { role: "member" } }, ["auth0|other"])).toBe(false);
+    expect(isAdminUser({ userId: null, claims: { "https://underwrite/roles": ["admin"] } }, [])).toBe(true);
+    expect(isAdminUser({ userId: "auth0|1", claims: {} }, [])).toBe(false);
   });
 });
 
@@ -92,7 +92,7 @@ describe("resolveBuyerAuth / resolveSellerAuth", () => {
   });
 
   it("accepts a non-revoked hashed buyer key and records last_used_at", async () => {
-    const issued = await issueApiKey(db, { name: "t-buyer", role: "buyer", ownerClerkUserId: "user_test" });
+    const issued = await issueApiKey(db, { name: "t-buyer", role: "buyer", ownerUserId: "user_test" });
     const stored = await lookupApiKey(db, issued.secret);
     expect(stored?.keyHash).toBe(hashApiKey(issued.secret));
     expect(JSON.stringify(stored)).not.toContain(issued.secret);
@@ -109,13 +109,13 @@ describe("resolveBuyerAuth / resolveSellerAuth", () => {
     const seller = await issueApiKey(db, {
       name: "t-seller-orphan",
       role: "seller",
-      ownerClerkUserId: "user_test",
+      ownerUserId: "user_test",
       agentId: "c2-honest",
     });
     const forbidden = await resolveBuyerAuth({ presented: seller.secret, legacyKey: undefined, db });
     expect(forbidden).toEqual({ ok: false, status: 403, error: "this key cannot access buyer request routes" });
 
-    const buyer = await issueApiKey(db, { name: "t-revoked", role: "buyer", ownerClerkUserId: "user_test" });
+    const buyer = await issueApiKey(db, { name: "t-revoked", role: "buyer", ownerUserId: "user_test" });
     await revokeApiKey(db, buyer.row.id);
     const revoked = await resolveBuyerAuth({ presented: buyer.secret, legacyKey: undefined, db });
     expect(revoked).toEqual({ ok: false, status: 401, error: "missing or invalid API key" });
@@ -137,7 +137,7 @@ describe("resolveBuyerAuth / resolveSellerAuth", () => {
     expect(ok.ok).toBe(true);
     if (ok.ok) expect(ok.agentId).toBe(created.agent.agentId);
 
-    const buyer = await issueApiKey(db, { name: "not-seller", role: "buyer", ownerClerkUserId: "user_seller" });
+    const buyer = await issueApiKey(db, { name: "not-seller", role: "buyer", ownerUserId: "user_seller" });
     const denied = await resolveSellerAuth({ presented: buyer.secret, db });
     expect(denied.ok).toBe(false);
     if (!denied.ok) expect(denied.status).toBe(401);

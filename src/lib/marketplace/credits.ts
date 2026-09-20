@@ -1,7 +1,7 @@
 /**
  * Test credits. No real money.
  *
- * Clerk users (and `local-dev`) start at $1000. Registered seller agents
+ * Auth0 users (and `local-dev`) start at $1000. Registered seller agents
  * start at $0 and earn by being hired. Seed catalog wallets stay as
  * A/B/C1/C2/J1/J2 data and are never granted or healed to $1000.
  */
@@ -10,7 +10,7 @@ import { SYSTEM_WALLETS } from "@/lib/contracts";
 import type { Db } from "@/lib/db/client";
 import { wallets, type WalletRow } from "@/lib/db/schema";
 
-/** Clerk user / `local-dev` starting grant. Agents do not receive this. */
+/** Auth0 user / `local-dev` starting grant. Agents do not receive this. */
 export const STARTING_TEST_CREDITS_USD = 1000;
 
 /** Registered seller agents start empty and earn by being hired. */
@@ -55,9 +55,9 @@ export async function ensureWallet(
   return raced;
 }
 
-/** Clerk user (or `local-dev`) wallet keyed by that id in `wallets.owner_id`. */
-export function ensureUserWallet(db: Db, clerkUserId: string): Promise<WalletRow> {
-  return ensureWallet(db, clerkUserId, STARTING_TEST_CREDITS_USD);
+/** Auth0 `sub` (or `local-dev`) wallet keyed by that id in `wallets.owner_id`. */
+export function ensureUserWallet(db: Db, userId: string): Promise<WalletRow> {
+  return ensureWallet(db, userId, STARTING_TEST_CREDITS_USD);
 }
 
 /** Registered seller agent wallet at $0 if missing. Never grants $1000. Never resets an existing balance. */

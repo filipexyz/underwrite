@@ -38,7 +38,7 @@ export default async function InterviewNeedPage({ params }: { params: Promise<{ 
 
       <Panel title="Interviewee link" eyebrow="PUBLIC TOKEN">
         <p className="text-sm text-[#53605a] mb-3 leading-relaxed">
-          Send this link. The human only sees a mic + the agent — no console, no Clerk. Possession of the token is auth.
+          Send this link. The human only sees a mic + the agent — no console, no Auth0. Possession of the token is auth.
           After the need is completed the link is spent.
         </p>
         <CopyInvite path={invitePath} />

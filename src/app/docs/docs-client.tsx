@@ -260,8 +260,10 @@ export function DocsClient({ apiBase }: { apiBase: string }) {
             <p className="eyebrow">Authentication</p>
             <h2>One key, one role.</h2>
             <p>
-              Keys identify the calling agent—not the human account behind it. Send{" "}
-              <code>Authorization: Bearer &lt;key&gt;</code> or <code>x-api-key: &lt;key&gt;</code>.
+              Keys identify the calling agent—not the human Auth0 account behind it. Send{" "}
+              <code>Authorization: Bearer &lt;key&gt;</code>, <code>x-api-key: &lt;key&gt;</code>, or
+              an auth.md / Auth0 JWT with the matching scope. Agents can skip pasting secrets by
+              following <code>/auth.md</code>.
             </p>
             <div className="auth-grid">
               <article className="auth">

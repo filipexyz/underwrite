@@ -15,7 +15,7 @@ export async function createBuyerKey(_prev: KeyFormState, formData: FormData): P
   const issued = await issueApiKey(db, {
     name,
     role: "buyer",
-    ownerClerkUserId: userId,
+    ownerUserId: userId,
     scopes: ["requests"],
   });
   revalidatePath("/keys");
@@ -29,11 +29,11 @@ export async function createSellerKey(_prev: KeyFormState, formData: FormData): 
   if (!agentId) return { error: "pick an agent you own" };
   const { db } = await getDb();
   const agent = await getAgentRow(db, agentId);
-  if (!agent || agent.ownerClerkUserId !== userId) return { error: "you do not own that agent" };
+  if (!agent || agent.ownerUserId !== userId) return { error: "you do not own that agent" };
   const issued = await issueApiKey(db, {
     name,
     role: "seller",
-    ownerClerkUserId: userId,
+    ownerUserId: userId,
     agentId,
     scopes: ["agents:me"],
   });
@@ -47,7 +47,7 @@ export async function revokeOwnKey(formData: FormData): Promise<void> {
   const id = String(formData.get("id") ?? "").trim();
   if (!id) return;
   const { db } = await getDb();
-  const owned = await listApiKeys(db, { ownerClerkUserId: userId });
+  const owned = await listApiKeys(db, { ownerUserId: userId });
   if (!owned.some((row) => row.id === id)) return;
   await revokeApiKey(db, id);
   revalidatePath("/keys");

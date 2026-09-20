@@ -13,7 +13,7 @@ A human doesn't need us: they try it and see. An agent can't try 40 options, can
 The full product spec lives in [`docs/`](docs/) — start with [`docs/README.md`](docs/README.md) (thesis
 and demo scene), then [`docs/PRODUCT.md`](docs/PRODUCT.md), [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md),
 [`docs/CONTRACTS.md`](docs/CONTRACTS.md) (the data contracts this code mirrors),
-[`docs/DECISIONS.md`](docs/DECISIONS.md) and [`docs/NEXT.md`](docs/NEXT.md). Those documents are canonical;
+[`docs/DECISIONS.md`](docs/DECISIONS.md), [`docs/AUTH.md`](docs/AUTH.md) and [`docs/NEXT.md`](docs/NEXT.md). Those documents are canonical;
 this file is about running the code.
 
 ---
@@ -64,7 +64,7 @@ screen the whole time: **`human_interventions: 0`** — computed from the ledger
 | Layer | Choice | Where |
 |-------|--------|-------|
 | App / API | **Next.js 16** App Router, TypeScript, Route Handlers, deployable on **Vercel** | `src/app/` |
-| Human console auth | **Clerk** (`clerkMiddleware` in `src/proxy.ts`) protects `/console`, `/keys`, `/account`, `/agents`, `/admin`, `/interviews`. Admin is `publicMetadata.role === "admin"`. `/i/[token]` and `/docs` are public | `src/proxy.ts`, `src/lib/auth/`, `src/app/admin/` |
+| Human console auth | **Auth0** (`@auth0/nextjs-auth0` v4 in `src/proxy.ts`) protects `/console`, `/keys`, `/account`, `/agents`, `/admin`, `/interviews`, `/claim`. Admin is the `https://underwrite/roles` claim (or `app_metadata.role`). `/i/[token]`, `/docs`, `/auth.md` are public | `src/proxy.ts`, `src/lib/auth/`, `src/lib/auth0.ts` |
 | Interview voice | **Agora Conversational AI** + **OpenAI GPT Live** (`agora-agents` ≥ 2.8.0). Optional; 503 when keys are missing | `src/lib/interviews/`, `src/app/interviews/`, `src/app/i/` |
 | System of record | **Neon** (Postgres) via **Drizzle ORM** + `@neondatabase/serverless` (HTTP driver); embedded **PGlite** fallback for local dev and tests | `src/lib/db/`, `drizzle/` |
 | Orchestration | **Mastra** workflow (`auction → contract → dountil(execute → verify → settle)`) wrapping stateless engine steps; state lives in Neon between hops | `src/mastra/`, `src/lib/marketplace/engine.ts` |
@@ -89,7 +89,7 @@ pnpm dev                          # http://localhost:3000
 With an empty `.env.local` the app still boots on embedded PGlite (auto-migrates and auto-seeds on
 first use) and `/console` is open, but **the marketplace will not run**.
 `POST /api/v1/requests` returns **503** until `MODEL_PROVIDER_API_KEY` is set. There is no
-simulated-token path. Clerk and tracing stay optional.
+simulated-token path. Auth0 and tracing stay optional.
 
 ### Fire one demo request
 
@@ -151,7 +151,7 @@ to push. The console **Fire demo request** button and `pnpm demo` always send `"
 Request routes accept **either** the legacy env `UNDERWRITE_API_KEY` **or** a non-revoked hashed **buyer**
 key (`Authorization: Bearer <key>` or `x-api-key`). If the env is unset and no key is presented, the
 routes stay public (system `buyer` wallet). They still require NeuraLake. Seller routes always
-require a seller key. These `/api/v1` routes never go through Clerk.
+require a seller key **or** an auth.md / Auth0 JWT with seller scopes. Human pages go through Auth0; `/api/v1` does not require a session cookie.
 
 An empty hireable registry (forgot `pnpm db:seed`, or every agent is disabled) settles as
 `no_eligible_bid`. Seed the catalog once on Neon.
@@ -221,7 +221,7 @@ curl -s -X POST http://localhost:3000/api/v1/jobs/req_…/deliverables \
 
 Explicitly **out of scope** here: reprice / counter-offer, Jev, Langflow, a full multi-hop A→B→C rewrite, and an in-repo seller worker. The seed Mastra loop is unchanged and still requires NeuraLake.
 
-### Self-serve (any signed-in Clerk user)
+### Self-serve (any signed-in Auth0 user)
 
 Admin is **not** a key-mint desk. Buyers and sellers issue their own credentials.
 
@@ -233,10 +233,10 @@ Admin is **not** a key-mint desk. Buyers and sellers issue their own credentials
 | `/agents/[id]` | Owner detail: full manifest, wallet, seller-key prefixes, edit, disable/enable, rotate/revoke keys. |
 | `/agents/register` | Register a hireable agent (manifest fields: name, role, specialties, model family, cost ceiling, …). Creates the row + a **$0** seller wallet + a seller key (shown once on the new detail page). |
 
-`GET/POST/PATCH /api/account/agents` and `GET/PATCH /api/account/agents/[id]` are the same owner flows over JSON (Clerk session).
+`GET/POST/PATCH /api/account/agents` and `GET/PATCH /api/account/agents/[id]` are the same owner flows over JSON (Auth0 session).
 `GET /api/account/wallet` returns your user test-credit balance.
 
-Every Clerk user (and `local-dev` when Clerk is off) gets a wallet of **$1000.00 test credits**
+Every Auth0 user (and `local-dev` when Auth0 is off) gets a wallet of **$1000.00 test credits**
 on first visit — idempotent, never reset. **Only users get that grant.** Registered seller agents
 start at **$0.00** and earn by being hired (seed A/B/C1/C2/J1/J2 keep their catalog balances). A
 buyer key owned by a user **checks** the user wallet against `max_cost_usd` (`402` if short) and
@@ -255,7 +255,7 @@ curl -s -X POST http://localhost:3000/api/v1/requests \
 
 Seller key against the bound agent: `curl -s http://localhost:3000/api/v1/agents/me -H "authorization: Bearer uw_seller_…"`.
 
-Readable agent API docs live at **`/docs`**. `/developers` and `/developers/playground` permanently redirect there. The marketplace knows you by the key you send, not by Clerk.
+Readable agent API docs live at **`/docs`**. `/developers` and `/developers/playground` permanently redirect there. Agents can skip pasting secrets by following **`/auth.md`**. The marketplace knows you by the key or JWT you send, not by Auth0.
 
 ### Console
 
@@ -266,7 +266,7 @@ a separate, narrower surface at `/admin`.
 
 ### Admin (`/admin`)
 
-Clerk-authenticated users with an admin flag. Non-admins get **403**. List seed + registered agents,
+Auth0-authenticated users with an admin claim. Non-admins get **403**. List seed + registered agents,
 enable/disable (disabled agents drop out of hire), list API keys by prefix/role/owner (never plaintext),
 revoke any key, and a short audit (recent requests, **wallet balances**, ledger head). Safe knobs stay as env
 vars — documented on the page.
@@ -306,8 +306,8 @@ needs still works. Marketplace routes are unchanged.
 
 ### Flow
 
-1. Open `/interviews` (Clerk-protected when Clerk keys are set). Register a need.
-2. Copy the **interviewee link** `/i/[token]` (unguessable; possession is auth — no Clerk).
+1. Open `/interviews` (Auth0-protected when Auth0 keys are set). Register a need.
+2. Copy the **interviewee link** `/i/[token]` (unguessable; possession is auth — no Auth0 session).
 3. The human opens that page only: the call auto-joins (Connecting → Live). Mic + GPT Live agent.
    No console chrome, no Finish/Conclude button. Copy on the call: *The interviewer will end the
    call when everything is answered.*
@@ -321,11 +321,11 @@ needs still works. Marketplace routes are unchanged.
 
 | Route | What |
 |-------|------|
-| `POST /api/v1/interviews/needs` | Create a need (Clerk session, or open when Clerk is off). |
+| `POST /api/v1/interviews/needs` | Create a need (Auth0 session, or open when Auth0 is off). |
 | `GET /api/v1/interviews/needs` | List. Includes `{ agora: { enabled, missing } }`. |
 | `GET /api/v1/interviews/needs/[id]` | Detail + sessions + `result_json`. |
-| `POST /api/v1/interviews/needs/[id]/start` | Creator start (Clerk). Same engine as the public start. **503** if Agora keys are missing. |
-| `POST /api/v1/interviews/sessions/[id]/finalize` | Creator finalize (Clerk). **409** if required fields are incomplete. |
+| `POST /api/v1/interviews/needs/[id]/start` | Creator start (Auth0). Same engine as the public start. **503** if Agora keys are missing. |
+| `POST /api/v1/interviews/sessions/[id]/finalize` | Creator finalize (Auth0). **409** if required fields are incomplete. |
 | `GET /api/v1/interviews/i/[token]` | Public invite lookup. |
 | `POST /api/v1/interviews/i/[token]/start` | Interviewee start. Auth = token. **410** if already completed. |
 | `POST /api/v1/interviews/i/[token]/finalize` | Agent-only completion. Auth = token. **409** if the brief is incomplete. |
@@ -335,7 +335,7 @@ needs still works. Marketplace routes are unchanged.
 
 ---
 
-## Setup: Neon, Clerk, model provider, tracing
+## Setup: Neon, Auth0, model provider, tracing
 
 ### Neon
 
@@ -346,44 +346,123 @@ needs still works. Marketplace routes are unchanged.
 3. `pnpm db:migrate` applies the committed SQL in [`drizzle/`](drizzle/) (`0000_init.sql`,
 `0001_api_keys_and_seller_agents.sql`, `0002_buyer_wallet_and_credits.sql`,
 `0003_agent_description.sql`, `0004_interview_pool.sql`, `0005_interview_invite_token.sql`,
-`0006_push_marketplace.sql`, …) with Drizzle's
+`0006_push_marketplace.sql`, `0007_auth_md.sql`, …) with Drizzle's
    migrator (on Vercel this happens automatically as part of `pnpm build`). `pnpm db:seed` inserts the
    catalog — a one-time step: it is idempotent, but it also resets axes, wallets and clears pairwise
    trust, so it is never run by the build. **Seed is still required once on Neon.** An empty hireable
    registry settles as `no_eligible_bid`.
 4. Changed `src/lib/db/schema.ts`? `pnpm db:generate` writes the next migration; commit it.
 
-Tables (mirroring `docs/CONTRACTS.md`): `agents` (plus seller fields `status`, `owner_clerk_user_id`,
+Tables (mirroring `docs/CONTRACTS.md`): `agents` (plus seller fields `status`, `owner_clerk_user_id`
+(stores Auth0 `sub` — historical column name),
 `contact`, `webhook_url`, `description`), `api_keys` (hashed secrets only), `trust_axes`, `trust_pairwise`, `wallets`,
 `requests` (plus optional `buyer_wallet_id` for user-funded requests), `bids`, `plans`, `escrows`,
 `verifications`, `ledger_events`, `attributions`. Interview pool: `interview_needs`, `interview_sessions`.
 Push marketplace: `agent_inbox`, `job_invites`; `requests.execution_mode`, `requests.plan_deadline_at`.
+auth.md: `agent_registrations`, `agent_claim_attempts`, `revoked_access_tokens`.
 
-### Clerk
+### Auth0 (humans) + auth.md (agents)
 
-1. Create an application at [dashboard.clerk.com](https://dashboard.clerk.com) → **API keys**.
-2. `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` in `.env.local`.
-3. `src/proxy.ts` runs `clerkMiddleware` and `auth.protect()` on `/console`, `/keys`, `/account`,
-   `/agents`, `/admin`, `/interviews`, plus `/api/account/*` and `/api/admin/*`. `/i/[token]` and
-   `/api/v1/interviews/i/*` are public (invite token; no Clerk). `/docs` is public.
-   Sign-in uses Clerk's hosted Account Portal. With either key missing the proxy is a
-   pass-through and those pages are open (local dev, treated as user `local-dev`).
+Dashboard steps cannot be automated from this repo. Free Auth0 plan is enough. `/docs` is public.
 
-#### How Luís marks an admin
+#### 1. Regular Web Application
 
-Admin is **not** an org role. In **Clerk Dashboard → Users → (your user) → Public metadata** set:
+1. [Auth0 Dashboard](https://manage.auth0.com) → **Applications → Create Application** → **Regular Web Application**.
+2. Settings → copy **Domain**, **Client ID**, **Client Secret**.
+3. Allowed Callback URLs: `{APP_BASE_URL}/auth/callback` (local: `http://localhost:3000/auth/callback`).
+4. Allowed Logout URLs: `{APP_BASE_URL}` (local: `http://localhost:3000`).
+5. Allowed Web Origins: `{APP_BASE_URL}`.
+6. On Vercel add the Production URL and every Preview origin you care about (or omit `APP_BASE_URL` and let the SDK infer the host — still register those callback/logout URLs).
+
+#### 2. API (Resource Server)
+
+1. **Applications → APIs → Create API**.
+2. Identifier / audience: `https://api.underwrite` (must match `AUTH0_AUDIENCE`).
+3. Enable RBAC. Add permissions:
+
+| Permission | Used by |
+|------------|---------|
+| `buyer:requests` | `POST/GET /api/v1/requests*`, `GET /api/v1/jobs/{id}/plans` |
+| `seller:agents` | `GET/PATCH /api/v1/agents/me`, inbox |
+| `seller:plans` | `POST /api/v1/jobs/{id}/plans` |
+| `seller:deliver` | `POST /api/v1/jobs/{id}/deliverables` |
+| `admin:*` | admin APIs (session admin claim is enough for humans) |
+
+4. Set `AUTH0_AUDIENCE=https://api.underwrite` **only after this API exists**. If the env is unset, human login still works (no `audience` on `/authorize`) and auth.md tokens still use the default audience `https://api.underwrite`.
+
+#### 3. How Luís marks an admin
+
+Admin is **not** an Auth0 Organization role. Two equivalent dashboard paths:
+
+**A. app_metadata (simplest)** — User Management → Users → (user) → **app_metadata**:
 
 ```json
 { "role": "admin" }
 ```
 
-`{ "admin": true }` is also accepted. That is the primary check (`src/lib/auth/admin.ts`). Optional
-bootstrap if metadata is awkward: `UNDERWRITE_ADMIN_USER_IDS=user_xxx,user_yyy` (comma-separated Clerk
-user ids). Non-admins hitting `/admin` get HTTP 403.
+`{ "admin": true }` is also accepted once the Action below copies metadata onto the token.
 
-The buyer of the demo is still an agent over HTTP. Clerk is for humans: debug console, self-serve keys,
-seller registration, the interview **creator** pool, and the narrow admin/audit surface. Interviewees
-are not signed in.
+**B. Auth0 RBAC** — create a role named `admin`, assign it to the user, enable RBAC on the API.
+
+Then add a **Post-Login Action** (Actions → Flows → Login) so the app can read the claim:
+
+```javascript
+exports.onExecutePostLogin = async (event, api) => {
+  const roles = [];
+  const meta = event.user.app_metadata || {};
+  if (meta.role) roles.push(meta.role);
+  if (meta.admin === true) roles.push("admin");
+  if (Array.isArray(event.authorization?.roles)) roles.push(...event.authorization.roles);
+  const unique = [...new Set(roles)];
+  if (unique.length) {
+    api.idToken.setCustomClaim("https://underwrite/roles", unique);
+    api.accessToken.setCustomClaim("https://underwrite/roles", unique);
+  }
+};
+```
+
+Optional bootstrap: `UNDERWRITE_ADMIN_USER_IDS=auth0|aaaa,auth0|bbbb` (Auth0 `sub` values). Non-admins hitting `/admin` get HTTP 403.
+
+#### 4. Env (Vercel + `.env.local`)
+
+| Variable | Required | Notes |
+|----------|----------|--------|
+| `AUTH0_DOMAIN` | for login | Tenant host **without** `https://` (e.g. `your-tenant.us.auth0.com`) |
+| `AUTH0_CLIENT_ID` | for login | Regular Web App |
+| `AUTH0_CLIENT_SECRET` | for login | Regular Web App |
+| `AUTH0_SECRET` | for login | `openssl rand -hex 32` — encrypts the session cookie |
+| `APP_BASE_URL` | recommended | `http://localhost:3000` locally. Alias: `AUTH0_BASE_URL`. Omit on Vercel Preview to infer the host |
+| `AUTH0_AUDIENCE` | for Auth0-issued API JWTs | `https://api.underwrite` — set after the API exists |
+| `UNDERWRITE_TOKEN_SECRET` | recommended in prod | HS256 for auth.md tokens. Falls back to `AUTH0_SECRET`, then a local stub |
+| `UNDERWRITE_ADMIN_USER_IDS` | optional | Comma-separated Auth0 `sub`s |
+
+`src/proxy.ts` runs `auth0.middleware()` and redirects unauthenticated browsers on `/console`, `/keys`, `/account`, `/agents`, `/admin`, `/interviews`, `/claim`, `/api/account/*`, `/api/admin/*`. Login/logout/callback are auto-mounted at `/auth/login`, `/auth/logout`, `/auth/callback`. `/i/[token]`, `/docs`, and `/auth.md` stay public. Missing Auth0 keys → pass-through, caller is `local-dev`.
+
+**Wallet mapping:** first signed-in request upserts `wallets.owner_id = Auth0 sub` at **$1000.00**. There is no Auth0 Action webhook. Existing balances are never reset.
+
+The buyer of the demo is still an agent over HTTP. Auth0 is for humans: debug console, self-serve keys, seller registration, the interview **creator** pool, the claim page, and admin. Interviewees are not signed in.
+
+#### 5. auth.md (agents — no WorkOS)
+
+Agents read `GET /auth.md` and do **not** need a human to paste a key:
+
+1. `GET /.well-known/oauth-protected-resource` then `GET /.well-known/oauth-authorization-server`
+2. `POST /agent/identity` with `type: "anonymous"` or `"service_auth"` (`identity_assertion` / ID-JAG returns `issuer_not_enabled` on this PoC)
+3. Human completes `/claim` while signed into Auth0 (user_code)
+4. `POST /oauth2/token` (claim grant, then jwt-bearer) → short-lived access_token
+5. `Authorization: Bearer <jwt>` on `/api/v1`
+
+Revoke: `POST /oauth2/revoke` (one access_token), `/account` or `/admin` (registration), or `POST /agent/event/notify` `{ "registration_id": "reg_…" }`.
+
+Legacy hashed `uw_buyer_` / `uw_seller_` keys and `UNDERWRITE_API_KEY` still work so external seller workers keep functioning during cutover.
+
+#### 6. Migrating off Clerk
+
+- **Sessions:** every Clerk cookie is dead. Users sign in again with Auth0 (same email is a new `sub`).
+- **Wallets / ownership:** rows keyed by `user_xxx` Clerk ids will **not** match `auth0|…`. Existing test-credit balances stay on the old owner id; new logins get a fresh $1000 wallet. There is no automated Clerk export in this repo — if you need old balances, map Clerk ids to Auth0 subs by hand in Neon (`wallets.owner_id`, `agents.owner_clerk_user_id`, `api_keys.owner_clerk_user_id`, `interview_needs.created_by_clerk_user_id`).
+- **Seller keys:** plaintext was never stored. Humans re-mint on `/keys` or `/agents/[id]`, **or** the worker follows `/auth.md` and uses a JWT.
+- **Admin:** re-set `app_metadata.role` in Auth0 (or `UNDERWRITE_ADMIN_USER_IDS`).
+- **Do not** leave `NEXT_PUBLIC_CLERK_*` / `CLERK_SECRET_KEY` on Vercel.
 
 ### Model provider (NeuraLake — required)
 
@@ -420,7 +499,7 @@ Import the repo and set at least:
 | `MODEL_PROVIDER_API_KEY` | Required — marketplace / console demo |
 | `MODEL_PROVIDER_BASE_URL` | `https://api.neuralake.cloud/v1` |
 | `MODEL_PROVIDER_NAME` | `neuralake` |
-| Clerk keys | Optional; protect `/console`, `/keys`, `/account`, `/agents`, `/admin`, `/interviews` |
+| Auth0 keys | Optional locally; required in production to protect human pages |
 
 Set the same NeuraLake vars on **Production and Preview**. Never paste a key into git or a PR.
 
@@ -479,18 +558,22 @@ src/lib/verification/
   judges.ts               independent judges: different model family, blind, not in the chain
   confidence.ts           hardcoded_v0: objective 0.45 · agreement 0.2 · track record 0.2 · process 0.05 · self-report ≤ 0.1 (penalised when it diverges)
 src/mastra/               Mastra instance + marketplace workflow
-src/lib/auth/             hashed API keys, buyer/seller auth helper, Clerk admin guard
+src/lib/auth/             hashed API keys, Auth0/JWT/auth.md helpers, admin claim guard
 src/lib/interviews/       need/session store, GPT Live prompt, transcript JSON extract, Agora start/stop
 src/lib/marketplace/push.ts  locked marketplace: invite, inbox, one plan, best-score, deliver
 src/app/api/v1/           agent-facing route handlers (requests + jobs/plans + jobs/deliverables + seller `/agents/me` + inbox + interviews)
-src/app/api/account/      Clerk-session self-serve key + owner agent APIs
-src/app/api/admin/        Clerk-admin list/disable/revoke/audit APIs
-src/app/console/          Clerk-protected debug console with live ledger
+src/app/api/account/      Auth0-session self-serve key + owner agent APIs
+src/app/api/admin/        Auth0-admin list/disable/revoke/audit APIs
+src/app/console/          Auth0-protected debug console with live ledger
 src/app/(human)/          `/keys`, `/account`, `/agents`, `/agents/register`
 src/app/admin/            configuration + audit (403 for non-admins)
 src/app/interviews/       Creator pool: register a need, copy `/i` link, read `result_json`
-src/app/i/                Public interviewee page (token auth, no Clerk, no chrome)
+src/app/i/                Public interviewee page (token auth, no Auth0, no chrome)
 src/app/docs/             Public agent API docs (`/developers` 301s here)
+src/app/auth.md/          Open auth.md skill for agents
+src/app/agent/            Identity + claim endpoints
+src/app/oauth2/           Token exchange + revoke
+src/app/claim/            Human user_code confirmation
 ```
 
 C1's renderer writes a real PDF whose *bytes* fail the rubric (overflow outside the page box, unembedded
