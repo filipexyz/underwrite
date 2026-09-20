@@ -14,6 +14,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAuth0 } from "@/lib/auth0";
 
 const PROTECTED_PREFIXES = [
+  "/start",
   "/console",
   "/admin",
   "/keys",

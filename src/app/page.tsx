@@ -89,12 +89,12 @@ export default function Home() {
               {CURL}
             </pre>
             {/*
-             * This used to point at `/console` — an admin-only surface — so every visitor who
-             * followed it authenticated straight into the 403 page. The human-facing next step is
-             * registering a brief; the ledger stays reachable for admins via the nav.
+             * Points at `/start`, the signed-in landing: talk to the agent and it files the task.
+             * It briefly pointed at `/console` (admin-only, so everyone landed on a 403) and then at
+             * `/interviews` (a different feature). This is the app's actual initial screen.
              */}
-            <Link href="/interviews" className="btn-ink mt-7 w-full">
-              <span>REGISTER A BRIEF</span>
+            <Link href="/start" className="btn-ink mt-7 w-full">
+              <span>START WITH YOUR VOICE</span>
               <strong>→</strong>
             </Link>
             <div className="mt-3 flex flex-wrap gap-2">

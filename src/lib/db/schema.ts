@@ -335,6 +335,7 @@ export const attributions = pgTable(
 // apart silently — adding a field to the brief would compile here and be invisible to the schema.
 
 import type { InterviewAnswers, InterviewBrief, TranscriptTurn } from "@/lib/interviews/types";
+import type { VoiceTaskBrief, TranscriptTurn as VoiceTranscriptTurn } from "@/lib/voice/types";
 
 export type { InterviewAnswers, InterviewBrief, TranscriptTurn };
 
@@ -378,6 +379,36 @@ export const interviewSessions = pgTable(
   (t) => [index("interview_sessions_need_idx").on(t.needId)],
 );
 
+// ---------------------------------------------------------------------------
+// Voice task composer — the signed-in entry point where a person talks a task into existence.
+// ---------------------------------------------------------------------------
+//
+// Deliberately its own table rather than another `interview_sessions` row. The two surfaces share
+// Agora primitives and UI patterns; sharing storage and lifecycle is how one feature takes the other
+// down. A voice session has a user (not a need), a brief (not answers), and produces a request.
+
+export const voiceSessions = pgTable(
+  "voice_sessions",
+  {
+    id: text("id").primaryKey(),
+    /** Auth0 `sub` (or `local-dev`). Signed-in only — this surface is not public. */
+    userId: text("user_id").notNull(),
+    status: text("status").notNull(),
+    agoraChannel: text("agora_channel").notNull(),
+    agoraAgentId: text("agora_agent_id"),
+    transcriptJson: jsonb("transcript_json").$type<VoiceTranscriptTurn[]>(),
+    /** Set only when the agent declared the brief complete and it validated. */
+    briefJson: jsonb("brief_json").$type<VoiceTaskBrief | null>(),
+    /** The marketplace request this conversation produced. Set once. */
+    requestId: text("request_id"),
+    /** Why a session failed, surfaced in the UI instead of only in logs. */
+    error: text("error"),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    endedAt: timestamp("ended_at", { withTimezone: true }),
+  },
+  (t) => [index("voice_sessions_user_idx").on(t.userId), index("voice_sessions_started_idx").on(t.startedAt)],
+);
+
 export type AgentRow = typeof agents.$inferSelect;
 export type ApiKeyRow = typeof apiKeys.$inferSelect;
 export type TrustAxesRow = typeof trustAxes.$inferSelect;
@@ -392,6 +423,7 @@ export type LedgerEventRow = typeof ledgerEvents.$inferSelect;
 export type AttributionRow = typeof attributions.$inferSelect;
 export type InterviewNeedRow = typeof interviewNeeds.$inferSelect;
 export type InterviewSessionRow = typeof interviewSessions.$inferSelect;
+export type VoiceSessionRow = typeof voiceSessions.$inferSelect;
 
 // ---------------------------------------------------------------------------
 // Locked marketplace PoC — inbox fallback + invite set

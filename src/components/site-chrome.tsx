@@ -67,7 +67,7 @@ export function SiteHeader({
          * human-facing brief pool; only the ops variant links to the ledger.
          */}
         {variant === "market" ? (
-          <LiveLink href="/interviews">START A BRIEF →</LiveLink>
+          <LiveLink href="/start">TALK TO THE AGENT →</LiveLink>
         ) : (
           <LiveLink href="/console">LIVE LEDGER →</LiveLink>
         )}
