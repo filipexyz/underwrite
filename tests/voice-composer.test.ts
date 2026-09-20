@@ -188,11 +188,44 @@ describe("task handoff", () => {
     const received = events.find((e) => e.type === "request_received");
     expect(received?.payload.actor).toBe("agent");
     expect(received?.payload.source).toBe("voice-composer");
+    expect(received?.payload.category).toBe("html_to_pdf");
 
     await completeVoiceSession(db, session.id, { brief, requestId: first.requestId });
     const second = await createTaskFromVoiceBrief(db, { session, brief });
     expect(second.created).toBe(false);
     expect(second.requestId).toBe(first.requestId);
+  });
+
+  it("classifies a landing brief as landing_page without TYPESAFE_API_KEY and records the source", async () => {
+    const previousKey = process.env.TYPESAFE_API_KEY;
+    delete process.env.TYPESAFE_API_KEY;
+    try {
+      const { db } = await getDb();
+      const session = await insertVoiceSession(db, { userId: USER, channel: "voice-landing-classify" });
+      const landingBrief: VoiceTaskBrief = {
+        requirement: "A single-page landing page with literally nothing on it and a big do-nothing button.",
+        max_cost_usd: 0.35,
+        max_latency_s: 75,
+        min_confidence: 0.92,
+        failure_policy: "refund",
+      };
+
+      const first = await createTaskFromVoiceBrief(db, { session, brief: landingBrief });
+      expect(first.created).toBe(true);
+      expect(first.category).toBe("landing_page");
+      expect(first.classifySource).toBe("heuristic");
+
+      const request = await getRequest(db, first.requestId);
+      expect(request?.category).toBe("landing_page");
+
+      const events = await listEvents(db, first.requestId);
+      const received = events.find((e) => e.type === "request_received");
+      expect(received?.payload.category).toBe("landing_page");
+      expect(received?.payload.classify_source).toBe("heuristic");
+    } finally {
+      if (previousKey === undefined) delete process.env.TYPESAFE_API_KEY;
+      else process.env.TYPESAFE_API_KEY = previousKey;
+    }
   });
 
   it("does not file a second task when the same conversation finalizes twice", async () => {

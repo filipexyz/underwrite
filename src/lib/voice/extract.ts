@@ -12,7 +12,7 @@
 import { env } from "@/lib/env";
 import { runInference } from "@/lib/observability/inference";
 import type { TranscriptTurn } from "@/lib/agora/rtm";
-import { DEFAULT_VOICE_CATEGORY, VoiceTaskBrief } from "./types";
+import { VoiceTaskBrief } from "./types";
 
 /** Render the conversation as plain lines, capped: a long call must not produce an unbounded prompt. */
 export function transcriptToPrompt(turns: TranscriptTurn[], maxChars = 8_000): string {
@@ -87,5 +87,8 @@ export async function extractBriefFromTranscript(turns: TranscriptTurn[]): Promi
     console.warn("[voice] extracted brief did not validate:", brief.error.flatten());
     return null;
   }
-  return { ...brief.data, category: brief.data.category ?? DEFAULT_VOICE_CATEGORY };
+  // Leave `category` unset when the model omitted it. Stamping a default here would
+  // override classifyTask (brief.category wins in the handoff) and send landing
+  // briefs to html_to_pdf again.
+  return brief.data;
 }

@@ -23,7 +23,7 @@ import { env } from "@/lib/env";
 import { submitVoiceBrief, submitTaskToolName } from "@/lib/voice/flow";
 import { scheduleVoicePushJob } from "@/lib/voice/push";
 import { appendVoiceTranscript } from "@/lib/voice/store";
-import { DEFAULT_VOICE_CATEGORY, VoiceTaskBrief } from "@/lib/voice/types";
+import { VoiceTaskBrief } from "@/lib/voice/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -208,7 +208,7 @@ async function handleToolCall(
             ok: true,
             request_id: submitted.requestId,
             created: submitted.created,
-            category: parsed.data.category ?? DEFAULT_VOICE_CATEGORY,
+            category: submitted.category,
             message: "Task posted to the marketplace. Tell the person it is posted and that they can follow it on screen.",
           }),
         },

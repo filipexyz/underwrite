@@ -20,7 +20,7 @@ import { voiceSessions } from "@/lib/db/schema";
 import { env } from "@/lib/env";
 import { submitVoiceBrief } from "@/lib/voice/flow";
 import { scheduleVoicePushJob } from "@/lib/voice/push";
-import { DEFAULT_VOICE_CATEGORY, VoiceTaskBrief } from "@/lib/voice/types";
+import { VoiceTaskBrief } from "@/lib/voice/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -64,7 +64,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       ok: true,
       request_id: submitted.requestId,
       created: submitted.created,
-      category: parsed.data.category ?? DEFAULT_VOICE_CATEGORY,
+      category: submitted.category,
       message: "Task posted to the marketplace. Tell the person it is posted and that they can follow it.",
     });
   } catch (error) {

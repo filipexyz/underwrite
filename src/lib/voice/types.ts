@@ -26,7 +26,10 @@ export const VoiceTaskBrief = z.object({
   max_latency_s: z.number().positive(),
   min_confidence: z.number().min(0).max(1),
   failure_policy: FailurePolicy,
-  /** Marketplace specialty; selects the verification rubric. Defaults to the demo category. */
+  /**
+   * Marketplace specialty; selects the verification rubric.
+   * Leave unset so `classifyTask` / the keyword heuristic can decide — do not stamp a PDF default.
+   */
   category: z.string().trim().min(1).optional(),
   /** Free-form colour the agent thought worth keeping. */
   notes: z.string().trim().max(2_000).optional(),
@@ -61,7 +64,12 @@ export const VoiceTranscriptAppendInput = z.object({
 });
 export type VoiceTranscriptAppendInput = z.infer<typeof VoiceTranscriptAppendInput>;
 
-export const DEFAULT_VOICE_CATEGORY = "html_to_pdf";
+/**
+ * Last-resort voice category when there is no requirement text to classify.
+ * Matches `classifyRequirementHeuristic("")`: landing_page, never html_to_pdf.
+ * Voice tasks with a brief go through classifyTask — do not stamp this onto the brief.
+ */
+export const DEFAULT_VOICE_CATEGORY = "landing_page";
 
 /** Agent uid for the composer; kept distinct from the interview agent's. */
 export const VOICE_AGENT_UID = 123457;
