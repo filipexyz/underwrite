@@ -57,6 +57,13 @@
       "when": 1789860541923,
       "tag": "0007_auth_md",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1789900000000,
+      "tag": "0008_hosted_agent_runtime",
+      "breakpoints": true
     }
   ]
 }

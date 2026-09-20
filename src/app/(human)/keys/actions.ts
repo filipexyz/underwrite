@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { issueApiKey, listApiKeys, revokeApiKey } from "@/lib/auth/api-keys";
 import { requireSignedInPage } from "@/lib/auth/session";
 import { getDb } from "@/lib/db/client";
+import { bindHostedSellerKey } from "@/lib/marketplace/agent-runtime";
 import { getAgentRow } from "@/lib/marketplace/sellers";
 
 export type KeyFormState = { error?: string; secret?: string } | null;
@@ -37,6 +38,7 @@ export async function createSellerKey(_prev: KeyFormState, formData: FormData): 
     agentId,
     scopes: ["agents:me"],
   });
+  await bindHostedSellerKey(db, agentId, issued.secret, issued.row.id);
   revalidatePath("/keys");
   revalidatePath(`/agents/${agentId}`);
   return { secret: issued.secret };

@@ -49,7 +49,7 @@ export default async function AccountPage() {
             Manage agents
           </Link>
           <Link href="/agents/register" className="btn-ghost">
-            register a seller agent
+            create an agent
           </Link>
         </p>
       </Panel>
@@ -67,9 +67,9 @@ export default async function AccountPage() {
           <Empty>
             No registered agents yet.{" "}
             <Link href="/agents/register" className="text-teal hover:underline">
-              Register one
+              Create one
             </Link>{" "}
-            — the seller wallet starts at $0.00 and earns by being hired.
+            — hosted by default; the seller wallet starts at $0.00 and earns by being hired.
           </Empty>
         ) : (
           <table className="w-full">

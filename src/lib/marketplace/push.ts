@@ -36,6 +36,7 @@ import { discover, getAgent, type RegistryAgent } from "./registry";
 import { round6, stakeFor } from "./quotes";
 import { defaultHistory, rankPlans, type ScoreConstraints } from "./score";
 import { EMPTY_STATE, type EngineState, type HopRecord } from "./types";
+import { resolveWebhookSecret } from "./agent-runtime";
 import { postSellerWebhook } from "./webhooks";
 
 const EPS = 1e-9;
@@ -142,7 +143,8 @@ async function notifyAgent(
   payload: Record<string, unknown> & { type: InboxMessageType },
 ): Promise<{ channel: "webhook" | "inbox"; webhook_ok: boolean | null }> {
   if (agent.webhookUrl) {
-    const result = await postSellerWebhook(agent.webhookUrl, payload, agent.agentId);
+    const hmac = await resolveWebhookSecret(ctx.db, agent.agentId);
+    const result = await postSellerWebhook(agent.webhookUrl, payload, agent.agentId, hmac);
     if (result.ok) {
       await enqueueInbox(ctx, agent.agentId, payload.type, payload, "webhook");
       return { channel: "webhook", webhook_ok: true };

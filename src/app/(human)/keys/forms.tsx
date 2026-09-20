@@ -26,7 +26,7 @@ export function CreateBuyerKeyForm() {
 export function CreateSellerKeyForm({ agents }: { agents: Array<{ agentId: string; name: string }> }) {
   const [state, action, pending] = useActionState(createSellerKey, null as KeyFormState);
   if (agents.length === 0) {
-    return <p className="text-sm text-[#53605a]">Register an agent first — seller keys are bound to one you own.</p>;
+    return <p className="text-sm text-[#53605a]">Create an agent first — seller keys are bound to one you own.</p>;
   }
   return (
     <form action={action} className="flex flex-col gap-3">

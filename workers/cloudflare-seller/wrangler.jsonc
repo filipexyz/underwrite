@@ -24,7 +24,10 @@
     "NEURALAKE_MODEL": "auto",
     "SELLER_INSTANCE_NAME": "default"
   }
-  // Secrets (never commit): wrangler secret put
+  // Hosted multi-tenant secrets (never commit): wrangler secret put
+  //   UNDERWRITE_HOSTED_RUNTIME_SECRET   — shared with Underwrite
+  //   UNDERWRITE_BASE_URL                — production platform origin
+  // Deprecated single-tenant fallback (do not use for new agents):
   //   UNDERWRITE_SELLER_API_KEY
   //   NEURALAKE_API_KEY
   //   UNDERWRITE_WEBHOOK_SECRET

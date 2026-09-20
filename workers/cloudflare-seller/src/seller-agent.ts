@@ -1,6 +1,6 @@
 import { Agent } from "agents";
 import type { FiberRecoveryContext } from "agents";
-import { readSellerConfig, requireNeuralakeKey, requireSellerKey, type SellerConfig } from "./config";
+import { requireNeuralakeKey, requireSellerKey, type SellerConfig } from "./config";
 import { runAcceptedJob } from "./execute";
 import { draftPlanWithNeuralake } from "./plan";
 import {
@@ -8,8 +8,10 @@ import {
   type PlanRequestEvent,
   type UnderwriteEvent,
 } from "./protocol";
+import { DIRECTORY_INSTANCE } from "./routes";
+import { credentialsFromProvision, mergeSellerConfig, pullHostedCredentials, type TenantCredentials } from "./tenant";
 import { createUnderwriteClient, isAlreadyDone, type UnderwriteClient } from "./underwrite";
-import { fiberIdempotencyKey } from "./webhook";
+import { fiberIdempotencyKey, verifyWebhookSignature, webhookHeaders } from "./webhook";
 
 export type JobMemory = {
   brief?: PlanRequestEvent["brief"];
@@ -21,6 +23,8 @@ export type JobMemory = {
 
 export type SellerState = {
   jobs: Record<string, JobMemory>;
+  credentials?: TenantCredentials;
+  tenants?: string[];
 };
 
 type FiberSnapshot = {
@@ -33,10 +37,10 @@ function mergeJob(state: SellerState, jobId: string, patch: Partial<JobMemory>):
 }
 
 export class SellerAgent extends Agent<Env, SellerState> {
-  initialState: SellerState = { jobs: {} };
+  initialState: SellerState = { jobs: {}, tenants: [] };
 
   private cfg(): SellerConfig {
-    return readSellerConfig(this.env);
+    return mergeSellerConfig(this.env, this.state.credentials, this.name);
   }
 
   private client(): UnderwriteClient {
@@ -44,14 +48,75 @@ export class SellerAgent extends Agent<Env, SellerState> {
     return createUnderwriteClient(cfg.underwriteBaseUrl, requireSellerKey(cfg));
   }
 
+  private async ensureCredentials(): Promise<SellerConfig> {
+    const current = this.cfg();
+    if (current.sellerApiKey && current.webhookSecret) return current;
+    if (this.name === DIRECTORY_INSTANCE) return current;
+    const pulled = await pullHostedCredentials(this.env, this.name);
+    if (pulled) {
+      this.setState({ ...this.state, credentials: { ...this.state.credentials, ...pulled } });
+    }
+    return this.cfg();
+  }
+
   async onRequest(request: Request): Promise<Response> {
     const url = new URL(request.url);
+    if (this.name === DIRECTORY_INSTANCE && url.pathname === "/tenants") {
+      if (request.method === "GET") {
+        return Response.json({ tenants: this.state.tenants ?? [] });
+      }
+      if (request.method === "PUT") {
+        const body = (await request.json().catch(() => ({}))) as { agent_id?: string };
+        const agentId = (body.agent_id ?? "").trim();
+        if (!agentId) return Response.json({ error: "missing agent_id" }, { status: 400 });
+        const tenants = new Set(this.state.tenants ?? []);
+        tenants.add(agentId);
+        this.setState({ ...this.state, tenants: [...tenants] });
+        return Response.json({ ok: true, tenants: [...tenants] });
+      }
+    }
     if (request.method === "GET" && (url.pathname === "/" || url.pathname === "/health")) {
-      return Response.json({ ok: true, agent: "cloudflare-seller", instance: this.name });
+      return Response.json({
+        ok: true,
+        agent: "cloudflare-seller",
+        instance: this.name,
+        provisioned: Boolean(this.state.credentials?.sellerApiKey),
+      });
+    }
+    if (request.method === "PUT" && url.pathname === "/provision") {
+      const body = (await request.json().catch(() => ({}))) as Parameters<typeof credentialsFromProvision>[0];
+      const credentials = credentialsFromProvision(body);
+      this.setState({ ...this.state, credentials: { ...this.state.credentials, ...credentials } });
+      return Response.json({ ok: true, agent_id: this.name, provisioned: true });
     }
     if (request.method === "POST" && url.pathname === "/inbox/drain") {
+      await this.ensureCredentials();
       const result = await this.pollInbox();
       return Response.json(result);
+    }
+    if (request.method === "POST" && url.pathname === "/webhook") {
+      const raw = await request.text();
+      const headers = webhookHeaders(request);
+      const cfg = await this.ensureCredentials();
+      const ok = await verifyWebhookSignature({
+        body: raw,
+        timestamp: headers.timestamp ?? "",
+        signature: headers.signature,
+        secret: cfg.webhookSecret,
+      });
+      if (!ok) {
+        return Response.json(
+          { error: "invalid x-underwrite-signature (HMAC-SHA256 of timestamp.body)" },
+          { status: 401 },
+        );
+      }
+      let parsed: unknown;
+      try {
+        parsed = raw ? JSON.parse(raw) : {};
+      } catch {
+        return Response.json({ error: "invalid JSON" }, { status: 400 });
+      }
+      return this.acceptEvent(parsed);
     }
     if (request.method !== "POST") {
       return Response.json({ error: "method not allowed" }, { status: 405 });

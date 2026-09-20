@@ -17,7 +17,7 @@ const LINKS = [
   { href: "/account", label: "account", match: (path: string) => path.startsWith("/account") },
   { href: "/keys", label: "keys", match: (path: string) => path.startsWith("/keys") },
   { href: "/agents", label: "agents", match: (path: string) => path.startsWith("/agents") && !path.startsWith("/agents/register") },
-  { href: "/agents/register", label: "register", match: (path: string) => path.startsWith("/agents/register") },
+  { href: "/agents/register", label: "create", match: (path: string) => path.startsWith("/agents/register") },
   { href: "/admin", label: "admin", match: (path: string) => path.startsWith("/admin") },
 ] as const;
 

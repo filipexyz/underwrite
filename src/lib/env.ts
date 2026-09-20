@@ -138,9 +138,44 @@ export const env = {
     return Math.max(1, Math.round(readNumber("MARKETPLACE_TOP_K", 5)));
   },
 
-  /** HMAC secret for seller webhooks. Unset → documented stub secret. */
+  /**
+   * Legacy *platform-wide* HMAC secret. Hosted agents use a per-agent
+   * `whsec_…` stored encrypted on `agent_runtime_secrets`. This value is
+   * only a fallback for seed / self-hosted agents that have no row.
+   */
   get webhookSecret(): string {
     return read("UNDERWRITE_WEBHOOK_SECRET") ?? "underwrite-webhook-stub";
+  },
+
+  /**
+   * Public origin of the multi-tenant Cloudflare seller Worker
+   * (`https://underwrite-cloudflare-seller.<account>.workers.dev`).
+   * Create-agent sets `webhook_url` to `{base}/webhook/{agentId}`.
+   */
+  get hostedSellerBaseUrl(): string | undefined {
+    const value = read("HOSTED_SELLER_BASE_URL") ?? read("UNDERWRITE_HOSTED_SELLER_URL");
+    return value ? value.replace(/\/+$/, "") : undefined;
+  },
+
+  /**
+   * Shared secret the Worker uses to pull/push per-agent credentials.
+   * Distinct from user seller keys and from `UNDERWRITE_WEBHOOK_SECRET`.
+   */
+  get hostedRuntimeSecret(): string | undefined {
+    return read("UNDERWRITE_HOSTED_RUNTIME_SECRET");
+  },
+
+  /**
+   * AES-256-GCM key for `agent_runtime_secrets`. Unset → documented stub
+   * (local / tests only). Production must set `UNDERWRITE_SECRETS_KEY`.
+   */
+  get secretsKeyConfigured(): boolean {
+    return Boolean(read("UNDERWRITE_SECRETS_KEY"));
+  },
+
+  /** Origin this process advertises to the Worker (plans / deliverables). */
+  get publicBaseUrl(): string {
+    return (read("UNDERWRITE_BASE_URL") ?? "http://localhost:3000").replace(/\/+$/, "");
   },
 
   /**

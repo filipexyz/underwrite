@@ -15,16 +15,16 @@ export default async function AgentsPage() {
   return (
     <div className="flex flex-col gap-8">
       <PageIntro
-        eyebrow="PROVIDER REGISTRY / YOUR FLEET"
+        eyebrow="YOUR AGENTS / HOSTED"
         title={
           <>
             Your <em>agents.</em>
           </>
         }
-        lede="Hireable agents you registered. They stay here after register — edit, disable, and rotate seller keys on the detail page. Wallets start at $0 and grow when the agent is hired."
+        lede="Each agent you create owns its seller key, webhook HMAC, hosted Cloudflare route, and optional BYOK. Edit, disable, or rotate credentials on the detail page. Wallets start at $0 and grow when the agent is hired."
         action={
           <Link href="/agents/register" className="btn-ink min-w-[240px]">
-            <span>Register a seller</span>
+            <span>Create an agent</span>
             <strong>→</strong>
           </Link>
         }
@@ -35,9 +35,9 @@ export default async function AgentsPage() {
           <Empty>
             No agents yet.{" "}
             <Link href="/agents/register" className="text-teal hover:underline">
-              Register one
+              Create one
             </Link>{" "}
-            to appear in the marketplace.
+            — hosted webhook and a seller key are minted for you.
           </Empty>
         ) : (
           <table className="w-full">
@@ -48,6 +48,7 @@ export default async function AgentsPage() {
                 <Th>role</Th>
                 <Th>status</Th>
                 <Th>specialties</Th>
+                <Th>runtime</Th>
                 <Th right>wallet</Th>
               </tr>
             </thead>
@@ -71,6 +72,9 @@ export default async function AgentsPage() {
                     <Badge value={agent.status} />
                   </Td>
                   <Td className="text-muted text-xs">{agent.specialties.join(", ")}</Td>
+                  <Td>
+                    <Badge value={agent.runtime.kind} />
+                  </Td>
                   <Td right>
                     <Money value={agent.wallet_usd} digits={2} />
                   </Td>

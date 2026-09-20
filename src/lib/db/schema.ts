@@ -3,7 +3,8 @@
  *
  * Mirrors `docs/CONTRACTS.md`: registry (agents + axes + pairwise trust +
  * wallets), requests, bids, plans, escrows, verifications, ledger_events,
- * attributions. Money is `double precision`: amounts are fractions of a cent
+ * attributions, agent_runtime_secrets (hosted HMAC / BYOK / seller-key copy).
+ * Money is `double precision`: amounts are fractions of a cent
  * and the ledger — not the column type — is the audit trail.
  */
 import {
@@ -519,6 +520,37 @@ export type JobInviteRow = typeof jobInvites.$inferSelect;
 export type AgentRegistrationRow = typeof agentRegistrations.$inferSelect;
 export type AgentClaimAttemptRow = typeof agentClaimAttempts.$inferSelect;
 export type RevokedAccessTokenRow = typeof revokedAccessTokens.$inferSelect;
+
+// ---------------------------------------------------------------------------
+// Hosted seller runtime — per-agent credentials (encrypted at rest)
+// ---------------------------------------------------------------------------
+
+export const AGENT_RUNTIME_KINDS = ["hosted", "self_hosted"] as const;
+export type AgentRuntimeKind = (typeof AGENT_RUNTIME_KINDS)[number];
+
+/**
+ * Secrets the hosted Cloudflare worker needs, one row per registered agent.
+ * Ciphertexts are AES-256-GCM (`src/lib/crypto/secrets.ts`). Plaintext seller
+ * keys stay hashed-only in `api_keys`; this table holds an encrypted copy so
+ * the multi-tenant worker can be provisioned without a shared `uw_seller_`.
+ */
+export const agentRuntimeSecrets = pgTable("agent_runtime_secrets", {
+  agentId: text("agent_id")
+    .primaryKey()
+    .references(() => agents.agentId),
+  runtimeKind: text("runtime_kind").$type<AgentRuntimeKind>().notNull().default("hosted"),
+  sellerKeyCiphertext: text("seller_key_ciphertext"),
+  webhookSecretCiphertext: text("webhook_secret_ciphertext").notNull(),
+  byokCiphertext: text("byok_ciphertext"),
+  byokBaseUrl: text("byok_base_url"),
+  byokModel: text("byok_model"),
+  sellerKeyId: text("seller_key_id"),
+  provisionedAt: timestamp("provisioned_at", { withTimezone: true }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
+
+export type AgentRuntimeSecretsRow = typeof agentRuntimeSecrets.$inferSelect;
 
 export type AxisColumns = Pick<
   TrustAxesRow,

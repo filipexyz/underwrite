@@ -25,7 +25,7 @@ async function postFixture(name) {
   const body = readFileSync(join(root, "fixtures", name), "utf8").replace(/\s+$/, "");
   const timestamp = String(Date.now());
   const signature = createHmac("sha256", secret).update(`${timestamp}.${body}`).digest("hex");
-  const res = await fetch(`${base}/webhook`, {
+  const res = await fetch(`${base}/webhook/${encodeURIComponent(agentId)}`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -52,7 +52,7 @@ if (!health.ok) {
 }
 console.log("GET /health", await health.json());
 
-const unsigned = await fetch(`${base}/webhook`, {
+const unsigned = await fetch(`${base}/webhook/${encodeURIComponent(agentId)}`, {
   method: "POST",
   headers: { "content-type": "application/json" },
   body: readFileSync(join(root, "fixtures", "plan_request.json"), "utf8"),
@@ -61,13 +61,13 @@ if (unsigned.status !== 401) {
   console.error(`expected 401 without HMAC, got ${unsigned.status}`);
   process.exit(1);
 }
-console.log("POST /webhook without signature → 401 (ok)");
+console.log("POST /webhook/:agentId without signature → 401 (ok)");
 
 let failed = false;
 for (const name of fixtures) {
   const result = await postFixture(name);
   const ok = result.status === 202 && result.body && result.body.ok === true;
-  console.log(`POST /webhook ${name} → ${result.status}`, result.body);
+  console.log(`POST /webhook/${agentId} ${name} → ${result.status}`, result.body);
   if (!ok) failed = true;
 }
 

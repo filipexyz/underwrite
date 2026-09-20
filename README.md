@@ -13,6 +13,7 @@ A human doesn't need us: they try it and see. An agent can't try 40 options, can
 The full product spec lives in [`docs/`](docs/) — start with [`docs/README.md`](docs/README.md) (thesis
 and demo scene), then [`docs/PRODUCT.md`](docs/PRODUCT.md), [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md),
 [`docs/CONTRACTS.md`](docs/CONTRACTS.md) (the data contracts this code mirrors),
+[`docs/HOSTED_AGENTS.md`](docs/HOSTED_AGENTS.md) (create-agent happy path),
 [`docs/DECISIONS.md`](docs/DECISIONS.md), [`docs/AUTH.md`](docs/AUTH.md) and [`docs/NEXT.md`](docs/NEXT.md). Those documents are canonical;
 this file is about running the code.
 
@@ -176,15 +177,18 @@ buyer POST /requests (execution_mode: "push")
         → existing judge vs the PLAN promise → RELEASE or WITHHOLD
 ```
 
-**Workers are not part of the Next.js app.** This platform exposes the APIs. An external
-seller registers an agent (`webhook_url` and/or inbox), receives `plan_request`, posts **one**
-plan+price, and if selected posts `artifact.pdf_base64`. Underwrite does not render the
-winner's PDF — checks inspect the worker's bytes. Push jobs still require NeuraLake (judges).
+**The default seller runtime is hosted.** Creating an agent in the app mints a per-agent
+`uw_seller_…`, a per-agent webhook HMAC secret, and points `webhook_url` at
+`{HOSTED_SELLER_BASE_URL}/webhook/{agentId}` on the one Cloudflare Worker
+([`workers/cloudflare-seller/`](workers/cloudflare-seller/)). Users do not deploy wrangler.
+See [`docs/HOSTED_AGENTS.md`](docs/HOSTED_AGENTS.md). Underwrite does not render the winner's PDF —
+checks inspect the worker's bytes. Push jobs still require NeuraLake (judges). Inbox is the fallback.
 
-A self-hosted Cloudflare seller PoC (Durable Object Agent, seller BYOK via NeuraLake) lives
-in [`workers/cloudflare-seller/`](workers/cloudflare-seller/). It is not the removed
-`workers/local-seller` stub. PRs that touch the worker run typecheck/test/`wrangler deploy --dry-run`;
-pushes to `main` deploy with [`.github/workflows/cloudflare-seller.yml`](.github/workflows/cloudflare-seller.yml).
+Self-hosting that Worker is an advanced opt-out. The old single-instance secrets
+(`UNDERWRITE_SELLER_API_KEY`, `SELLER_INSTANCE_NAME=default`, one global
+`UNDERWRITE_WEBHOOK_SECRET`) are deprecated. PRs that touch the worker run
+typecheck/test/`wrangler deploy --dry-run`; pushes to `main` deploy with
+[`.github/workflows/cloudflare-seller.yml`](.github/workflows/cloudflare-seller.yml).
 
 ```bash
 # 1. Buyer opens a push job (holds max_cost_usd)
@@ -195,8 +199,9 @@ curl -s -X POST http://localhost:3000/api/v1/requests \
 
 # 2. Worker: HMAC webhook (preferred) or GET /api/v1/agents/me/inbox
 #    POST plan_request body is signed:
-#      x-underwrite-signature: sha256=<HMAC-SHA256(timestamp.body, UNDERWRITE_WEBHOOK_SECRET)>
+#      x-underwrite-signature: sha256=<HMAC-SHA256(timestamp.body, per-agent whsec_…)>
 #      x-underwrite-timestamp, x-underwrite-agent-id
+#    Hosted URL: {HOSTED_SELLER_BASE_URL}/webhook/{agentId}
 
 # 3. Invited worker posts exactly one plan+price
 curl -s -X POST http://localhost:3000/api/v1/jobs/req_…/plans \
@@ -217,23 +222,28 @@ curl -s -X POST http://localhost:3000/api/v1/jobs/req_…/deliverables \
 | `MARKETPLACE_PUSH=1` | off | API default becomes push when the field is omitted |
 | `PLAN_WINDOW_MS` | `8000` | Select when the window elapses (or sooner if every invitee posted) |
 | `MARKETPLACE_TOP_K` | `5` | How many hireable agents to invite |
-| `UNDERWRITE_WEBHOOK_SECRET` | stub | HMAC-SHA256 of `timestamp.body` on seller webhooks |
+| `UNDERWRITE_WEBHOOK_SECRET` | stub | **Deprecated fallback** HMAC for agents with no per-agent secret |
+| `HOSTED_SELLER_BASE_URL` | — | Public Worker origin; create-agent sets `/webhook/{agentId}` |
+| `UNDERWRITE_HOSTED_RUNTIME_SECRET` | — | Worker ↔ platform provision/pull |
+| `UNDERWRITE_SECRETS_KEY` | stub | AES-256-GCM for per-agent seller key / HMAC / BYOK |
 
 Explicitly **out of scope** here: reprice / counter-offer, Jev, Langflow, a full multi-hop A→B→C rewrite, and an in-repo seller worker. The seed Mastra loop is unchanged and still requires NeuraLake.
 
-### Self-serve (any signed-in Auth0 user)
+### Create an agent (any signed-in Auth0 user)
 
-Admin is **not** a key-mint desk. Buyers and sellers issue their own credentials.
+Admin is **not** a key-mint desk. Every authenticated user creates their own agents and keys.
+The happy path is documented in [`docs/HOSTED_AGENTS.md`](docs/HOSTED_AGENTS.md).
 
 | Page | What |
 |------|------|
-| `/account` | Your **user wallet** balance ($1000.00 test credits on first sign-in) plus any registered seller-agent wallets (those start at **$0**). |
+| `/account` | Your **user wallet** balance ($1000.00 test credits on first sign-in) plus any seller-agent wallets (those start at **$0**). |
 | `/keys` | Create / list / revoke **buyer** keys; create / list / revoke **seller** keys bound to an agent you own. Full secret is shown **once**. Also shows the user wallet. |
-| `/agents` | List agents you own (name, id, role, status, specialties, wallet). Empty state links to register. |
-| `/agents/[id]` | Owner detail: full manifest, wallet, seller-key prefixes, edit, disable/enable, rotate/revoke keys. |
-| `/agents/register` | Register a hireable agent (manifest fields: name, role, specialties, model family, cost ceiling, …). Creates the row + a **$0** seller wallet + a seller key (shown once on the new detail page). |
+| `/agents` | List agents you own (name, id, role, status, runtime, wallet). Empty state links to create. |
+| `/agents/[id]` | Owner detail: manifest, hosted webhook, BYOK (encrypted), disable/enable, rotate seller key / HMAC. |
+| `/agents/register` | **Create an agent.** Hosted Cloudflare webhook by default, `uw_seller_…` bound only to that agent (shown once), per-agent HMAC secret, optional NeuraLake BYOK. |
 
 `GET/POST/PATCH /api/account/agents` and `GET/PATCH /api/account/agents/[id]` are the same owner flows over JSON (Auth0 session).
+`PATCH /api/account/agents/[id]/runtime` updates BYOK / HMAC / hosted vs self-hosted.
 `GET /api/account/wallet` returns your user test-credit balance.
 
 Every Auth0 user (and `local-dev` when Auth0 is off) gets a wallet of **$1000.00 test credits**
@@ -346,7 +356,7 @@ needs still works. Marketplace routes are unchanged.
 3. `pnpm db:migrate` applies the committed SQL in [`drizzle/`](drizzle/) (`0000_init.sql`,
 `0001_api_keys_and_seller_agents.sql`, `0002_buyer_wallet_and_credits.sql`,
 `0003_agent_description.sql`, `0004_interview_pool.sql`, `0005_interview_invite_token.sql`,
-`0006_push_marketplace.sql`, `0007_auth_md.sql`, …) with Drizzle's
+`0006_push_marketplace.sql`, `0007_auth_md.sql`, `0008_hosted_agent_runtime.sql`, …) with Drizzle's
    migrator (on Vercel this happens automatically as part of `pnpm build`). `pnpm db:seed` inserts the
    catalog — a one-time step: it is idempotent, but it also resets axes, wallets and clears pairwise
    trust, so it is never run by the build. **Seed is still required once on Neon.** An empty hireable
@@ -355,7 +365,7 @@ needs still works. Marketplace routes are unchanged.
 
 Tables (mirroring `docs/CONTRACTS.md`): `agents` (plus seller fields `status`, `owner_clerk_user_id`
 (stores Auth0 `sub` — historical column name),
-`contact`, `webhook_url`, `description`), `api_keys` (hashed secrets only), `trust_axes`, `trust_pairwise`, `wallets`,
+`contact`, `webhook_url`, `description`), `api_keys` (hashed secrets only), `agent_runtime_secrets` (AES-256-GCM seller-key copy / HMAC / BYOK), `trust_axes`, `trust_pairwise`, `wallets`,
 `requests` (plus optional `buyer_wallet_id` for user-funded requests), `bids`, `plans`, `escrows`,
 `verifications`, `ledger_events`, `attributions`. Interview pool: `interview_needs`, `interview_sessions`.
 Push marketplace: `agent_inbox`, `job_invites`; `requests.execution_mode`, `requests.plan_deadline_at`.
@@ -565,7 +575,7 @@ src/app/api/v1/           agent-facing route handlers (requests + jobs/plans + j
 src/app/api/account/      Auth0-session self-serve key + owner agent APIs
 src/app/api/admin/        Auth0-admin list/disable/revoke/audit APIs
 src/app/console/          Auth0-protected debug console with live ledger
-src/app/(human)/          `/keys`, `/account`, `/agents`, `/agents/register`
+src/app/(human)/          `/keys`, `/account`, `/agents`, `/agents/register` (create hosted agent)
 src/app/admin/            configuration + audit (403 for non-admins)
 src/app/interviews/       Creator pool: register a need, copy `/i` link, read `result_json`
 src/app/i/                Public interviewee page (token auth, no Auth0, no chrome)
@@ -597,9 +607,9 @@ Next, in order — cut from the bottom:
    deliberately has **no reprice**.
 4. **Calibration**: run the scene many times, tune EMA alphas and the `hardcoded_v0` weights against outcomes.
 
-Self-serve buyer/seller keys and seller registration shipped as a vertical slice (hashed `api_keys`,
-`/keys`, `/agents`, `/agents/register`, `/admin`). Seed catalog A/B/C1/C2/J1/J2 remains the demo loop
-(and still needs NeuraLake keys).
+Self-serve buyer/seller keys and **hosted multi-tenant agents** shipped (`/agents`, `/agents/register`,
+per-agent `uw_seller_` + HMAC + BYOK, one Cloudflare Worker). Seed catalog A/B/C1/C2/J1/J2 remains
+the demo loop (and still needs NeuraLake keys).
 
 Explicitly **not** built, by decision ([`docs/NEXT.md`](docs/NEXT.md)): Langflow as executor host, deep
 multi-round negotiation, Jev-based marketplace selection, real payment rails.

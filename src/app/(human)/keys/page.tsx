@@ -51,7 +51,7 @@ export default async function KeysPage() {
           eyebrow="PROVIDER AGENT"
           aside={
             <Link href="/agents/register" className="btn-ghost">
-              register an agent
+              create an agent
             </Link>
           }
         >

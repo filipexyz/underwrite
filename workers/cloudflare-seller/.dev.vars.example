@@ -4,16 +4,16 @@
 # Underwrite origin the worker calls (no trailing slash required).
 UNDERWRITE_BASE_URL=http://localhost:3000
 
-# Seller key minted in Underwrite (/keys or /agents/register). Prefix uw_seller_
-UNDERWRITE_SELLER_API_KEY=uw_seller_replace_me
+# Shared with the Next.js app. Used to provision DOs and pull per-agent credentials.
+UNDERWRITE_HOSTED_RUNTIME_SECRET=replace_me_runtime_secret
 
-# Must match the platform's UNDERWRITE_WEBHOOK_SECRET (default stub below).
+# Deprecated single-tenant fallback. Hosted agents do not use these.
+# Leave blank in the multi-tenant happy path.
+UNDERWRITE_SELLER_API_KEY=
 UNDERWRITE_WEBHOOK_SECRET=underwrite-webhook-stub
-
-# Seller BYOK — NeuraLake (or any OpenAI-compatible gateway). Not Cloudflare AI Gateway.
-NEURALAKE_API_KEY=replace_me
+NEURALAKE_API_KEY=
 NEURALAKE_BASE_URL=https://api.neuralake.cloud/v1
 NEURALAKE_MODEL=auto
 
-# Durable Object name used when x-underwrite-agent-id is missing (local smoke).
+# Legacy Durable Object name when x-underwrite-agent-id and /webhook/:id are both absent.
 SELLER_INSTANCE_NAME=default
