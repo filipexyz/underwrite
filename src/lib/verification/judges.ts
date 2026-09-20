@@ -3,9 +3,10 @@
  *
  * Independence is enforced, not assumed: a judge must be from a different
  * model family than the producer and outside the chain it judges (invariant 7).
- * The rubric is blind — judges see artifact facts + rubric, never the
- * producer's reasoning or self-report. Disagreement is signal: it lowers
- * `agreement` and marks the SLA as not met.
+ * The rubric is blind — judges see TASK_SPEC + artifact facts + applicable
+ * checks, never the producer's reasoning or self-report. Out-of-scope
+ * criteria are invisible. Disagreement is signal: it lowers `agreement` and
+ * marks the SLA as not met.
  *
  * The marketplace pays for judging (funded by forfeited stakes + commission).
  */
@@ -26,18 +27,49 @@ export type JudgingResult = {
   skipped: Array<{ judge_id: string; reason: string }>;
 };
 
+function applicableIds(spec: VerificationSpec): Set<string> {
+  return new Set(spec.checks.map((c) => c.check_id));
+}
+
+function kindLabel(kind: ArtifactFacts["kind"]): string {
+  return kind === "html" ? "HTML" : kind === "md" ? "Markdown" : "PDF";
+}
+
 /**
  * What a blind judge concludes from the facts. Deterministic on purpose:
  * NeuraLake text is rationale, never control flow.
- * J2 is the stricter reader (fonts), which is where disagreement can appear.
+ * J2 may stay stricter on in-scope PDF fonts only (html_to_pdf / fonts_embedded);
+ * it never invents out-of-scope criteria.
  */
-function judgeFacts(judge: RegistryAgent, facts: ArtifactFacts, source: SourceDocument): { verdict: Verdict; reasons: string[] } {
+export function judgeFacts(
+  judge: RegistryAgent,
+  facts: ArtifactFacts,
+  source: SourceDocument,
+  spec: VerificationSpec,
+  category?: string,
+): { verdict: Verdict; reasons: string[] } {
+  const applicable = applicableIds(spec);
   const reasons: string[] = [];
-  if (!facts.valid) return { verdict: "inconclusive", reasons: ["artifact is not a readable PDF"] };
-  if (facts.overflow_regions > 0) reasons.push(`${facts.overflow_regions} overflowing region(s)`);
-  const coverage = textCoverage(source.text, facts.text);
-  if (coverage < TEXT_COVERAGE_THRESHOLD) reasons.push(`only ${(coverage * 100).toFixed(1)}% of the source text is present`);
-  if (judge.agentId.startsWith("j2") && !facts.fonts_embedded) reasons.push("fonts are not embedded");
+  const asksValid = [...applicable].some((id) => id === "artifact_renders" || id === "artifact_exists" || id.endsWith("_valid"));
+  if (asksValid && !facts.valid) {
+    return { verdict: "inconclusive", reasons: [`artifact is not readable ${kindLabel(facts.kind)}`] };
+  }
+  if (applicable.has("no_layout_overflow") && facts.overflow_regions > 0) {
+    reasons.push(`${facts.overflow_regions} overflowing region(s)`);
+  }
+  if (applicable.has("text_matches_source")) {
+    const coverage = textCoverage(source.text, facts.text);
+    if (coverage < TEXT_COVERAGE_THRESHOLD) reasons.push(`only ${(coverage * 100).toFixed(1)}% of the source text is present`);
+  }
+  const fontsInScope = facts.kind === "pdf" && (applicable.has("fonts_embedded") || category === "html_to_pdf");
+  if (judge.agentId.startsWith("j2") && fontsInScope && !facts.fonts_embedded) {
+    reasons.push("fonts are not embedded");
+  }
+  if (applicable.has("has_title") && !facts.title?.trim()) reasons.push("missing title");
+  if (applicable.has("has_primary_cta") && facts.cta_selectors_found.length === 0) reasons.push("no primary CTA");
+  if (applicable.has("viewport_meta") && !facts.has_viewport_meta) reasons.push("missing viewport meta");
+  if (applicable.has("has_sources_section") && !facts.has_sources_section) reasons.push("no sources section");
+  if (applicable.has("has_structure") && facts.sections.length < 2) reasons.push("report lacks structure");
   return { verdict: reasons.length === 0 ? "pass" : "fail", reasons };
 }
 
@@ -50,13 +82,17 @@ export async function runJudges(
     source: SourceDocument;
     spec: VerificationSpec;
     parentEventId: string | null;
+    taskRequirement?: string;
+    category?: string;
   },
 ): Promise<JudgingResult> {
   const verdicts: JudgeVerdict[] = [];
   const eventIds: string[] = [];
   const skipped: JudgingResult["skipped"] = [];
+  const category = args.category ?? ctx.request.category;
+  const taskRequirement = args.taskRequirement ?? ctx.request.requirement;
 
-  for (const judge of judgesFor(ctx.registry, ctx.request.category)) {
+  for (const judge of judgesFor(ctx.registry, category)) {
     if (judge.modelFamily === args.producer.modelFamily) {
       skipped.push({ judge_id: judge.agentId, reason: `same model family as producer (${judge.modelFamily})` });
       continue;
@@ -66,17 +102,30 @@ export async function runJudges(
       continue;
     }
 
-    const { verdict, reasons } = judgeFacts(judge, args.facts, args.source);
-    const rubric = args.spec.checks.map((c) => `- ${c.check_id} (w=${c.weight}): ${c.description}`).join("\n");
+    const { verdict, reasons } = judgeFacts(judge, args.facts, args.source, args.spec, category);
+    const applicable = args.spec.checks.map((c) => `- ${c.check_id} (w=${c.weight}): ${c.description}`).join("\n");
     const structural =
       verdict === "pass"
-        ? "PASS — the artifact satisfies every rubric item I can observe."
+        ? "PASS — the artifact satisfies every applicable check I can observe."
         : `${verdict.toUpperCase()} — ${reasons.join("; ")}.`;
+    const factsLine = [
+      `kind=${args.facts.kind}`,
+      `valid=${args.facts.valid}`,
+      `pages=${args.facts.pages}`,
+      `overflow_regions=${args.facts.overflow_regions}`,
+      `fonts_embedded=${args.facts.fonts_embedded}`,
+      `links=${args.facts.links.length}`,
+      `text_chars=${args.facts.text.length}`,
+      `word_count=${args.facts.word_count}`,
+      `title=${args.facts.title ?? ""}`,
+      `cta=${args.facts.cta_selectors_found.length}`,
+      `source_chars=${args.source.text.length}`,
+    ].join(", ");
     const inference = await runInference({
       agent_id: judge.agentId,
       purpose: "judge",
-      system: `You are an independent verification judge (rubric ${args.spec.rubric_version}). You see only the artifact facts and the rubric. Answer with a verdict and one sentence.`,
-      prompt: `Rubric:\n${rubric}\n\nArtifact facts: pages=${args.facts.pages}, overflow_regions=${args.facts.overflow_regions}, fonts_embedded=${args.facts.fonts_embedded}, links=${args.facts.links.length}, text_chars=${args.facts.text.length}, source_chars=${args.source.text.length}.\nStructural verdict (decisions stay rule-based): ${structural}`,
+      system: `You are an independent verification judge (rubric ${args.spec.rubric_version}). You receive TASK_SPEC, ARTIFACT_FACTS, and APPLICABLE_CHECKS only. Out-of-scope criteria: do not reason about them, do not fail on them, and do not mention them. The structural verdict is already decided from artifact facts; write one sentence of rationale only.`,
+      prompt: `TASK_SPEC:\n${taskRequirement}\n\nAPPLICABLE_CHECKS:\n${applicable}\n\nARTIFACT_FACTS: ${factsLine}\n\nStructural verdict (decisions stay rule-based): ${structural}`,
       maxOutputTokens: 120,
     });
 

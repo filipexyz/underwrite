@@ -79,7 +79,10 @@ function result(ctx: EngineContext, settled: boolean): StepResult {
 }
 
 function sourceFor(ctx: EngineContext): SourceDocument {
-  const html = ctx.request.files.find((f) => f.media_type.includes("html"))?.content ?? DEMO_INPUT_HTML;
+  const html =
+    ctx.request.files.find((f) => f.media_type.includes("html"))?.content ??
+    ctx.request.files.find((f) => f.media_type.includes("markdown") || /\.md$/i.test(f.name))?.content ??
+    DEMO_INPUT_HTML;
   return parseSource(html, ctx.request.requirement);
 }
 
@@ -555,6 +558,8 @@ export async function verifyDelivery(db: Db, requestId: string): Promise<StepRes
     planId: leaf.plan_id,
     spec: ctx.request.verification,
     artifactEventId: state.artifact_event_id,
+    category: ctx.request.category,
+    taskRequirement: ctx.request.requirement,
   });
 
   await saveState(ctx, {

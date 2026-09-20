@@ -106,15 +106,15 @@ additional features:
 
 | File | What it is |
 |------|------------|
-| `README.md` | this file — the entry point |
+| [`README.md`](../README.md) | run guide: seed + push, scoped verification (4 categories), hosted agents, Auth0/auth.md, `/docs` |
 | `CONTEXT.md` | the event: rules, 5 challenges, judging weights, prizes, schedule, contacts |
 | `PRODUCT.md` | product spec: 4-field request, confidence machinery, demo scene |
 | `ARCHITECTURE.md` | human/agent boundary, A→B→C chain, per-hop escrow, judges, guardrails, registry, build order |
 | `CONTRACTS.md` | data contracts: Request, Plan, Bid, Verification, LedgerEvent, Escrow, Attribution, Axes + invariants |
 | `HOSTED_AGENTS.md` | create-agent happy path + `/agents/[id]/test` Cloudflare test area |
-| `DEMO.md` | the literal 4-minute script + code-freeze deliverables |
 | `DECISIONS.md` | decision log (D-001 → D-036). Read before disagreeing. |
-| `AUTH.md` | Auth0 humans + auth.md agents — short map; dashboard checklist lives in the root README |
+| `AUTH.md` | Auth0 humans + auth.md agents — short map; env names in `.env.example` and the root README |
+| `NEXT.md` | deferred backlog (MCP surface, Langflow, real rails, …) |
 
 ---
 

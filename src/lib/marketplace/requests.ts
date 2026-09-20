@@ -24,7 +24,7 @@ import {
 } from "@/lib/db/schema";
 import { newId, nowMs } from "@/lib/ids";
 import { deriveMetrics, listEvents, rowToEvent } from "@/lib/ledger/ledger";
-import { defaultRubricFor } from "@/lib/verification/rubric";
+import { defaultRubricFor, scopeChecks } from "@/lib/verification/rubric";
 import { DEMO_INPUT_HTML } from "./artifact";
 
 export const DEFAULT_CATEGORY = "html_to_pdf";
@@ -55,7 +55,9 @@ export async function createRequest(
 ): Promise<RequestRow> {
   const requestId = newId("req");
   const category = (input.category ?? meta.category ?? DEFAULT_CATEGORY).trim() || DEFAULT_CATEGORY;
-  const verification = input.verification ?? defaultRubricFor(category);
+  const verification = scopeChecks(input.verification ?? defaultRubricFor(category), input.task.requirement, {
+    category,
+  });
   const executionMode = resolveExecutionMode(input.execution_mode, meta.executionMode);
   const requestedInviteIds = [...new Set((input.invite_agent_ids ?? []).map((id) => id.trim()).filter(Boolean))];
   const [row] = await db

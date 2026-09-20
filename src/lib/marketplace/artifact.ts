@@ -10,6 +10,14 @@ import { newId } from "@/lib/ids";
 import type { ExecutionPolicy } from "./types";
 import { renderHtmlToPdf } from "./pdf/render";
 
+export type ArtifactKind = "pdf" | "html" | "md";
+
+export type ArtifactScreenshot = {
+  name?: string;
+  viewport?: string;
+  data_base64?: string;
+};
+
 export type SourceDocument = {
   html: string;
   text: string;
@@ -18,18 +26,32 @@ export type SourceDocument = {
   expected_pages: number;
   page_size: "A4";
   margins_cm: number;
+  requirement?: string;
+  expected_sections?: string[];
+  expected_topics?: string[];
+  expected_metrics?: string[];
+  min_word_count?: number;
 };
 
-export type PdfArtifact = {
+export type DeliveryArtifact = {
   artifact_ref: string;
-  kind: "pdf";
+  kind: ArtifactKind;
   producer_agent_id: string;
-  /** Real PDF, base64 — facts are read from these bytes. */
-  pdf_base64: string;
   /** The producer's own claim — displayed as suspect, never trusted (D-005). */
   self_report: number;
   observed_latency_ms: number;
   declared_latency_ms: number;
+  pdf_base64?: string;
+  html?: string;
+  markdown?: string;
+  url?: string;
+  screenshots?: ArtifactScreenshot[];
+};
+
+export type PdfArtifact = DeliveryArtifact & {
+  kind: "pdf";
+  /** Real PDF, base64 — facts are read from these bytes. */
+  pdf_base64: string;
 };
 
 const CHARS_PER_PAGE = 3000;
@@ -56,6 +78,37 @@ export function extractLinks(html: string): string[] {
   return links;
 }
 
+const SECTION_WORDS = ["hero", "features", "pricing", "about", "faq", "testimonials", "contact", "team", "product", "footer"];
+
+function impliedSections(requirement: string): string[] {
+  const lower = requirement.toLowerCase();
+  return SECTION_WORDS.filter((word) => new RegExp(`\\b${word}\\b`, "i").test(lower));
+}
+
+function impliedTopics(requirement: string): string[] {
+  const quoted = [...requirement.matchAll(/[“"]([^”"]+)[”"]/g)].map((m) => m[1].trim()).filter(Boolean);
+  if (quoted.length > 0) return quoted;
+  const about = /(?:cover(?:ing|s)?|topics?:)\s+(.+?)(?:\s+with\s+|\.|$)/i.exec(requirement);
+  if (!about) return [];
+  return about[1]
+    .split(/,| and /i)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 2);
+}
+
+function impliedMetrics(requirement: string): string[] {
+  const named = [...requirement.matchAll(/\b(?:metric|kpi|stat)s?\s*[:=]\s*([^.;]+)/gi)].flatMap((m) =>
+    m[1].split(/,| and /i).map((s) => s.trim()).filter(Boolean),
+  );
+  if (named.length > 0) return named;
+  return [...requirement.matchAll(/\b([a-z][\w-]{1,24})\s+(?:metric|kpi|stat)s?\b/gi)].map((m) => m[1]);
+}
+
+function impliedMinWords(requirement: string): number | undefined {
+  const m = /(?:at least|min(?:imum)?(?:\s+length)?|≥|>=)\s*(\d+)\s*words/i.exec(requirement);
+  return m ? Number(m[1]) : undefined;
+}
+
 export function parseSource(html: string, requirement: string): SourceDocument {
   const text = stripHtml(html);
   const margins = /(\d+(?:\.\d+)?)\s*cm\s*margins?/i.exec(requirement);
@@ -66,6 +119,11 @@ export function parseSource(html: string, requirement: string): SourceDocument {
     expected_pages: Math.max(1, Math.ceil(text.length / CHARS_PER_PAGE)),
     page_size: "A4",
     margins_cm: margins ? Number(margins[1]) : 2,
+    requirement,
+    expected_sections: impliedSections(requirement),
+    expected_topics: impliedTopics(requirement),
+    expected_metrics: impliedMetrics(requirement),
+    min_word_count: impliedMinWords(requirement),
   };
 }
 

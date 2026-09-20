@@ -6,7 +6,7 @@
  * engine interprets the policy; nothing about A/B/C1/C2 is hardcoded in code.
  */
 import type { AgentRole, Strategy } from "@/lib/contracts";
-import type { PdfArtifact } from "./artifact";
+import type { DeliveryArtifact } from "./artifact";
 import type { Selection } from "./quotes";
 
 export type SelectionPolicy = "cheapest" | "cheapest_trusted";
@@ -115,7 +115,7 @@ export type EngineState = {
   pending_latency_s: number;
   hops: HopRecord[];
   failed_agents: string[];
-  artifact: PdfArtifact | null;
+  artifact: DeliveryArtifact | null;
   artifact_event_id: string | null;
   render_cost_usd: number;
   verification: VerificationCursor | null;
