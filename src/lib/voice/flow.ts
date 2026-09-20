@@ -158,7 +158,7 @@ function buildVoiceMcpServer(sessionId: string): McpServersItem {
 export async function submitVoiceBrief(
   db: Db,
   args: { session: { id: string; agoraAgentId: string | null }; brief: VoiceTaskBrief },
-): Promise<{ requestId: string; created: boolean; summary: string }> {
+): Promise<{ requestId: string; created: boolean; summary: string; category: string }> {
   const task = await createTaskFromVoiceBrief(db, { session: args.session as never, brief: args.brief });
   await completeVoiceSession(db, args.session.id, { brief: args.brief, requestId: task.requestId });
   try {
@@ -167,7 +167,12 @@ export async function submitVoiceBrief(
     // The task exists; a stuck agent must not fail the submission.
     console.warn("[voice] stop agent failed (task already created):", error);
   }
-  return { requestId: task.requestId, created: task.created, summary: summarizeBrief(args.brief) };
+  return {
+    requestId: task.requestId,
+    created: task.created,
+    summary: summarizeBrief(args.brief),
+    category: task.category,
+  };
 }
 
 export type FinalizeVoiceResult =
@@ -240,7 +245,7 @@ export async function finalizeVoiceSession(
       request_id: task.requestId,
       created: task.created,
       summary: summarizeBrief(brief),
-      category: brief.category ?? DEFAULT_VOICE_CATEGORY,
+      category: task.category,
     },
   };
 }

@@ -66,6 +66,7 @@ export async function createRequest(
     buyerWalletId?: string;
     executionMode?: "seed" | "push";
     category?: string;
+    classifySource?: string;
   } = {},
 ): Promise<RequestRow> {
   const requestId = newId("req");
@@ -114,6 +115,8 @@ export async function createRequest(
       buyer_wallet_id: meta.buyerWalletId ?? null,
       execution_mode: executionMode,
       invite_agent_ids: requestedInviteIds,
+      category,
+      ...(meta.classifySource ? { classify_source: meta.classifySource } : {}),
     },
   });
   return row;
