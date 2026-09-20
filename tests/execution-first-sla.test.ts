@@ -5,9 +5,9 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import type { Verification } from "@/lib/contracts";
 import { getDb, type Db } from "@/lib/db/client";
-import type { EscrowRow } from "@/lib/db/schema";
+import { plans, type EscrowRow } from "@/lib/db/schema";
 import { walkBack } from "@/lib/marketplace/attribution";
-import { buildContext } from "@/lib/marketplace/context";
+import { buildContext, type EngineContext } from "@/lib/marketplace/context";
 import {
   allDeclaredChecksPassed,
   createAndLockEscrow,
@@ -215,11 +215,11 @@ describe("releaseEscrow — settle path", () => {
     ({ db } = await getDb());
   });
 
-  it("RELEASES when checks passed and hardcoded_v0 is below the floor", async () => {
+  async function lockTestEscrow(requirement: string): Promise<{ ctx: EngineContext; escrow: EscrowRow }> {
     const row = await createRequest(
       db,
       {
-        task: { requirement: "Brief the buyer on portfolio risk.", files: [] },
+        task: { requirement, files: [] },
         max_cost_usd: 0.05,
         max_latency_s: 30,
         min_confidence: FLOOR,
@@ -230,8 +230,25 @@ describe("releaseEscrow — settle path", () => {
       { source: "tests/execution-first-sla" },
     );
     const ctx = await buildContext(db, row.requestId);
-    const locked = await createAndLockEscrow(ctx, {
-      plan_id: `plan_sla_${row.requestId.slice(-8)}`,
+    const planId = `plan_sla_${row.requestId.slice(-8)}`;
+    await db.insert(plans).values({
+      planId,
+      requestId: row.requestId,
+      agentId: "c2-honest",
+      deliverable: "html",
+      promisedConfidence: 0.96,
+      maxCostUsd: 0.04,
+      estLatencyS: 8,
+      chain: [{ agent_id: "c2-honest", role: "executor", subtask: "brief", cost_usd: 0.04 }],
+      rationale: "execution-first SLA fixture",
+      planCostUsd: 0,
+      stakeUsd: 0,
+      strategyConsidered: ["self"],
+      strategyChosen: "self",
+      status: "validated",
+    });
+    const escrow = await createAndLockEscrow(ctx, {
+      plan_id: planId,
       hop_index: 0,
       payer_agent_id: null,
       payee_agent_id: "c2-honest",
@@ -239,6 +256,11 @@ describe("releaseEscrow — settle path", () => {
       stake_usd: 0,
       min_confidence: FLOOR,
     });
+    return { ctx, escrow };
+  }
+
+  it("RELEASES when checks passed and hardcoded_v0 is below the floor", async () => {
+    const { ctx, escrow } = await lockTestEscrow("Brief the buyer on portfolio risk.");
     const burned = computeConfidence({
       objective: 1,
       agreement: null,
@@ -246,9 +268,9 @@ describe("releaseEscrow — settle path", () => {
       process: 1,
       self_report: 0.96,
     });
-    expect(burned.computed).toBeLessThan(locked.minConfidence);
+    expect(burned.computed).toBeLessThan(escrow.minConfidence);
 
-    const released = await releaseEscrow(ctx, locked, {
+    const released = await releaseEscrow(ctx, escrow, {
       verdict: "pass",
       confidence: burned.computed,
       judges_disagree: false,
@@ -258,31 +280,9 @@ describe("releaseEscrow — settle path", () => {
   });
 
   it("refuses RELEASE when an applicable check failed", async () => {
-    const row = await createRequest(
-      db,
-      {
-        task: { requirement: "Brief the buyer on a failed check.", files: [] },
-        max_cost_usd: 0.05,
-        max_latency_s: 30,
-        min_confidence: FLOOR,
-        failure_policy: "refund",
-        selection_timeout_s: 5,
-        category: "analista de investimentos",
-      },
-      { source: "tests/execution-first-sla" },
-    );
-    const ctx = await buildContext(db, row.requestId);
-    const locked = await createAndLockEscrow(ctx, {
-      plan_id: `plan_fail_${row.requestId.slice(-8)}`,
-      hop_index: 0,
-      payer_agent_id: null,
-      payee_agent_id: "c2-honest",
-      amount_usd: 0.01,
-      stake_usd: 0,
-      min_confidence: FLOOR,
-    });
+    const { ctx, escrow } = await lockTestEscrow("Brief the buyer on a failed check.");
     await expect(
-      releaseEscrow(ctx, locked, {
+      releaseEscrow(ctx, escrow, {
         verdict: "fail",
         confidence: 0.99,
         judges_disagree: false,
