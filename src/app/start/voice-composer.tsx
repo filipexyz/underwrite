@@ -165,30 +165,20 @@ export function VoiceComposer({ startPath }: { startPath: string }) {
   );
 
   /**
-   * The happy path is fully automatic: the agent's closing sentence is the trigger.
+   * Completion detection, copied from the interview room because it is the rule that works.
    *
-   * The prompt standardises that sentence ("I have everything and am posting the task"), so matching it
-   * is a contract with our own instruction rather than a guess at the model's phrasing. A false positive
-   * is safe: the server extracts the brief from the transcript and answers 409 if it is not actually
-   * complete, which puts the call back to `live` and tells the person what is still missing.
+   * The interview asks a question about the **data** — "are all the required fields present in the
+   * transcript yet?" — on every settled assistant turn, and calls the existing finalize endpoint the
+   * moment they are. It does not look for a magic sentence and it does not wait on a timer.
    *
-   * There is deliberately **no button**. A human step between the conversation and the market would undo
-   * the point of the surface, and it is the only thing that would make `human_interventions` non-zero.
+   * The structured turn is what makes that possible, so the prompt asks for one exactly as the interview
+   * prompt does. When speech recognition garbles it, the request is still sent and the server recovers
+   * the brief from the transcript — so the garbling degrades the result instead of ending it.
    */
   const maybeFinish = useCallback(
     (turns: TranscriptTurn[]) => {
-      const lastAssistant = [...turns].reverse().find((t) => t.role === "assistant" && t.turn_id !== -1);
-      if (!lastAssistant) return;
-
-      // If the agent happened to emit parseable structure, use it and skip the extraction call.
-      const parsed = extractBriefJson(lastAssistant.text);
-      const structured = parsed ? VoiceTaskBrief.safeParse(parsed) : null;
-      if (structured?.success) {
-        void finish(turns, structured.data);
-        return;
-      }
-
-      if (isWrapUp(lastAssistant.text)) void finish(turns);
+      const brief = extractBriefFromTurns(turns);
+      if (brief) void finish(turns, brief);
     },
     [finish],
   );
@@ -394,26 +384,29 @@ export function VoiceComposer({ startPath }: { startPath: string }) {
 }
 
 /**
- * Closing phrases the prompt asks the agent to use, plus the obvious Portuguese equivalents.
+ * Closing-phrase matching was removed here.
  *
- * A phrase list is a blunt instrument, and it is acceptable here **only** because a wrong answer is not
- * destructive: the server decides whether the brief is actually complete and rejects it if not, putting
- * the call back to `live` with the missing terms named. The alternative — never detecting completion —
- * needs a human press, which is the thing being removed.
+ * It was my second attempt at the same mistake: guessing at the *wording* instead of asking about the
+ * *data*. The interview room checks whether every required field is present in the transcript and calls
+ * the endpoint when they are — no phrase list, no timer, no button. See `maybeFinish`.
  */
-const WRAP_UP_MARKERS = [
-  "posting the task",
-  "post the task",
-  "i have everything",
-  "vou publicar a tarefa",
-  "publicando a tarefa",
-  "tenho tudo",
-  "postando a tarefa",
-];
 
-export function isWrapUp(text: string): boolean {
-  const lower = text.toLowerCase();
-  return WRAP_UP_MARKERS.some((marker) => lower.includes(marker));
+/**
+ * Read a validated brief out of the conversation.
+ *
+ * Walks the assistant turns newest-first because the structured turn is the last thing the agent says, and
+ * tolerates trailing speech after the object. Validating here is what lets the client skip a server round
+ * trip in the common case; the server still re-validates and can recover the brief from prose.
+ */
+export function extractBriefFromTurns(turns: TranscriptTurn[]): VoiceTaskBrief | null {
+  for (const turn of [...turns].reverse()) {
+    if (turn.role !== "assistant" || turn.turn_id === -1) continue;
+    const parsed = extractBriefJson(turn.text);
+    if (!parsed) continue;
+    const brief = VoiceTaskBrief.safeParse(parsed);
+    if (brief.success) return brief.data;
+  }
+  return null;
 }
 
 /**
