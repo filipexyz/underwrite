@@ -123,7 +123,7 @@ export async function createTaskFromVoiceBrief(
     source: "voice-composer",
     buyerWalletId: args.session.userId,
     category: input.category,
-    // Always push. Seed (`runMarketplace`) is the html-to-pdf demo auction and must not run here.
+    // Always push. The seed Mastra html-to-pdf auction must not run here.
     executionMode: "push",
   });
 

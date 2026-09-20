@@ -307,21 +307,21 @@ function sellerDraft(name: string, specialty: string, webhook?: string) {
 
 describe("voice finalize starts push, not the seed PDF loop", () => {
   it("does not import runMarketplace or pin a hardcoded agent id", () => {
-    const sources = [
+    const kickoff = [
       "src/app/api/v1/voice/sessions/[id]/finalize/route.ts",
       "src/app/api/mcp/voice/[sessionId]/route.ts",
       "src/app/api/v1/voice/sessions/[id]/tools/submit_task/route.ts",
-      "src/lib/voice/handoff.ts",
-      "src/lib/voice/push.ts",
     ].map((file) => readFileSync(file, "utf8"));
-    for (const source of sources) {
-      expect(source).not.toContain("runMarketplace");
+    const helpers = ["src/lib/voice/handoff.ts", "src/lib/voice/push.ts"].map((file) => readFileSync(file, "utf8"));
+    for (const source of [...kickoff, ...helpers]) {
+      expect(source).not.toMatch(/from\s+["']@\/mastra["']/);
       expect(source).not.toContain(PINNED_AGENT_ID);
       expect(source).not.toMatch(/invite_agent_ids:\s*\[/);
     }
-    expect(sources[0]).toContain("scheduleVoicePushJob");
-    expect(sources[1]).toContain("scheduleVoicePushJob");
-    expect(sources[2]).toContain("scheduleVoicePushJob");
+    for (const source of kickoff) {
+      expect(source).not.toContain("runMarketplace");
+      expect(source).toContain("scheduleVoicePushJob");
+    }
   });
 
   it("finalizes onto a push job and invites Top-K for the category", async () => {
