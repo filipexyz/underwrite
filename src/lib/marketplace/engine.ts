@@ -32,6 +32,7 @@ import {
   refundEscrow,
   releaseEscrow,
   settleStake,
+  allDeclaredChecksPassed,
   slaMet,
   withholdEscrow,
   type SlaEvidence,
@@ -594,7 +595,13 @@ export async function settleChain(db: Db, requestId: string): Promise<StepResult
   if (!verRow) throw new Error(`verification not found: ${state.verification.verification_id}`);
   const verification = rowToVerification(verRow);
   const delivered = verification.confidence.computed;
-  const evidence: SlaEvidence = { verdict: verification.verdict, confidence: delivered, judges_disagree: verification.judges_disagree };
+  const allChecksPassed = allDeclaredChecksPassed(verification.checks) || state.verification.objective === 1;
+  const evidence: SlaEvidence = {
+    verdict: verification.verdict,
+    confidence: delivered,
+    judges_disagree: verification.judges_disagree,
+    all_checks_passed: allChecksPassed,
+  };
   const hops = state.hops;
   const leafIndex = hops.length - 1;
   const leaf = hops[leafIndex];
@@ -629,7 +636,14 @@ export async function settleChain(db: Db, requestId: string): Promise<StepResult
     if (escrow.status !== "LOCKED") continue;
 
     if (slaMet(escrow, evidence)) {
-      await releaseEscrow(ctx, escrow, { ...evidence, payload: { promised_confidence: hop.promised_confidence, attempt: state.attempt } });
+      await releaseEscrow(ctx, escrow, {
+        ...evidence,
+        payload: {
+          promised_confidence: hop.promised_confidence,
+          attempt: state.attempt,
+          execution_first_sla: Boolean(evidence.all_checks_passed && delivered < escrow.minConfidence),
+        },
+      });
       await settleStake(ctx, escrow, { promised_confidence: hop.promised_confidence, delivered_confidence: delivered, blown: blown(hop.promised_confidence) });
       if (i === 0) {
         await chargeCommission(ctx, escrow, commissionOf(escrow.amountUsd), null);

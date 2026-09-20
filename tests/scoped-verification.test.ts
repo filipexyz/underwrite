@@ -319,12 +319,13 @@ describe("verifyArtifact + judgesFor", () => {
     ({ db } = await getDb());
   });
 
-  it("judgesFor still filters by judge:${category} for all four categories", async () => {
+  it("judgesFor matches judge:${category} and falls back to J1/J2 for custom specialties", async () => {
     const registry = await loadRegistry(db, TASK_CATEGORY);
     for (const category of ["html_to_pdf", "landing_page", "dashboard", "research_report"]) {
       expect(judgesFor(registry, category).map((j) => j.agentId).sort()).toEqual(["j1-judge", "j2-judge"]);
     }
-    expect(judgesFor(registry, "unknown_specialty")).toEqual([]);
+    expect(judgesFor(registry, "unknown_specialty").map((j) => j.agentId).sort()).toEqual(["j1-judge", "j2-judge"]);
+    expect(judgesFor(registry, "analista de investimentos").map((j) => j.agentId).sort()).toEqual(["j1-judge", "j2-judge"]);
   });
 
   it("J1/J2 disagreement sets judges_disagree and sla_verdict fail", async () => {

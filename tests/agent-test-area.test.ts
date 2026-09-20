@@ -68,9 +68,11 @@ describe("test fixture specialty", () => {
     expect(built.task.requirement).toMatch(/Carteira Alpha, an executor/);
     expect(built.task.requirement).toMatch(/analista de investimentos/);
     expect(built.task.requirement).toMatch(/Gera relatórios de alocação e risco/);
+    expect(built.task.requirement).toMatch(/HTML briefing/);
     expect(built.task.requirement).not.toMatch(/\bpdf\b/i);
     expect(built.task.requirement).not.toMatch(/A4/i);
     expect(built.task.files[0]?.content).toContain("analista de investimentos");
+    expect(built.task.files[0]?.content).toMatch(/HTML briefing/);
     expect(built.task.files[0]?.content).not.toMatch(/\bA4 PDF\b/i);
     expect(testFixtureForAgent({ specialties: ["analista de investimentos"] }).uses_html_to_pdf).toBe(false);
     expect(defaultRubricFor("analista de investimentos").rubric_version).toBe("specialty_report@v0");

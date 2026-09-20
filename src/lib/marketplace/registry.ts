@@ -106,11 +106,19 @@ export function discover(
     .sort((a, b) => a.agentId.localeCompare(b.agentId));
 }
 
-/** Judges registered for this task category (`judge:${category}`). */
+/**
+ * Judges registered for this task category (`judge:${category}`).
+ * Custom / unnamed specialties are not in the four named rubrics — J1/J2
+ * (any judge with a `judge:` specialty) still run so agreement is not null.
+ * Missing judges must not withhold when checks pass (execution-first SLA).
+ */
 export function judgesFor(registry: Registry, category: string): RegistryAgent[] {
-  return [...registry.agents.values()]
-    .filter((a) => a.role === "judge" && a.specialties.includes(`judge:${category}`))
+  const judges = [...registry.agents.values()]
+    .filter((a) => a.role === "judge")
     .sort((a, b) => a.agentId.localeCompare(b.agentId));
+  const exact = judges.filter((a) => a.specialties.includes(`judge:${category}`));
+  if (exact.length > 0) return exact;
+  return judges.filter((a) => a.specialties.some((s) => s.startsWith("judge:")));
 }
 
 export async function upsertPairwise(
