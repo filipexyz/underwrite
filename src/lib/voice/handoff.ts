@@ -1,10 +1,11 @@
 /**
  * Voice brief → marketplace request.
  *
- * The last step of the composer: what the agent agreed to out loud becomes a real `Request`, and the
- * auction starts by itself. "Fully automatic" is the requirement, so there is no confirmation screen
+ * The last step of the composer: what the agent agreed to out loud becomes a real `Request` on the
+ * locked **push** path (Top-K hireable agents for the classified specialty — same as the hosted
+ * agent test area). "Fully automatic" is the requirement, so there is no confirmation screen
  * between the conversation and the market — the human hears the summary and sellers are already
- * bidding.
+ * being invited.
  *
  * The requirement text is composed **deterministically** from the brief. The agent negotiated the
  * numbers in conversation, but the artefact agents bid on must be reproducible and must not depend on
@@ -82,6 +83,7 @@ export function voiceBriefToRequestInput(brief: VoiceTaskBrief, category?: strin
     min_confidence: brief.min_confidence,
     failure_policy: brief.failure_policy,
     selection_timeout_s: 5,
+    execution_mode: "push",
     category: brief.category ?? category ?? DEFAULT_VOICE_CATEGORY,
   };
 }
@@ -121,6 +123,8 @@ export async function createTaskFromVoiceBrief(
     source: "voice-composer",
     buyerWalletId: args.session.userId,
     category: input.category,
+    // Always push. Seed (`runMarketplace`) is the html-to-pdf demo auction and must not run here.
+    executionMode: "push",
   });
 
   return { requestId: row.requestId, created: true };

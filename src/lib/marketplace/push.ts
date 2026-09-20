@@ -247,7 +247,21 @@ export async function startPushJob(
   const deadline = new Date(Date.now() + env.planWindowMs);
 
   if (invited.length === 0) {
+    const reason = requested?.length
+      ? "requested invitees were not hireable for this specialty"
+      : "no hireable agents matched the specialty";
     await refundBuyerHold(ctx, ctx.request.maxCostUsd, `escrow_hold_refund:${requestId}:no_invitees`);
+    await ctx.ledger.append({
+      type: "plan_selected",
+      payload: {
+        job_id: requestId,
+        rule: "Top-K discovery",
+        reason,
+        requested_invite_agent_ids: requested ?? [],
+        skipped: resolved.skipped,
+        invited: [],
+      },
+    });
     await saveState(ctx, {
       ...EMPTY_STATE,
       execution_mode: "push",
@@ -258,10 +272,9 @@ export async function startPushJob(
     });
     await setRequestStatus(ctx, "no_eligible_plan", {
       completedAt: new Date(),
+      error: reason,
       outcome: {
-        reason: requested?.length
-          ? "requested invitees were not hireable for this specialty"
-          : "no hireable agents matched the specialty",
+        reason,
         requested_invite_agent_ids: requested ?? [],
         skipped: resolved.skipped,
       },

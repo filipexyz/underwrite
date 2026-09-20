@@ -1,19 +1,19 @@
 /**
  * POST /api/v1/voice/sessions/[id]/finalize — the agent declares the brief complete.
  *
- * Files the marketplace task and **starts the auction**, which is the "fully automatic" requirement:
- * the human hears the summary and sellers are already bidding, with no confirmation screen between the
- * conversation and the market.
+ * Files the marketplace task and **starts the real push job** (Top-K discovery for
+ * the classified specialty — same path as hosted agent test / `execution_mode: "push"`).
+ * The seed Mastra PDF loop is not used.
  *
- * The auction runs in `after()` so the response is not held open by the marketplace loop — the client
- * needs to answer quickly to keep the voice call responsive.
+ * The job starts in `after()` so the response is not held open by discovery or
+ * webhooks — the client needs to answer quickly to keep the voice call responsive.
  */
-import { after, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { jsonError } from "@/lib/api/http";
 import { requireSignedInApi } from "@/lib/auth/session";
 import { getDb } from "@/lib/db/client";
-import { runMarketplace } from "@/mastra";
 import { finalizeVoiceSession } from "@/lib/voice/flow";
+import { scheduleVoicePushJob } from "@/lib/voice/push";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -36,15 +36,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!result.ok) return jsonError(result.status, result.error, result.details);
 
   if (result.payload.created) {
-    const { request_id: requestId } = result.payload;
-    after(async () => {
-      try {
-        await runMarketplace(requestId);
-      } catch (error) {
-        // The task exists and is visible; a crashed loop is recoverable by re-running the request.
-        console.error(`[voice] marketplace loop for ${requestId} crashed:`, error);
-      }
-    });
+    scheduleVoicePushJob(result.payload.request_id);
   }
 
   return NextResponse.json(result.payload, { status: result.payload.created ? 201 : 200 });
