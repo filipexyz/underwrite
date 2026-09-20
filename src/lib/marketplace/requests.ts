@@ -45,10 +45,17 @@ export const DEMO_REQUEST: RequestInput = {
 export async function createRequest(
   db: Db,
   input: RequestInput,
-  meta: { actor?: string; source?: string; buyerWalletId?: string; executionMode?: "seed" | "push" } = {},
+  meta: {
+    actor?: string;
+    source?: string;
+    buyerWalletId?: string;
+    executionMode?: "seed" | "push";
+    category?: string;
+  } = {},
 ): Promise<RequestRow> {
   const requestId = newId("req");
-  const verification = input.verification ?? defaultRubricFor(DEFAULT_CATEGORY);
+  const category = (meta.category ?? DEFAULT_CATEGORY).trim() || DEFAULT_CATEGORY;
+  const verification = input.verification ?? defaultRubricFor(category);
   const executionMode = resolveExecutionMode(input.execution_mode, meta.executionMode);
   const requestedInviteIds = [...new Set((input.invite_agent_ids ?? []).map((id) => id.trim()).filter(Boolean))];
   const [row] = await db
@@ -56,7 +63,7 @@ export async function createRequest(
     .values({
       requestId,
       status: "received",
-      category: DEFAULT_CATEGORY,
+      category,
       requirement: input.task.requirement,
       files: input.task.files,
       maxCostUsd: input.max_cost_usd,

@@ -1,6 +1,8 @@
 # Cloudflare seller worker — PR verify + deploy on main.
-# Runtime BYOK keys (UNDERWRITE_*, NEURALAKE_*, webhook HMAC) are NOT set here.
-# Put those on the Worker with `wrangler secret put` or the Cloudflare dashboard.
+# Runtime BYOK keys and HMAC are NOT set here (wrangler secret / dashboard).
+# UNDERWRITE_BASE_URL is a wrangler.jsonc var: production
+# https://underwrite-gamma.vercel.app. Do not put localhost in that file —
+# `wrangler deploy` overwrites the dashboard value with the same name.
 name: Cloudflare seller
 
 on:
@@ -102,6 +104,8 @@ jobs:
           exit "${missing}"
 
       # `pnpm deploy` is pnpm's workspace-publish command (ERR_PNPM_NOTHING_TO_DEPLOY).
+      # wrangler.jsonc vars include UNDERWRITE_BASE_URL=https://underwrite-gamma.vercel.app
+      # (never localhost). That var is applied on every deploy.
       - name: Wrangler deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

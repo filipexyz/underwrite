@@ -258,7 +258,10 @@ That page is the human substitute for curl:
    provision, BYOK, and Worker `GET /health` (flags a localhost `UNDERWRITE_BASE_URL`).
 2. Shows the same **503** as the API when `MODEL_PROVIDER_API_KEY` is missing.
 3. Starts a real `POST /api/v1/requests` equivalent (`execution_mode: "push"`) as
-   your session wallet with `invite_agent_ids: [this agent]`.
+   your session wallet with `invite_agent_ids: [this agent]`. If the agent does
+   not list `html_to_pdf`, the fixture uses the agent’s specialty (or an override)
+   instead of blocking the invite. Add `html_to_pdf` on the agent page for the
+   PDF demo.
 4. Streams received → plans → selected → delivered / failed and links the console ledger.
 
 Buyers can pass the same `invite_agent_ids` on `POST /api/v1/requests`. Omit it and

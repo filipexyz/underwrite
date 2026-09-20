@@ -39,8 +39,10 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     recent,
     selection: {
       mode: "invite_agent_ids",
-      category: "html_to_pdf",
-      note: "The test job is a real POST /api/v1/requests (execution_mode: push) as your user wallet, with invite_agent_ids pinned to this agent. Without that field the marketplace invites Top-K hireable html_to_pdf agents and prefers those with a webhook.",
+      category: readiness.fixture.category,
+      note: readiness.fixture.uses_html_to_pdf
+        ? "The test job is a real POST /api/v1/requests (execution_mode: push) as your user wallet, with invite_agent_ids pinned to this agent. Without that field the marketplace invites Top-K hireable html_to_pdf agents and prefers those with a webhook."
+        : `This agent does not list html_to_pdf, so the test job uses specialty ${readiness.fixture.category} (or a POST body category override) instead of dropping the invite. Add html_to_pdf on the agent page to use the PDF fixture.`,
     },
   });
 }

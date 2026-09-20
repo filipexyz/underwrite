@@ -19,14 +19,20 @@
     }
   ],
   "vars": {
-    "UNDERWRITE_BASE_URL": "http://localhost:3000",
+    // Production Underwrite origin. `wrangler deploy` writes this plaintext
+    // var and overwrites any dashboard value with the same name — never put
+    // http://localhost:3000 here or hosted agents cannot POST plans back.
+    // Local `wrangler dev` overrides this via `.dev.vars`.
+    "UNDERWRITE_BASE_URL": "https://underwrite-gamma.vercel.app",
     "NEURALAKE_BASE_URL": "https://api.neuralake.cloud/v1",
     "NEURALAKE_MODEL": "auto",
     "SELLER_INSTANCE_NAME": "default"
   }
   // Hosted multi-tenant secrets (never commit): wrangler secret put
   //   UNDERWRITE_HOSTED_RUNTIME_SECRET   — shared with Underwrite
-  //   UNDERWRITE_BASE_URL                — production platform origin
+  // Do not `wrangler secret put UNDERWRITE_BASE_URL` while it is a var —
+  // same-name secret + var conflict. Change the var above, or remove it and
+  // set the origin once in the dashboard / as a secret that CI does not pass.
   // Deprecated single-tenant fallback (do not use for new agents):
   //   UNDERWRITE_SELLER_API_KEY
   //   NEURALAKE_API_KEY

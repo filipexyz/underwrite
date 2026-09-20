@@ -1,7 +1,13 @@
-# Copy to .dev.vars (never commit). wrangler dev loads this file.
-# Production: `wrangler secret put <NAME>` for every secret below.
+# Copy to .dev.vars (never commit). wrangler dev loads this file and
+# overrides wrangler.jsonc vars. This is the only place localhost belongs.
+#
+# Production: wrangler.jsonc sets UNDERWRITE_BASE_URL to
+# https://underwrite-gamma.vercel.app on every CI deploy. Do not put
+# localhost in wrangler.jsonc — that overwrites the dashboard/production
+# value and hosted agents cannot POST plans back.
+# Secrets: `wrangler secret put UNDERWRITE_HOSTED_RUNTIME_SECRET`
 
-# Underwrite origin the worker calls (no trailing slash required).
+# Local Next.js origin the worker calls (no trailing slash required).
 UNDERWRITE_BASE_URL=http://localhost:3000
 
 # Shared with the Next.js app. Used to provision DOs and pull per-agent credentials.

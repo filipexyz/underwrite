@@ -7,6 +7,7 @@ import { LiveLedger } from "@/app/console/requests/[id]/live-ledger";
 import { Badge, Empty, Money, Panel, PhaseRail, Stat, inputClass } from "@/app/console/ui";
 import type { LedgerEvent, LedgerMetrics } from "@/lib/contracts";
 import {
+  HTML_TO_PDF_CATEGORY,
   TEST_FIXTURE_SUMMARY,
   type AgentTestReadiness,
   type PublicTestRuntime,
@@ -37,6 +38,7 @@ type JobResult = {
   skipped: Array<{ agent_id: string; reason: string }>;
   plan_deadline_at: string;
   targeted: boolean;
+  category?: string;
   links: { console: string; events: string };
   error?: string;
 };
@@ -107,6 +109,7 @@ export function AgentTestArea({
   const [error, setError] = useState<{ status: number; message: string; details?: unknown } | null>(null);
   const [pending, setPending] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [category, setCategory] = useState(initialReadiness.fixture.category);
 
   const blockers = useMemo(() => readiness.checks.filter((c) => c.severity === "block" && !c.ok), [readiness.checks]);
   const warnings = useMemo(() => readiness.checks.filter((c) => c.severity === "warn" && !c.ok), [readiness.checks]);
@@ -157,7 +160,7 @@ export function AgentTestArea({
       const res = await fetch(`/api/account/agents/${agent.agent_id}/test`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ category }),
       });
       const body = (await res.json()) as JobResult & { error?: string; details?: unknown };
       if (!res.ok) {
@@ -254,6 +257,16 @@ export function AgentTestArea({
                   <span className="font-medium">{item.title}</span>
                 </p>
                 <p className={`pt-1 ${item.severity === "block" ? "text-danger" : "text-[#53605a]"}`}>{item.detail}</p>
+                {item.id === "specialty" && !item.ok ? (
+                  <p className="pt-1 text-sm">
+                    <Link href={`/agents/${agent.agent_id}`} className="text-teal hover:underline">
+                      Edit specialties on the agent page
+                    </Link>
+                    {readiness.fixture.category !== HTML_TO_PDF_CATEGORY
+                      ? ` · test will still run as ${readiness.fixture.category}`
+                      : ""}
+                  </p>
+                ) : null}
               </li>
             ))}
           </ul>
@@ -270,14 +283,49 @@ export function AgentTestArea({
         aside={<Badge value="invite_agent_ids" />}
       >
         <p className="text-sm text-[#53605a] leading-relaxed mb-4">
-          Fixture: compile <code>input.html</code> to PDF (A4, 2cm margins) for{" "}
-          <Money value={TEST_FIXTURE_SUMMARY.max_cost_usd} /> / {TEST_FIXTURE_SUMMARY.max_latency_s}s /{" "}
-          {(TEST_FIXTURE_SUMMARY.min_confidence * 100).toFixed(0)}% confidence. This is{" "}
-          <code>execution_mode: &quot;push&quot;</code> as your Auth0 session (or <code>local-dev</code>), not a
-          simulated NeuraLake call and not a signed-only webhook bypass. Selection is pinned with{" "}
-          <code>invite_agent_ids: [{agent.agent_id}]</code>. Without that field the marketplace would invite Top-K
-          hireable <code>html_to_pdf</code> agents and prefer those with a webhook.
+          {category === HTML_TO_PDF_CATEGORY ? (
+            <>
+              Fixture: compile <code>input.html</code> to PDF (A4, 2cm margins) for{" "}
+              <Money value={TEST_FIXTURE_SUMMARY.max_cost_usd} /> / {TEST_FIXTURE_SUMMARY.max_latency_s}s /{" "}
+              {(TEST_FIXTURE_SUMMARY.min_confidence * 100).toFixed(0)}% confidence.
+            </>
+          ) : (
+            <>
+              Fixture: a <code>{category}</code> brief (not the HTML→PDF demo) for{" "}
+              <Money value={TEST_FIXTURE_SUMMARY.max_cost_usd} /> / {TEST_FIXTURE_SUMMARY.max_latency_s}s /{" "}
+              {(TEST_FIXTURE_SUMMARY.min_confidence * 100).toFixed(0)}% confidence. Marketplace invites match
+              this specialty, so this agent is not dropped as{" "}
+              <code>specialty_mismatch:html_to_pdf</code>.
+            </>
+          )}{" "}
+          This is <code>execution_mode: &quot;push&quot;</code> as your Auth0 session (or <code>local-dev</code>
+          ), not a simulated NeuraLake call and not a signed-only webhook bypass. Selection is pinned with{" "}
+          <code>invite_agent_ids: [{agent.agent_id}]</code>.
         </p>
+        {!agent.specialties.includes(HTML_TO_PDF_CATEGORY) ? (
+          <p className="text-sm text-[#53605a] leading-relaxed mb-4">
+            This agent is <span className="font-medium">{agent.name}</span> with specialties{" "}
+            <code>{agent.specialties.join(", ") || "—"}</code>.{" "}
+            <Link href={`/agents/${agent.agent_id}`} className="text-teal hover:underline">
+              Add html_to_pdf on the agent page
+            </Link>{" "}
+            if you want the PDF fixture. Or keep the matching specialty below.
+          </p>
+        ) : null}
+        {agent.specialties.filter((item) => !item.startsWith("judge:")).length > 0 ? (
+          <label className="flex flex-col gap-1 text-sm mb-4 md:w-80">
+            <span className="eyebrow !mb-0">fixture specialty</span>
+            <select className={inputClass} value={category} onChange={(event) => setCategory(event.target.value)}>
+              {agent.specialties
+                .filter((item) => !item.startsWith("judge:"))
+                .map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+            </select>
+          </label>
+        ) : null}
         <button type="button" className="btn-ink" disabled={!canRun} onClick={() => void runTest()}>
           <span>{pending ? "Opening job…" : "Run test job"}</span>
           <strong>→</strong>
