@@ -9,19 +9,19 @@ import {
   type WeeklyLeaderboard,
 } from "./leaderboard";
 
-const loadCached = unstable_cache(
-  async () => {
-    const { db } = await getDb();
-    return loadWeeklyLeaderboard(db);
-  },
-  ["weekly-agent-leaderboard"],
-  { revalidate: LEADERBOARD_REVALIDATE_S },
-);
-
 /** Short-TTL cached board for the public home and `GET /api/v1/leaderboard/weekly`. */
 export async function getWeeklyLeaderboard(): Promise<WeeklyLeaderboard> {
+  const bucket = String(Math.floor(Date.now() / (LEADERBOARD_REVALIDATE_S * 1000)));
+  const load = unstable_cache(
+    async () => {
+      const { db } = await getDb();
+      return loadWeeklyLeaderboard(db);
+    },
+    ["weekly-agent-leaderboard", bucket],
+    { revalidate: LEADERBOARD_REVALIDATE_S },
+  );
   try {
-    return await loadCached();
+    return await load();
   } catch {
     return emptyLeaderboard(new Date(), LEADERBOARD_TZ, UNAVAILABLE_LEADERBOARD_COPY);
   }
