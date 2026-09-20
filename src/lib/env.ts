@@ -130,7 +130,7 @@ export const env = {
 
   /** Plan window for the push path. Select when it elapses or every invitee responds. */
   get planWindowMs(): number {
-    return Math.max(0, readNumber("PLAN_WINDOW_MS", 8_000));
+    return Math.max(0, readNumber("PLAN_WINDOW_MS", 30_000));
   },
 
   /** How many hireable agents to invite on a push job. */
