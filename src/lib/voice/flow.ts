@@ -114,6 +114,28 @@ function sessionIdForChannel(userId: string): string {
   return `${userId}-${Date.now().toString(36)}`;
 }
 
+/**
+ * File the task for an already-validated brief, once, and stop the agent.
+ *
+ * This is the function the end tool executes: when the model invokes `submit_task`, the call runs here, in
+ * our own process, against our own data. `createTaskFromVoiceBrief` is idempotent, so a model that calls
+ * the tool twice — or a retried request — still produces exactly one task.
+ */
+export async function submitVoiceBrief(
+  db: Db,
+  args: { session: { id: string; agoraAgentId: string | null }; brief: VoiceTaskBrief },
+): Promise<{ requestId: string; created: boolean; summary: string }> {
+  const task = await createTaskFromVoiceBrief(db, { session: args.session as never, brief: args.brief });
+  await completeVoiceSession(db, args.session.id, { brief: args.brief, requestId: task.requestId });
+  try {
+    await stopGptLiveAgent(args.session.agoraAgentId);
+  } catch (error) {
+    // The task exists; a stuck agent must not fail the submission.
+    console.warn("[voice] stop agent failed (task already created):", error);
+  }
+  return { requestId: task.requestId, created: task.created, summary: summarizeBrief(args.brief) };
+}
+
 export type FinalizeVoiceResult =
   | { ok: true; payload: { session_id: string; request_id: string; created: boolean; summary: string; category: string } }
   | { ok: false; status: number; error: string; details?: unknown };
