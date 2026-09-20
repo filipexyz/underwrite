@@ -285,7 +285,17 @@ describe("runAcceptedJob", () => {
 
   it("delivers a single markdown file when the zip-shaped brief only yields one artifact", async () => {
     chatCompletion.mockResolvedValue(
-      completion(JSON.stringify({ files: [{ name: "report.md", content: "# Findings\n\nHold the book.\n\n## Risks\n\nFX.\n" }] })),
+      completion(
+        JSON.stringify({
+          files: [
+            {
+              name: "report.md",
+              content:
+                "# Findings\n\nYields remain above the cost of capital after hedging.\n\n## Risks\n\nFX and duration still dominate the left tail.\n\n## Recommendation\n\nHold the core book.\n",
+            },
+          ],
+        }),
+      ),
     );
 
     const result = await runAcceptedJob({
