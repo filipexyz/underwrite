@@ -1,4 +1,5 @@
 import { readSellerConfig, resolveUnderwriteBaseUrl, type SellerConfig } from "./config";
+import { sellerError, sellerLog } from "./log";
 
 export type TenantCredentials = {
   sellerApiKey?: string;
@@ -9,6 +10,12 @@ export type TenantCredentials = {
   underwriteBaseUrl?: string;
 };
 
+export type ProvisionByok = {
+  api_key?: string | null;
+  base_url?: string | null;
+  model?: string | null;
+};
+
 export type ProvisionBody = {
   agent_id?: string;
   underwrite_base_url?: string | null;
@@ -17,15 +24,26 @@ export type ProvisionBody = {
   byok_api_key?: string | null;
   byok_base_url?: string | null;
   byok_model?: string | null;
+  /** Hosted pull (`GET /api/internal/hosted-agents/:id`) nests BYOK here. */
+  byok?: ProvisionByok | null;
 };
 
+function firstText(...values: Array<string | null | undefined>): string | undefined {
+  for (const value of values) {
+    const trimmed = value?.trim();
+    if (trimmed) return trimmed;
+  }
+  return undefined;
+}
+
 export function credentialsFromProvision(body: ProvisionBody): TenantCredentials {
+  const nested = body.byok && typeof body.byok === "object" ? body.byok : null;
   return {
     sellerApiKey: body.seller_api_key?.trim() || undefined,
     webhookSecret: body.webhook_secret?.trim() || undefined,
-    neuralakeApiKey: body.byok_api_key?.trim() || undefined,
-    neuralakeBaseUrl: body.byok_base_url?.trim() || undefined,
-    neuralakeModel: body.byok_model?.trim() || undefined,
+    neuralakeApiKey: firstText(body.byok_api_key, nested?.api_key),
+    neuralakeBaseUrl: firstText(body.byok_base_url, nested?.base_url),
+    neuralakeModel: firstText(body.byok_model, nested?.model),
     underwriteBaseUrl: body.underwrite_base_url?.trim() || undefined,
   };
 }
@@ -54,8 +72,25 @@ export async function pullHostedCredentials(env: Env, agentId: string): Promise<
       "x-underwrite-runtime-secret": secret,
     },
   });
-  if (!res.ok) return null;
+  if (!res.ok) {
+    sellerError({
+      instance: agentId,
+      msg: "credential_pull_failed",
+      status: res.status,
+      underwrite_base_url: base,
+    });
+    return null;
+  }
   const json = (await res.json()) as { agent?: ProvisionBody };
   if (!json.agent) return null;
-  return credentialsFromProvision(json.agent);
+  const pulled = credentialsFromProvision(json.agent);
+  sellerLog({
+    instance: agentId,
+    msg: "credential_pull_ok",
+    status: res.status,
+    has_seller: Boolean(pulled.sellerApiKey),
+    has_webhook: Boolean(pulled.webhookSecret),
+    has_byok: Boolean(pulled.neuralakeApiKey),
+  });
+  return pulled;
 }

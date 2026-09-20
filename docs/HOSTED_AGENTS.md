@@ -153,6 +153,7 @@ Manual:
 | `GET/PATCH /api/account/agents`, `/[id]` | Auth0 session | List / edit / disable |
 | `PATCH /api/account/agents/[id]/runtime` | Auth0 session | BYOK, rotate HMAC, hosted vs self-hosted |
 | `GET/POST /api/account/agents/[id]/test` | Auth0 session | Diagnose runtime / fire a targeted push job |
-| `GET /api/internal/hosted-agents/[id]` | runtime secret | Worker credential pull |
+| `GET /api/internal/hosted-agents/[id]` | runtime secret | Worker credential pull (flat `byok_api_key` + nested `byok`) |
+| `POST /api/internal/hosted-agents/[id]` | runtime secret | Worker last_error report (test area) |
 
 `POST /api/v1/jobs/…/plans` and `/deliverables` still require **that agent’s** seller key.

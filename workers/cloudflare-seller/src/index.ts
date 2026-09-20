@@ -35,7 +35,7 @@ async function listTenants(env: Env): Promise<string[]> {
 }
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     const cfg = readSellerConfig(env);
     const route = parseSellerPath(url.pathname);
@@ -52,6 +52,13 @@ export default {
         deprecated_global_seller_key: Boolean(cfg.sellerApiKey),
         deprecated_global_byok: Boolean(cfg.neuralakeApiKey),
       });
+    }
+
+    if (route.kind === "provision" && request.method === "GET") {
+      if (!authorizeRuntime(request.headers, env)) {
+        return json(401, { error: "missing or invalid runtime secret" });
+      }
+      return routeToSeller(env, new Request(new URL("/health", request.url), { method: "GET" }), route.agentId);
     }
 
     if (route.kind === "provision" && (request.method === "PUT" || request.method === "POST")) {
@@ -99,6 +106,7 @@ export default {
         }
       }
 
+      ctx.waitUntil(rememberTenant(env, resolved.agentId));
       const forwarded = new Request(new URL("/webhook", request.url), {
         method: "POST",
         headers: request.headers,

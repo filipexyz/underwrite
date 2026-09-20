@@ -57,6 +57,8 @@ export type PublicTestRuntime = {
   byok_model: string | null;
   provisioned: boolean;
   hosted_webhook_url: string | null;
+  last_error: string | null;
+  last_error_at: string | null;
 };
 
 export const TEST_FIXTURE_SUMMARY = {

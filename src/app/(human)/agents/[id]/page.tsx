@@ -118,6 +118,7 @@ export default async function AgentDetailPage({ params }: { params: Promise<{ id
           <Stat label="BYOK" value={runtime.byok_configured ? "configured" : "not set"} />
           <Stat label="BYOK base" value={runtime.byok_base_url ?? "NeuraLake default"} />
           <Stat label="provisioned" value={runtime.provisioned ? "yes" : "pending / inbox"} />
+          <Stat label="last error" value={runtime.last_error ?? "—"} />
         </dl>
         <RuntimeForm agentId={agent.agent_id} runtime={runtime} />
       </Panel>

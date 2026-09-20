@@ -64,6 +64,13 @@
       "when": 1789900000000,
       "tag": "0008_hosted_agent_runtime",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1789912000000,
+      "tag": "0009_runtime_last_error",
+      "breakpoints": true
     }
   ]
 }

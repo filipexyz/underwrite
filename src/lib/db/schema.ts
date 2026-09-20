@@ -546,6 +546,8 @@ export const agentRuntimeSecrets = pgTable("agent_runtime_secrets", {
   byokModel: text("byok_model"),
   sellerKeyId: text("seller_key_id"),
   provisionedAt: timestamp("provisioned_at", { withTimezone: true }),
+  lastError: text("last_error"),
+  lastErrorAt: timestamp("last_error_at", { withTimezone: true }),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });

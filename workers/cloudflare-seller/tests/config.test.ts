@@ -49,4 +49,10 @@ describe("Workers Observability / Logs", () => {
     expect(wrangler).toMatch(/"persist"\s*:\s*true/);
     expect(wrangler).not.toMatch(/"observability"\s*:\s*\{[^}]*"enabled"\s*:\s*false/);
   });
+
+  it("schedules a cron so inbox drain still runs if a webhook 202 never starts a fiber", () => {
+    const wrangler = envFile("wrangler.jsonc");
+    expect(wrangler).toMatch(/"triggers"\s*:\s*\{/);
+    expect(wrangler).toMatch(/"crons"\s*:\s*\[\s*"\* \* \* \* \*"/);
+  });
 });

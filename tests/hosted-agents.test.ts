@@ -3,7 +3,7 @@
  * and isolation so user B cannot operate user A’s agent.
  */
 import { beforeAll, describe, expect, it } from "vitest";
-import { GET as getInternalHosted } from "@/app/api/internal/hosted-agents/[id]/route";
+import { GET as getInternalHosted, POST as postInternalHosted } from "@/app/api/internal/hosted-agents/[id]/route";
 import { POST as postAccountAgent } from "@/app/api/account/agents/route";
 import { GET as getOwnedAgentApi } from "@/app/api/account/agents/[id]/route";
 import { POST as postOwnedKey } from "@/app/api/account/agents/[id]/keys/route";
@@ -14,7 +14,7 @@ import { resolveSellerAuth } from "@/lib/auth/api-keys";
 import { decryptSecret, encryptSecret, generateWebhookSecret } from "@/lib/crypto/secrets";
 import { getDb, type Db } from "@/lib/db/client";
 import { TASK_CATEGORY } from "@/lib/db/seed";
-import { resolveWebhookSecret } from "@/lib/marketplace/agent-runtime";
+import { getPublicAgentRuntime, resolveWebhookSecret } from "@/lib/marketplace/agent-runtime";
 import { DEMO_REQUEST } from "@/lib/marketplace/requests";
 import { registerSellerAgent } from "@/lib/marketplace/sellers";
 import { signWebhookBody, verifyWebhookSignature } from "@/lib/marketplace/webhooks";
@@ -211,6 +211,45 @@ describe("isolation: user A vs user B", () => {
     expect(body.agent.webhook_secret).toBe(aliceWebhook);
     expect(body.agent.owner_user_id).toBe("user_alice_iso");
     expect(body.agent.seller_api_key).not.toBe(bobSecret);
+    expect("byok_api_key" in body.agent).toBe(true);
+  });
+
+  it("records Worker last_error for the test area", async () => {
+    const denied = await postInternalHosted(
+      new Request("http://local/api/internal/hosted-agents/x", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ last_error: "NeuraLake BYOK missing" }),
+      }),
+      { params: Promise.resolve({ id: aliceId }) },
+    );
+    expect(denied.status).toBe(401);
+
+    const ok = await postInternalHosted(
+      new Request("http://local/api/internal/hosted-agents/x", {
+        method: "POST",
+        headers: { authorization: "Bearer runtime-test-secret", "content-type": "application/json" },
+        body: JSON.stringify({ last_error: "NeuraLake BYOK missing — paste a key on the agent" }),
+      }),
+      { params: Promise.resolve({ id: aliceId }) },
+    );
+    expect(ok.status).toBe(200);
+
+    const runtime = await getPublicAgentRuntime(db, aliceId, null);
+    expect(runtime.last_error).toMatch(/BYOK missing/);
+    expect(runtime.last_error_at).toBeTruthy();
+
+    const cleared = await postInternalHosted(
+      new Request("http://local/api/internal/hosted-agents/x", {
+        method: "POST",
+        headers: { authorization: "Bearer runtime-test-secret", "content-type": "application/json" },
+        body: JSON.stringify({ last_error: null }),
+      }),
+      { params: Promise.resolve({ id: aliceId }) },
+    );
+    expect(cleared.status).toBe(200);
+    const after = await getPublicAgentRuntime(db, aliceId, null);
+    expect(after.last_error).toBeNull();
   });
 });
 
