@@ -97,6 +97,65 @@ export type StartGptLiveAgentArgs = {
 };
 
 /**
+ * Start an agent on the **LLM pipeline** with our own completions endpoint as the LLM stage.
+ *
+ * This is the `recipe-agent-custom-llm` shape, and it is what makes real tool calling possible: Agora never
+ * sees a tool call, because the tool loop runs inside the endpoint we hand it. STT and TTS stay
+ * Agora-managed (`DeepgramSTT` / `MiniMaxTTS` with no provider key — the presets are covered by our Agora
+ * account), so switching pipelines needs **no new credentials**.
+ *
+ * Kept separate from the GPT Live path on purpose: the interview stays on `withMllm`, so this cannot change
+ * its behaviour.
+ */
+export async function startCustomLlmAgent(args: {
+  channel: string;
+  userUid: string;
+  prompt: string;
+  greeting: string;
+  agentUid: string;
+  /** Public URL of our OpenAI-compatible completions route for this session. */
+  llmUrl: string;
+  llmApiKey: string;
+}): Promise<{ agentId: string; agentUid: string }> {
+  const { AgoraClient, Agent, CustomLLM, DeepgramSTT, ExpiresIn, MiniMaxTTS } = await import("agora-agents");
+  const appId = env.agora.appId;
+  const certificate = env.agora.certificate;
+  if (!appId || !certificate) throw new Error("Agora credentials are not set");
+
+  const client = new AgoraClient({ area: await agoraArea(), appId, appCertificate: certificate });
+
+  const agent = new Agent({
+    client,
+    advancedFeatures: { enable_rtm: true, enable_tools: false },
+    parameters: { data_channel: "rtm", enable_error_message: true, enable_metrics: true },
+  })
+    .withLlm(
+      new CustomLLM({
+        apiKey: args.llmApiKey,
+        model: "underwrite-voice",
+        url: args.llmUrl,
+        systemMessages: [{ role: "system", content: args.prompt }],
+        greetingMessage: args.greeting,
+      }),
+    )
+    .withStt(new DeepgramSTT({ model: "nova-3" }))
+    .withTts(new MiniMaxTTS({ model: "speech-2.6-turbo" }));
+
+  const session = agent.createSession({
+    name: `voice-${args.channel}`.slice(0, 64),
+    channel: args.channel,
+    agentUid: args.agentUid,
+    remoteUids: [args.userUid],
+    idleTimeout: 180,
+    expiresIn: ExpiresIn.hours(1),
+  });
+
+  const agentId = await session.start();
+  storeAgentSession(agentId, session);
+  return { agentId, agentUid: args.agentUid };
+}
+
+/**
  * Start a GPT Live agent.
  *
  * Note on failure modes: `session.start()` resolves as soon as the agent session is *accepted*, so a

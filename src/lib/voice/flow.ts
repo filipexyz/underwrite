@@ -7,7 +7,14 @@
  */
 import type { Db } from "@/lib/db/client";
 import { env } from "@/lib/env";
-import { mintJoinToken, newBrowserUid, newChannelName, startGptLiveAgent, stopGptLiveAgent } from "@/lib/agora/gpt-live";
+import {
+  mintJoinToken,
+  newBrowserUid,
+  newChannelName,
+  startCustomLlmAgent,
+  stopGptLiveAgent,
+} from "@/lib/agora/gpt-live";
+import { publicApiBaseUrl } from "@/lib/docs/api-base";
 import { createTaskFromVoiceBrief } from "./handoff";
 import { extractBriefFromTranscript } from "./extract";
 import { buildVoiceComposerGreeting, buildVoiceComposerPrompt, summarizeBrief } from "./prompt";
@@ -73,12 +80,17 @@ export async function startVoiceSession(db: Db, userId: string): Promise<StartVo
   const { token, expireAt } = mintJoinToken(session.agoraChannel, uid);
 
   try {
-    const started = await startGptLiveAgent({
+    // The agent's LLM stage is our own endpoint, per the Agora tool-calling recipe: the tool loop runs
+    // there, so the model's tool_call never has to travel over a data channel. STT and TTS stay
+    // Agora-managed, so switching pipelines needs no new credentials.
+    const started = await startCustomLlmAgent({
       channel: session.agoraChannel,
       userUid: uid.toString(),
       prompt: buildVoiceComposerPrompt(),
       greeting: buildVoiceComposerGreeting(),
       agentUid: String(VOICE_AGENT_UID),
+      llmUrl: publicApiBaseUrl() + "/api/v1/voice/sessions/" + session.id + "/llm/chat/completions",
+      llmApiKey: (process.env.VOICE_LLM_TOKEN ?? "").trim(),
     });
     await attachVoiceAgentId(db, session.id, started.agentId);
     return {
