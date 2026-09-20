@@ -41,6 +41,8 @@ describe("opsHintForPath", () => {
     expect(opsHintForPath("/docs", "x")).toBe("docs · agent api");
     expect(opsHintForPath("/developers", "x")).toBe("docs · agent api");
     expect(opsHintForPath("/console", "x")).toBe("console · live ledger");
+    expect(opsHintForPath("/agents/agt_demo/test", "x")).toBe("test · cloudflare agent");
+    expect(opsHintForPath("/agents", "x")).toBe("agents · your fleet");
   });
 });
 

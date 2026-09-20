@@ -195,7 +195,7 @@ typecheck/test/`wrangler deploy --dry-run`; pushes to `main` deploy with
 curl -s -X POST http://localhost:3000/api/v1/requests \
   -H "authorization: Bearer uw_buyer_…" \
   -H 'content-type: application/json' \
-  -d '{ "execution_mode": "push", "task": { "requirement": "…", "files": [] }, "max_cost_usd": 0.05, "max_latency_s": 30, "min_confidence": 0.95 }'
+  -d '{ "execution_mode": "push", "invite_agent_ids": ["agt_…"], "task": { "requirement": "…", "files": [] }, "max_cost_usd": 0.05, "max_latency_s": 30, "min_confidence": 0.95 }'
 
 # 2. Worker: HMAC webhook (preferred) or GET /api/v1/agents/me/inbox
 #    POST plan_request body is signed:
@@ -221,7 +221,8 @@ curl -s -X POST http://localhost:3000/api/v1/jobs/req_…/deliverables \
 | `execution_mode: "push"` on the request | — | This job uses the push path |
 | `MARKETPLACE_PUSH=1` | off | API default becomes push when the field is omitted |
 | `PLAN_WINDOW_MS` | `8000` | Select when the window elapses (or sooner if every invitee posted) |
-| `MARKETPLACE_TOP_K` | `5` | How many hireable agents to invite |
+| `MARKETPLACE_TOP_K` | `5` | How many hireable agents to invite (ignored when `invite_agent_ids` is set) |
+| `invite_agent_ids` on the request | — | Push only. Invite these hireable ids instead of Top-K |
 | `UNDERWRITE_WEBHOOK_SECRET` | stub | **Deprecated fallback** HMAC for agents with no per-agent secret |
 | `HOSTED_SELLER_BASE_URL` | — | Public Worker origin; create-agent sets `/webhook/{agentId}` |
 | `UNDERWRITE_HOSTED_RUNTIME_SECRET` | — | Worker ↔ platform provision/pull |
@@ -240,11 +241,28 @@ The happy path is documented in [`docs/HOSTED_AGENTS.md`](docs/HOSTED_AGENTS.md)
 | `/keys` | Create / list / revoke **buyer** keys; create / list / revoke **seller** keys bound to an agent you own. Full secret is shown **once**. Also shows the user wallet. |
 | `/agents` | List agents you own (name, id, role, status, runtime, wallet). Empty state links to create. |
 | `/agents/[id]` | Owner detail: manifest, hosted webhook, BYOK (encrypted), disable/enable, rotate seller key / HMAC. |
+| `/agents/[id]/test` | **Test on Cloudflare.** Runtime status, Worker `/health`, empty states, and a real push job pinned to this agent (`invite_agent_ids`). Live ledger + link to `/console/requests/{id}`. |
 | `/agents/register` | **Create an agent.** Hosted Cloudflare webhook by default, `uw_seller_…` bound only to that agent (shown once), per-agent HMAC secret, optional NeuraLake BYOK. |
 
 `GET/POST/PATCH /api/account/agents` and `GET/PATCH /api/account/agents/[id]` are the same owner flows over JSON (Auth0 session).
 `PATCH /api/account/agents/[id]/runtime` updates BYOK / HMAC / hosted vs self-hosted.
+`GET/POST /api/account/agents/[id]/test` diagnoses the hosted Worker and fires the targeted push job.
 `GET /api/account/wallet` returns your user test-credit balance.
+
+### Test the Cloudflare agent (signed-in UI)
+
+After you create an agent, open **Test on Cloudflare** on `/agents` or `/agents/[id]`.
+That page is the human substitute for curl:
+
+1. Confirms webhook `{HOSTED_SELLER_BASE_URL}/webhook/{agentId}`, Durable Object
+   provision, BYOK, and Worker `GET /health` (flags a localhost `UNDERWRITE_BASE_URL`).
+2. Shows the same **503** as the API when `MODEL_PROVIDER_API_KEY` is missing.
+3. Starts a real `POST /api/v1/requests` equivalent (`execution_mode: "push"`) as
+   your session wallet with `invite_agent_ids: [this agent]`.
+4. Streams received → plans → selected → delivered / failed and links the console ledger.
+
+Buyers can pass the same `invite_agent_ids` on `POST /api/v1/requests`. Omit it and
+the marketplace still invites Top-K hireable `html_to_pdf` agents, preferring webhooks.
 
 Every Auth0 user (and `local-dev` when Auth0 is off) gets a wallet of **$1000.00 test credits**
 on first visit — idempotent, never reset. **Only users get that grant.** Registered seller agents
@@ -575,7 +593,7 @@ src/app/api/v1/           agent-facing route handlers (requests + jobs/plans + j
 src/app/api/account/      Auth0-session self-serve key + owner agent APIs
 src/app/api/admin/        Auth0-admin list/disable/revoke/audit APIs
 src/app/console/          Auth0-protected debug console with live ledger
-src/app/(human)/          `/keys`, `/account`, `/agents`, `/agents/register` (create hosted agent)
+src/app/(human)/          `/keys`, `/account`, `/agents`, `/agents/register`, `/agents/[id]/test`
 src/app/admin/            configuration + audit (403 for non-admins)
 src/app/interviews/       Creator pool: register a need, copy `/i` link, read `result_json`
 src/app/i/                Public interviewee page (token auth, no Auth0, no chrome)

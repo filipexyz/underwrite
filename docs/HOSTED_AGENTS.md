@@ -23,6 +23,7 @@ deploy Cloudflare, wrangle `SELLER_INSTANCE_NAME=default`, or share a team `uw_s
 Inbox (`GET /api/v1/agents/me/inbox`) remains the fallback if the webhook misses the 2.5s window.
 
 Disable / enable, rotate seller keys, rotate the HMAC secret, and replace BYOK on `/agents/[id]`.
+Exercise the Worker from **`/agents/[id]/test`** (see below).
 
 ## What “hosted” means
 
@@ -95,20 +96,45 @@ that was pasted into a shared Worker secret.
 
 Seed catalog A/B/C1/C2/J1/J2 is unchanged (Mastra demo loop).
 
+## Test the hosted agent (no curl)
+
+Signed-in owners open **`/agents/[id]/test`** (“Test on Cloudflare” on the agent
+list and detail pages). That page:
+
+1. Shows runtime status: hosted webhook, Durable Object provisioned, last webhook
+   error, Worker `GET /health` (including the Worker’s `UNDERWRITE_BASE_URL`).
+2. Surfaces empty states when `HOSTED_SELLER_BASE_URL` is unset, the Worker still
+   callbacks to localhost, BYOK is missing, the agent is disabled, or
+   `MODEL_PROVIDER_*` is missing (same **503** text as `POST /api/v1/requests`).
+3. Runs a **real** marketplace job: session wallet + `execution_mode: "push"` +
+   `invite_agent_ids: [this agent]`. This is Option A — not a signed test
+   webhook that skips Underwrite.
+4. Streams the ledger (`received → plans → selected → delivered / failed`) and
+   links to `/console/requests/{id}`.
+
+Without `invite_agent_ids`, push jobs still invite Top-K hireable `html_to_pdf`
+agents and prefer those with a webhook. The test area always pins the owned agent.
+
+`GET/POST /api/account/agents/[id]/test` is the same flow over JSON (Auth0 session).
+
 ## Test plan
 
-Automated: `tests/hosted-agents.test.ts`, `workers/cloudflare-seller/tests/tenant.test.ts`.
+Automated: `tests/hosted-agents.test.ts`, `tests/agent-test-area.test.ts`,
+`workers/cloudflare-seller/tests/tenant.test.ts`.
 
 Manual:
 
 1. User A signs in → Create agent → copy `uw_seller_` + `whsec_`. Confirm webhook
    `…/webhook/agt_…` and BYOK “configured”.
-2. Buyer `POST /api/v1/requests` `{ "execution_mode": "push", … }`. A’s agent receives
-   `plan_request`, posts one plan, and if selected delivers a real PDF.
-3. User B creates a second agent. B’s key returns B’s `/api/v1/agents/me`. B cannot
+2. Open **Test on Cloudflare**. Recheck runtime. Run the test job. Watch the
+   webhook delivery and `/console/requests/{id}`.
+3. Buyer `POST /api/v1/requests` `{ "execution_mode": "push", "invite_agent_ids": ["agt_…"], … }`
+   is the same path. A’s agent receives `plan_request`, posts one plan, and if
+   selected delivers a real PDF.
+4. User B creates a second agent. B’s key returns B’s `/api/v1/agents/me`. B cannot
    `GET/PATCH /api/account/agents/<A>` (404). B’s HMAC does not verify A’s signature.
    Posting a plan with B’s key on a job that invited only A is **403**.
-4. Disable A → A disappears from the next invite set.
+5. Disable A → A disappears from the next invite set (and the test POST returns 409).
 
 ## APIs
 
@@ -117,6 +143,7 @@ Manual:
 | `POST /api/account/agents` | Auth0 session | Create (returns `secret` + `webhook_secret` once) |
 | `GET/PATCH /api/account/agents`, `/[id]` | Auth0 session | List / edit / disable |
 | `PATCH /api/account/agents/[id]/runtime` | Auth0 session | BYOK, rotate HMAC, hosted vs self-hosted |
+| `GET/POST /api/account/agents/[id]/test` | Auth0 session | Diagnose runtime / fire a targeted push job |
 | `GET /api/internal/hosted-agents/[id]` | runtime secret | Worker credential pull |
 
 `POST /api/v1/jobs/…/plans` and `/deliverables` still require **that agent’s** seller key.

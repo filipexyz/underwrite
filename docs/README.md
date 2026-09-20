@@ -111,9 +111,9 @@ additional features:
 | `PRODUCT.md` | product spec: 4-field request, confidence machinery, demo scene |
 | `ARCHITECTURE.md` | human/agent boundary, A→B→C chain, per-hop escrow, judges, guardrails, registry, build order |
 | `CONTRACTS.md` | data contracts: Request, Plan, Bid, Verification, LedgerEvent, Escrow, Attribution, Axes + invariants |
-| `HOSTED_AGENTS.md` | create-agent happy path: per-user hosted sellers, HMAC, BYOK, Worker tenancy |
+| `HOSTED_AGENTS.md` | create-agent happy path + `/agents/[id]/test` Cloudflare test area |
 | `DEMO.md` | the literal 4-minute script + code-freeze deliverables |
-| `DECISIONS.md` | decision log (D-001 → D-034). Read before disagreeing. |
+| `DECISIONS.md` | decision log (D-001 → D-035). Read before disagreeing. |
 | `AUTH.md` | Auth0 humans + auth.md agents — short map; dashboard checklist lives in the root README |
 
 ---

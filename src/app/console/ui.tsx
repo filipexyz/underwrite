@@ -4,12 +4,24 @@ const STATUS_STYLE: Record<string, string> = {
   received: "border-line text-ink",
   auctioning: "border-[#d6823e] text-warn",
   contracting: "border-[#d6823e] text-warn",
+  planning: "border-[#d6823e] text-warn",
   executing: "border-[#d6823e] text-warn",
   verifying: "border-[#d6823e] text-warn",
   escalated: "border-[#d4a090] text-danger",
   completed: "border-[#62ad9e] text-teal",
   failed: "border-[#d4a090] text-danger",
   no_eligible_bid: "border-[#d4a090] text-danger",
+  no_eligible_plan: "border-[#d4a090] text-danger",
+  hosted: "border-[#62ad9e] text-teal",
+  self_hosted: "border-[#d6823e] text-warn",
+  ready: "border-[#62ad9e] text-teal",
+  provisioned: "border-[#62ad9e] text-teal",
+  pending: "border-[#d6823e] text-warn",
+  up: "border-[#62ad9e] text-teal",
+  down: "border-[#d4a090] text-danger",
+  warn: "border-[#d6823e] text-warn",
+  block: "border-[#d4a090] text-danger",
+  info: "border-line text-ink",
   LOCKED: "border-[#d6823e] text-warn",
   RELEASED: "border-[#62ad9e] text-teal bg-acid/50",
   WITHHELD: "border-[#d4a090] text-danger",
@@ -53,7 +65,7 @@ const STATUS_STYLE: Record<string, string> = {
   calling: "border-[#d6823e] text-warn",
 };
 
-export const TERMINAL_STATUSES = new Set(["completed", "failed", "no_eligible_bid"]);
+export const TERMINAL_STATUSES = new Set(["completed", "failed", "no_eligible_bid", "no_eligible_plan"]);
 
 export const inputClass = "input-mesh";
 

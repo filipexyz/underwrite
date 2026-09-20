@@ -92,6 +92,51 @@ export function discoverTopK(
     .slice(0, k);
 }
 
+export type InviteSkip = { agent_id: string; reason: string };
+
+export type InviteDelivery = {
+  agent_id: string;
+  channel: "webhook" | "inbox";
+  webhook_ok: boolean | null;
+};
+
+/**
+ * Resolve who to notify on a push job.
+ * An explicit `requested` list replaces Top-K (test area / buyer targeting).
+ * Missing, disabled, judge, or wrong-specialty ids are skipped, not invented.
+ */
+export function resolveInvitees(
+  registry: EngineContext["registry"],
+  specialty: string,
+  requested?: string[] | null,
+  k = env.marketplaceTopK,
+): { agents: RegistryAgent[]; skipped: InviteSkip[] } {
+  const ids = [...new Set((requested ?? []).map((id) => id.trim()).filter(Boolean))];
+  if (ids.length === 0) {
+    return { agents: discoverTopK(registry, specialty, k), skipped: [] };
+  }
+
+  const agents: RegistryAgent[] = [];
+  const skipped: InviteSkip[] = [];
+  for (const agentId of ids) {
+    const agent = registry.agents.get(agentId);
+    if (!agent) {
+      skipped.push({ agent_id: agentId, reason: "not_hireable_or_unknown" });
+      continue;
+    }
+    if (agent.role === "judge") {
+      skipped.push({ agent_id: agentId, reason: "judge" });
+      continue;
+    }
+    if (!agent.specialties.includes(specialty)) {
+      skipped.push({ agent_id: agentId, reason: `specialty_mismatch:${specialty}` });
+      continue;
+    }
+    agents.push(agent);
+  }
+  return { agents, skipped };
+}
+
 function briefPayload(ctx: EngineContext, planDeadlineAt: Date) {
   return {
     type: "plan_request" as const,
@@ -156,7 +201,10 @@ async function notifyAgent(
   return { channel: "inbox", webhook_ok: null };
 }
 
-export async function startPushJob(db: Db, requestId: string): Promise<{ invited: string[]; plan_deadline_at: string }> {
+export async function startPushJob(
+  db: Db,
+  requestId: string,
+): Promise<{ invited: string[]; plan_deadline_at: string; deliveries: InviteDelivery[]; skipped: InviteSkip[] }> {
   const ctx = await buildContext(db, requestId);
   if (ctx.request.executionMode !== "push") {
     throw new PushJobError(409, "request is not a push job", { execution_mode: ctx.request.executionMode });
@@ -166,6 +214,8 @@ export async function startPushJob(db: Db, requestId: string): Promise<{ invited
     return {
       invited: existing.invited_agent_ids,
       plan_deadline_at: existing.plan_deadline_at ?? ctx.request.planDeadlineAt?.toISOString() ?? "",
+      deliveries: [],
+      skipped: existing.invite_skipped ?? [],
     };
   }
   if (ctx.request.status !== "received") {
@@ -190,7 +240,9 @@ export async function startPushJob(db: Db, requestId: string): Promise<{ invited
     throw error;
   }
 
-  const invited = discoverTopK(ctx.registry, ctx.request.category);
+  const requested = getState(ctx).requested_invite_agent_ids;
+  const resolved = resolveInvitees(ctx.registry, ctx.request.category, requested);
+  const invited = resolved.agents;
   const deadline = new Date(Date.now() + env.planWindowMs);
 
   if (invited.length === 0) {
@@ -198,18 +250,27 @@ export async function startPushJob(db: Db, requestId: string): Promise<{ invited
     await saveState(ctx, {
       ...EMPTY_STATE,
       execution_mode: "push",
+      requested_invite_agent_ids: requested,
+      invite_skipped: resolved.skipped,
       hold_usd: 0,
       settled: true,
     });
     await setRequestStatus(ctx, "no_eligible_plan", {
       completedAt: new Date(),
-      outcome: { reason: "no hireable agents matched the specialty" },
+      outcome: {
+        reason: requested?.length
+          ? "requested invitees were not hireable for this specialty"
+          : "no hireable agents matched the specialty",
+        requested_invite_agent_ids: requested ?? [],
+        skipped: resolved.skipped,
+      },
     });
-    return { invited: [], plan_deadline_at: deadline.toISOString() };
+    return { invited: [], plan_deadline_at: deadline.toISOString(), deliveries: [], skipped: resolved.skipped };
   }
 
   const payload = briefPayload(ctx, deadline);
   const invitedIds: string[] = [];
+  const deliveries: InviteDelivery[] = [];
 
   for (const agent of invited) {
     const delivery = await notifyAgent(ctx, agent, payload);
@@ -221,6 +282,7 @@ export async function startPushJob(db: Db, requestId: string): Promise<{ invited
       status: "invited",
     });
     invitedIds.push(agent.agentId);
+    deliveries.push({ agent_id: agent.agentId, channel: delivery.channel, webhook_ok: delivery.webhook_ok });
     await ctx.ledger.append({
       type: "plan_request",
       agent_id: agent.agentId,
@@ -243,12 +305,14 @@ export async function startPushJob(db: Db, requestId: string): Promise<{ invited
   await saveState(ctx, {
     ...EMPTY_STATE,
     execution_mode: "push",
+    requested_invite_agent_ids: requested,
     invited_agent_ids: invitedIds,
+    invite_skipped: resolved.skipped,
     plan_deadline_at: deadline.toISOString(),
     hold_usd: ctx.request.maxCostUsd,
   });
   await setRequestStatus(ctx, "planning");
-  return { invited: invitedIds, plan_deadline_at: deadline.toISOString() };
+  return { invited: invitedIds, plan_deadline_at: deadline.toISOString(), deliveries, skipped: resolved.skipped };
 }
 
 function approachText(input: JobPlanInput): string {

@@ -5,6 +5,7 @@ export function opsHintForPath(pathname: string, fallback: string): string {
   if (pathname.startsWith("/interviews")) return "interviews · human briefs";
   if (pathname.startsWith("/docs") || pathname.startsWith("/developers")) return "docs · agent api";
   if (pathname.startsWith("/agents/register")) return "create · hosted agent";
+  if (/^\/agents\/[^/]+\/test\/?$/.test(pathname)) return "test · cloudflare agent";
   if (pathname.startsWith("/agents")) return "agents · your fleet";
   if (pathname.startsWith("/keys")) return "keys · self-serve";
   if (pathname.startsWith("/account")) return "account · test credits";

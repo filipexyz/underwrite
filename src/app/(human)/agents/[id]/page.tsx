@@ -48,6 +48,10 @@ export default async function AgentDetailPage({ params }: { params: Promise<{ id
                 <Badge value={agent.status} />
                 <Badge value={agent.role} />
               </div>
+              <Link href={`/agents/${agent.agent_id}/test`} className="btn-ink">
+                <span>Test on Cloudflare</span>
+                <strong>→</strong>
+              </Link>
             </div>
           }
         />
