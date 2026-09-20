@@ -13,10 +13,13 @@ import {
   isLoopbackHost,
   looksRemoteOrigin,
   resolveTestCategory,
+  testFixtureForAgent,
+  testTaskForAgent,
   testTaskForCategory,
 } from "@/lib/marketplace/agent-test";
+import { defaultRubricFor } from "@/lib/verification/rubric";
 import { resolveInvitees } from "@/lib/marketplace/push";
-import { DEMO_REQUEST } from "@/lib/marketplace/requests";
+import { DEMO_REQUEST, getRequest } from "@/lib/marketplace/requests";
 import { registerSellerAgent } from "@/lib/marketplace/sellers";
 import { loadRegistry } from "@/lib/marketplace/registry";
 import { opsHintForPath } from "@/lib/ui/ops-hint";
@@ -45,12 +48,30 @@ function params(id: string) {
 }
 
 describe("test fixture specialty", () => {
-  it("prefers html_to_pdf when listed, otherwise the first executable specialty", () => {
-    expect(resolveTestCategory(["analista de investimentos", "html_to_pdf"])).toBe("html_to_pdf");
+  it("uses the first executable specialty, not a hardcoded html_to_pdf preference", () => {
+    expect(resolveTestCategory(["analista de investimentos", "html_to_pdf"])).toBe("analista de investimentos");
+    expect(resolveTestCategory(["html_to_pdf", "research"])).toBe("html_to_pdf");
     expect(resolveTestCategory(["analista de investimentos"])).toBe("analista de investimentos");
     expect(resolveTestCategory(["judge:html_to_pdf", "research"], "research")).toBe("research");
     expect(testTaskForCategory("html_to_pdf").files[0]?.name).toBe("input.html");
-    expect(testTaskForCategory("analista de investimentos").files[0]?.name).toBe("brief.txt");
+    expect(testTaskForCategory("analista de investimentos").files[0]?.name).toBe("brief.html");
+  });
+
+  it("builds requirement from role, name, and description", () => {
+    const built = testTaskForAgent({
+      specialties: ["analista de investimentos"],
+      role: "executor",
+      name: "Carteira Alpha",
+      description: "Gera relatórios de alocação e risco.",
+    });
+    expect(built.category).toBe("analista de investimentos");
+    expect(built.task.requirement).toMatch(/Carteira Alpha, an executor/);
+    expect(built.task.requirement).toMatch(/analista de investimentos/);
+    expect(built.task.requirement).toMatch(/Gera relatórios de alocação e risco/);
+    expect(built.task.files[0]?.content).toContain("analista de investimentos");
+    expect(testFixtureForAgent({ specialties: ["analista de investimentos"] }).uses_html_to_pdf).toBe(false);
+    expect(defaultRubricFor("analista de investimentos").rubric_version).toBe("specialty_report@v0");
+    expect(defaultRubricFor("html_to_pdf").rubric_version).toBe("html_to_pdf@v0");
   });
 });
 
@@ -68,6 +89,22 @@ describe("invite targeting helpers", () => {
     const resolved = resolveInvitees(registry, TASK_CATEGORY, [keep.agent.agentId, "agt_missing", skip.agent.agentId]);
     expect(resolved.agents.map((a) => a.agentId)).toEqual([keep.agent.agentId, skip.agent.agentId]);
     expect(resolved.skipped).toEqual([{ agent_id: "agt_missing", reason: "not_hireable_or_unknown" }]);
+  });
+
+  it("invites a pinned specialist when the job category matches, and skips html_to_pdf mismatch", async () => {
+    const analyst = await registerSellerAgent(db, "user_invite_analyst", {
+      ...draft,
+      name: "Analyst",
+      specialties: ["analista de investimentos"],
+    });
+    const registry = await loadRegistry(db, "analista de investimentos");
+    const matched = resolveInvitees(registry, "analista de investimentos", [analyst.agent.agentId]);
+    expect(matched.agents.map((a) => a.agentId)).toEqual([analyst.agent.agentId]);
+    const mismatched = resolveInvitees(registry, TASK_CATEGORY, [analyst.agent.agentId]);
+    expect(mismatched.agents).toEqual([]);
+    expect(mismatched.skipped).toEqual([
+      { agent_id: analyst.agent.agentId, reason: `specialty_mismatch:${TASK_CATEGORY}` },
+    ]);
   });
 });
 
@@ -105,6 +142,34 @@ describe("POST /api/v1/requests invite_agent_ids", () => {
       { params: Promise.resolve({ requestId: job.request_id }) },
     );
     expect(stolen.status).toBe(403);
+  });
+
+  it("honors body.category so a pinned specialist is invited", async () => {
+    const target = await registerSellerAgent(db, "user_invite_category", {
+      ...draft,
+      name: "Pinned analyst",
+      specialties: ["analista de investimentos"],
+    });
+    const created = await postRequest(
+      new Request("http://localhost/api/v1/requests", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          execution_mode: "push",
+          category: "analista de investimentos",
+          invite_agent_ids: [target.agent.agentId],
+          task: { requirement: "Brief the buyer on portfolio risk.", files: [] },
+          max_cost_usd: 0.05,
+          max_latency_s: 30,
+          min_confidence: 0.95,
+        }),
+      }),
+    );
+    expect(created.status).toBe(202);
+    const job = (await created.json()) as { invited_agent_ids: string[]; request_id: string };
+    expect(job.invited_agent_ids).toEqual([target.agent.agentId]);
+    const row = await getRequest(db, job.request_id);
+    expect(row?.category).toBe("analista de investimentos");
   });
 
   it("rejects invite_agent_ids on the seed path", async () => {
@@ -169,11 +234,13 @@ describe("account agent test API", () => {
     expect(job.links.console).toBe(`/console/requests/${job.request_id}`);
   });
 
-  it("invites a non-html_to_pdf agent with a matching fixture instead of 422", async () => {
+  it("invites a non-html_to_pdf agent with a matching fixture instead of blocking", async () => {
     const mine = await registerSellerAgent(db, LOCAL_DEV_USER_ID, {
       ...draft,
-      name: "analista de investimentos",
+      name: "Carteira Alpha",
+      role: "executor",
       specialties: ["analista de investimentos"],
+      description: "Gera relatórios de alocação e risco.",
     });
 
     const diagnosed = await getAgentTest(new Request("http://local/api/account/agents/x/test"), params(mine.agent.agentId));
@@ -181,20 +248,23 @@ describe("account agent test API", () => {
     const diagnosis = (await diagnosed.json()) as {
       readiness: {
         ready: boolean;
-        fixture: { category: string; uses_html_to_pdf: boolean };
+        fixture: { category: string; uses_html_to_pdf: boolean; requirement: string };
         checks: Array<{ id: string; ok: boolean; severity: string }>;
       };
-      selection: { category: string };
+      selection: { category: string; note: string };
     };
-    expect(diagnosis.readiness.fixture).toEqual({
-      category: "analista de investimentos",
-      uses_html_to_pdf: false,
-      requirement: expect.stringMatching(/analista de investimentos/) as unknown as string,
-    });
+    expect(diagnosis.readiness.fixture.category).toBe("analista de investimentos");
+    expect(diagnosis.readiness.fixture.uses_html_to_pdf).toBe(false);
+    expect(diagnosis.readiness.fixture.requirement).toMatch(/Carteira Alpha/);
+    expect(diagnosis.readiness.fixture.requirement).toMatch(/analista de investimentos/);
+    expect(diagnosis.readiness.fixture.requirement).toMatch(/Gera relatórios de alocação e risco/);
     expect(diagnosis.selection.category).toBe("analista de investimentos");
+    expect(diagnosis.selection.note).toMatch(/analista de investimentos/);
+    expect(diagnosis.selection.note).not.toMatch(/Add html_to_pdf/);
     const specialty = diagnosis.readiness.checks.find((c) => c.id === "specialty");
-    expect(specialty?.severity).toBe("warn");
-    expect(specialty?.ok).toBe(false);
+    expect(specialty?.severity).toBe("info");
+    expect(specialty?.ok).toBe(true);
+    expect(diagnosis.readiness.ready).toBe(true);
 
     const posted = await postAgentTest(
       new Request("http://local/api/account/agents/x/test", {
@@ -206,6 +276,7 @@ describe("account agent test API", () => {
     );
     expect(posted.status).toBe(202);
     const job = (await posted.json()) as {
+      request_id: string;
       invited_agent_ids: string[];
       targeted: boolean;
       category: string;
@@ -213,6 +284,11 @@ describe("account agent test API", () => {
     expect(job.targeted).toBe(true);
     expect(job.category).toBe("analista de investimentos");
     expect(job.invited_agent_ids).toEqual([mine.agent.agentId]);
+
+    const row = await getRequest(db, job.request_id);
+    expect(row?.category).toBe("analista de investimentos");
+    expect(row?.requirement).toMatch(/analista de investimentos/);
+    expect(row?.verification.rubric_version).toBe("specialty_report@v0");
   });
 
   it("422s when the category override is not one of the agent specialties", async () => {

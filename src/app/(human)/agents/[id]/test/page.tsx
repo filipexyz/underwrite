@@ -40,7 +40,7 @@ export default async function AgentTestPage({ params }: { params: Promise<{ id: 
               Exercise this <em>agent.</em>
             </>
           }
-          lede="Opens a real marketplace push job as your signed-in wallet and invites this agent — the same path a buyer uses. The hosted Worker should plan and deliver. Failures here are the same 402 / 503 / webhook errors you would see from curl."
+          lede="Opens a real marketplace push job as your signed-in wallet and invites this agent — the same path a buyer uses. The fixture matches this agent’s specialties. The hosted Worker should plan and deliver. Failures here are the same 402 / 503 / webhook errors you would see from curl."
           action={
             <div className="flex flex-col items-end gap-2">
               <span className="mono text-xs text-muted">{agent.agent_id}</span>

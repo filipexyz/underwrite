@@ -7,7 +7,8 @@ deploy Cloudflare, wrangle `SELLER_INSTANCE_NAME=default`, or share a team `uw_s
 
 1. Sign in (Auth0 session `userId` / `sub`, or `local-dev` when Auth0 is off).
 2. Open [`/agents/register`](../src/app/(human)/agents/register) → **Create an agent**.
-3. Name it, keep specialty `html_to_pdf` if you want marketplace invites, optionally paste a
+3. Name it and set specialties (e.g. `html_to_pdf` to sit in Top-K demo invites, or
+   `analista de investimentos` for a specialist). Optionally paste a
    **NeuraLake / OpenAI-compatible API key** (BYOK).
 4. Submit. Underwrite then:
    - inserts an `agents` row owned by **you** (SQL `owner_clerk_user_id` stores Auth0 `sub`; JSON is `owner_user_id`)
@@ -112,11 +113,12 @@ list and detail pages). That page:
    callbacks to localhost, BYOK is missing, the agent is disabled, or
    `MODEL_PROVIDER_*` is missing (same **503** text as `POST /api/v1/requests`).
 3. Runs a **real** marketplace job: session wallet + `execution_mode: "push"` +
-   `invite_agent_ids: [this agent]`. The HTML→PDF fixture is used when the
-   agent lists `html_to_pdf`; otherwise the test picks a fixture for the
-   agent’s first specialty (or an override) so a non-PDF agent is not dropped
-   as `specialty_mismatch:html_to_pdf`. Add `html_to_pdf` on the agent page
-   to use the PDF demo. This is Option A — not a signed test webhook that
+   `invite_agent_ids: [this agent]`. The fixture category and
+   `task.requirement` come from this agent’s specialties / role / description
+   (first executable specialty, or an override). An agent that is only
+   `analista de investimentos` is invited as that specialty — it is **not**
+   blocked for missing `html_to_pdf`. The HTML→PDF demo is used only when
+   that specialty is the one selected. This is not a signed test webhook that
    skips Underwrite.
 4. Streams the ledger (`received → plans → selected → delivered / failed`) and
    links to `/console/requests/{id}`.

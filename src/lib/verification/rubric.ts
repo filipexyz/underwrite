@@ -19,10 +19,21 @@ export const HTML_TO_PDF_RUBRIC: VerificationSpec = {
   ],
 };
 
+/** Lighter rubric for specialty fixtures that are still delivered as a PDF report. */
+export const SPECIALTY_REPORT_RUBRIC: VerificationSpec = {
+  rubric_version: "specialty_report@v0",
+  required_passing: 1,
+  checks: [
+    { check_id: "pdf_valid", weight: 2, description: "The artifact parses as a PDF document." },
+    { check_id: "text_matches_source", weight: 2, description: "Text extracted from the PDF covers the source brief." },
+    { check_id: "no_layout_overflow", weight: 1, description: "No content region overflows its page box." },
+  ],
+};
+
 const RUBRICS: Record<string, VerificationSpec> = {
   html_to_pdf: HTML_TO_PDF_RUBRIC,
 };
 
 export function defaultRubricFor(category: string): VerificationSpec {
-  return RUBRICS[category] ?? HTML_TO_PDF_RUBRIC;
+  return RUBRICS[category] ?? SPECIALTY_REPORT_RUBRIC;
 }
