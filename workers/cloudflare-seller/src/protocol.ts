@@ -68,8 +68,11 @@ export type JobPlanInput = {
 export type JobDeliverableInput = {
   self_confidence?: number;
   artifact: {
-    pdf_base64: string;
-    kind?: "pdf";
+    pdf_base64?: string;
+    html?: string;
+    markdown?: string;
+    md?: string;
+    kind?: "pdf" | "html" | "md" | "markdown";
     artifact_ref?: string;
     observed_latency_ms?: number;
     declared_latency_ms?: number;

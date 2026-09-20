@@ -171,6 +171,19 @@ describe("scopeChecks", () => {
     expect(checkIds(leaked)).not.toContain("has_primary_cta");
   });
 
+  it("specialty HTML is not judged with PDF-only checks", () => {
+    const requirement =
+      "Act as an executor specializing in analista de investimentos. Deliver an HTML briefing: findings, risks, and a recommendation.";
+    const spec = scopeChecks(SPECIALTY_REPORT_RUBRIC, requirement, {
+      category: "analista de investimentos",
+      artifact_kind: "html",
+    });
+    expect(checkIds(spec)).not.toEqual(
+      expect.arrayContaining(["pdf_valid", "text_matches_source", "fonts_embedded", "no_layout_overflow", "page_count"]),
+    );
+    expect(checkIds(spec)).toEqual(expect.arrayContaining(["artifact_exists", "has_structure", "covers_brief_topics"]));
+  });
+
   it("PDF geometry words do not imply landing_page PDF checks unless a PDF is requested", () => {
     const withMargins = scopeChecks("landing_page", "Build a landing page with 2cm margins on A4 and embedded fonts.", {
       category: "landing_page",
@@ -227,6 +240,46 @@ describe("Nexus false-positive", () => {
   });
 });
 
+describe("specialty HTML report", () => {
+  it("passes specialty content checks and does not evaluate PDF geometry", async () => {
+    const requirement =
+      "Act as an executor specializing in analista de investimentos. Deliver an HTML briefing with findings, risks, and a recommendation.";
+    const html = `<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Investment briefing</title></head>
+<body>
+  <h1>Investment briefing</h1>
+  <h2>Findings</h2>
+  <p>Allocation toward duration remains the main driver of expected return for this analista de investimentos book.</p>
+  <h2>Risks</h2>
+  <p>Recommendation quality depends on FX and political risk remaining bounded.</p>
+  <h2>Recommendation</h2>
+  <p>Hold the core book and hedge residual exposure.</p>
+</body>
+</html>`;
+    const artifact: DeliveryArtifact = {
+      artifact_ref: "art_specialty",
+      kind: "html",
+      producer_agent_id: "c2-honest",
+      html,
+      self_report: 0.7,
+      observed_latency_ms: 10,
+      declared_latency_ms: 10,
+    };
+    const source = parseSource(html, requirement);
+    const facts = await inspectArtifact(artifact);
+    const spec = scopeChecks(SPECIALTY_REPORT_RUBRIC, requirement, {
+      category: "analista de investimentos",
+      artifact_kind: "html",
+    });
+    const result = runChecks(spec, facts, source);
+    expect(result.checks.map((c) => c.check_id)).not.toEqual(
+      expect.arrayContaining(["pdf_valid", "text_matches_source", "fonts_embedded"]),
+    );
+    expect(result.checks.every((c) => c.passed)).toBe(true);
+  });
+});
+
 describe("research artifact", () => {
   it("passes research checks and does not evaluate CTAs", async () => {
     const source = parseSource(RESEARCH_MD, RESEARCH_TASK);
@@ -245,8 +298,8 @@ describe("J1/J2 disagreement withholds", () => {
     const j1 = judgeStub("j1-judge", "family-beta");
     const j2 = judgeStub("j2-judge", "family-delta");
 
-    expect(judgeFacts(j1, facts, source, SPECIALTY_REPORT_RUBRIC, TASK_CATEGORY).verdict).toBe("pass");
-    expect(judgeFacts(j2, facts, source, SPECIALTY_REPORT_RUBRIC, TASK_CATEGORY).verdict).toBe("fail");
+    expect(judgeFacts(j1, facts, source, HTML_TO_PDF_RUBRIC, TASK_CATEGORY).verdict).toBe("pass");
+    expect(judgeFacts(j2, facts, source, HTML_TO_PDF_RUBRIC, TASK_CATEGORY).verdict).toBe("fail");
 
     const landingSpec = scopeChecks("landing_page", LANDING_TASK, { category: "landing_page" });
     expect(judgeFacts(j2, facts, source, landingSpec, "landing_page").reasons.join(" ")).not.toMatch(/font/i);
@@ -288,7 +341,7 @@ describe("verifyArtifact + judgesFor", () => {
         failure_policy: "refund",
         selection_timeout_s: 5,
         category: TASK_CATEGORY,
-        verification: SPECIALTY_REPORT_RUBRIC,
+        verification: HTML_TO_PDF_RUBRIC,
       },
       { source: "tests/scoped-verification" },
     );
@@ -332,7 +385,7 @@ describe("verifyArtifact + judgesFor", () => {
       chainAgentIds: ["c2-honest"],
       facts: { ...facts, fonts_embedded: false, overflow_regions: 0, text: source.text, valid: true },
       source,
-      spec: SPECIALTY_REPORT_RUBRIC,
+      spec: HTML_TO_PDF_RUBRIC,
       parentEventId: null,
       taskRequirement: requirement,
       category: TASK_CATEGORY,
@@ -346,7 +399,7 @@ describe("verifyArtifact + judgesFor", () => {
       producer: getAgent(ctx.registry, "c2-honest"),
       chainAgentIds: ["c2-honest"],
       planId,
-      spec: SPECIALTY_REPORT_RUBRIC,
+      spec: HTML_TO_PDF_RUBRIC,
       artifactEventId: null,
       category: TASK_CATEGORY,
       taskRequirement: requirement,

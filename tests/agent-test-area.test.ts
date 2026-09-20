@@ -68,7 +68,10 @@ describe("test fixture specialty", () => {
     expect(built.task.requirement).toMatch(/Carteira Alpha, an executor/);
     expect(built.task.requirement).toMatch(/analista de investimentos/);
     expect(built.task.requirement).toMatch(/Gera relatórios de alocação e risco/);
+    expect(built.task.requirement).not.toMatch(/\bpdf\b/i);
+    expect(built.task.requirement).not.toMatch(/A4/i);
     expect(built.task.files[0]?.content).toContain("analista de investimentos");
+    expect(built.task.files[0]?.content).not.toMatch(/\bA4 PDF\b/i);
     expect(testFixtureForAgent({ specialties: ["analista de investimentos"] }).uses_html_to_pdf).toBe(false);
     expect(defaultRubricFor("analista de investimentos").rubric_version).toBe("specialty_report@v0");
     expect(defaultRubricFor("html_to_pdf").rubric_version).toBe("html_to_pdf@v0");
@@ -258,6 +261,7 @@ describe("account agent test API", () => {
     expect(diagnosis.readiness.fixture.requirement).toMatch(/Carteira Alpha/);
     expect(diagnosis.readiness.fixture.requirement).toMatch(/analista de investimentos/);
     expect(diagnosis.readiness.fixture.requirement).toMatch(/Gera relatórios de alocação e risco/);
+    expect(diagnosis.readiness.fixture.requirement).not.toMatch(/\bpdf\b/i);
     expect(diagnosis.selection.category).toBe("analista de investimentos");
     expect(diagnosis.selection.note).toMatch(/analista de investimentos/);
     expect(diagnosis.selection.note).not.toMatch(/Add html_to_pdf/);
@@ -289,6 +293,9 @@ describe("account agent test API", () => {
     expect(row?.category).toBe("analista de investimentos");
     expect(row?.requirement).toMatch(/analista de investimentos/);
     expect(row?.verification.rubric_version).toBe("specialty_report@v0");
+    expect(row?.verification.checks.map((c) => c.check_id)).not.toEqual(
+      expect.arrayContaining(["pdf_valid", "text_matches_source", "fonts_embedded", "no_layout_overflow"]),
+    );
   });
 
   it("422s when the category override is not one of the agent specialties", async () => {

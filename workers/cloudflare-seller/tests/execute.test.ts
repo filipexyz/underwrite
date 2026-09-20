@@ -22,6 +22,7 @@ import { extractHtmlDocument } from "../src/neuralake";
 import {
   estimateSelfReport,
   isExecutableJobHtml,
+  isPdfDeliverableCategory,
   resolveJobCategory,
   runAcceptedJob,
   shouldCompileProvidedHtml,
@@ -65,12 +66,6 @@ function completion(text: string) {
   return { text, model: "auto", tokens_in: 20, tokens_out: 400 };
 }
 
-function renderedHtml(): string {
-  const args = renderHtmlToPdf.mock.calls[0] as unknown as [string, string] | undefined;
-  if (typeof args?.[0] !== "string") throw new Error("renderHtmlToPdf was not called with HTML");
-  return args[0];
-}
-
 describe("execute path selection", () => {
   it("compiles html_to_pdf only when the brief already has a source HTML file", () => {
     const withFile: PlanRequestEvent["brief"] = {
@@ -85,6 +80,9 @@ describe("execute path selection", () => {
     expect(shouldCompileProvidedHtml("html_to_pdf", noFile)).toBe(false);
     expect(shouldCompileProvidedHtml("analista de investimentos", withFile)).toBe(false);
     expect(shouldCompileProvidedHtml("research_report", withFile)).toBe(false);
+    expect(isPdfDeliverableCategory("html_to_pdf")).toBe(true);
+    expect(isPdfDeliverableCategory("analista de investimentos")).toBe(false);
+    expect(isPdfDeliverableCategory("landing_page")).toBe(false);
     expect(resolveJobCategory(undefined)).toBe("html_to_pdf");
   });
 
@@ -119,7 +117,7 @@ describe("runAcceptedJob", () => {
     renderHtmlToPdf.mockImplementation(async () => new TextEncoder().encode("%PDF-1.4 mock"));
   });
 
-  it("uses NeuraLake HTML for a specialty job with no source file, not htmlFromBrief", async () => {
+  it("delivers NeuraLake HTML for a specialty job with no source file — not a PDF and not htmlFromBrief", async () => {
     chatCompletion.mockResolvedValue(completion(MODEL_HTML));
 
     const result = await runAcceptedJob({
@@ -139,23 +137,23 @@ describe("runAcceptedJob", () => {
     expect(call.messages[0].content).toMatch(/HTML only/i);
     expect(call.messages[1].content).toMatch(/analista de investimentos/);
 
-    expect(renderHtmlToPdf).toHaveBeenCalledTimes(1);
-    const html = renderedHtml();
-    expect(html).toContain("Investment briefing");
-    expect(html).toContain("Recommendation");
-    expect(html).not.toContain("<h1>Underwrite job</h1>");
-    expect(html).not.toMatch(/<pre>/);
+    expect(renderHtmlToPdf).not.toHaveBeenCalled();
+    expect(result.artifact.kind).toBe("html");
+    expect(result.artifact.html).toContain("Investment briefing");
+    expect(result.artifact.html).toContain("Recommendation");
+    expect(result.artifact.html).not.toContain("<h1>Underwrite job</h1>");
+    expect(result.artifact.pdf_base64).toBeUndefined();
 
     expect(result.self_confidence).toBeLessThanOrEqual(0.9);
     expect(result.self_confidence).not.toBe(0.96);
     expect(result.artifact.self_report).toBe(result.self_confidence);
   });
 
-  it("still generates with the model when a specialty fixture attached brief.html", async () => {
+  it("still delivers HTML when a specialty fixture attached brief.html", async () => {
     chatCompletion.mockResolvedValue(completion(MODEL_HTML));
-    const briefHtml = `<!doctype html><html><body><h1>Agent · analista de investimentos</h1><p>Produce a concise A4 PDF.</p></body></html>`;
+    const briefHtml = `<!doctype html><html><body><h1>Agent · analista de investimentos</h1><p>Produce a structured HTML briefing.</p></body></html>`;
 
-    await runAcceptedJob({
+    const result = await runAcceptedJob({
       baseUrl: "https://api.neuralake.cloud/v1",
       apiKey: "nl_test",
       model: "auto",
@@ -168,12 +166,14 @@ describe("runAcceptedJob", () => {
     });
 
     expect(chatCompletion).toHaveBeenCalled();
-    const html = renderedHtml();
-    expect(html).toContain("Investment briefing");
-    expect(html).not.toBe(briefHtml);
+    expect(renderHtmlToPdf).not.toHaveBeenCalled();
+    expect(result.artifact.kind).toBe("html");
+    expect(result.artifact.html).toContain("Investment briefing");
+    expect(result.artifact.html).not.toBe(briefHtml);
+    expect(result.artifact.pdf_base64).toBeUndefined();
   });
 
-  it("compiles the provided HTML for html_to_pdf and does not call the model", async () => {
+  it("compiles the provided HTML to PDF for html_to_pdf and does not call the model", async () => {
     const source = `<!doctype html><html><body><h1>Hello</h1><p>See <a href="https://example.com/underwrite">docs</a>.</p></body></html>`;
 
     const result = await runAcceptedJob({
@@ -194,11 +194,14 @@ describe("runAcceptedJob", () => {
 
     expect(chatCompletion).not.toHaveBeenCalled();
     expect(renderHtmlToPdf).toHaveBeenCalledWith(source, expect.any(String));
+    expect(result.artifact.kind).toBe("pdf");
+    expect(result.artifact.pdf_base64).toBeTruthy();
+    expect(result.artifact.html).toBeUndefined();
     expect(result.self_confidence).toBeLessThanOrEqual(0.9);
     expect(result.self_confidence).not.toBe(0.96);
   });
 
-  it("strips fences, retries once on empty HTML, then throws instead of using the stub", async () => {
+  it("strips fences, retries once on empty HTML, then throws instead of using a stub PDF", async () => {
     chatCompletion.mockResolvedValueOnce(completion("```html\n\n```")).mockResolvedValueOnce(completion("not a document"));
 
     await expect(
@@ -215,10 +218,10 @@ describe("runAcceptedJob", () => {
     expect(renderHtmlToPdf).not.toHaveBeenCalled();
   });
 
-  it("retries once and accepts the second HTML document", async () => {
+  it("retries once and accepts the second HTML document as kind html", async () => {
     chatCompletion.mockResolvedValueOnce(completion("just a note")).mockResolvedValueOnce(completion("```html\n" + MODEL_HTML + "\n```"));
 
-    await runAcceptedJob({
+    const result = await runAcceptedJob({
       baseUrl: "https://api.neuralake.cloud/v1",
       apiKey: "nl_test",
       model: "auto",
@@ -227,8 +230,9 @@ describe("runAcceptedJob", () => {
     });
 
     expect(chatCompletion).toHaveBeenCalledTimes(2);
-    const html = renderedHtml();
-    expect(html).toContain("<h1>Investment briefing</h1>");
-    expect(html).not.toContain("```");
+    expect(renderHtmlToPdf).not.toHaveBeenCalled();
+    expect(result.artifact.kind).toBe("html");
+    expect(result.artifact.html).toContain("<h1>Investment briefing</h1>");
+    expect(result.artifact.html).not.toContain("```");
   });
 });
