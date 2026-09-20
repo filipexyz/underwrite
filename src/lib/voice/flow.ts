@@ -90,7 +90,7 @@ export async function startVoiceSession(db: Db, userId: string): Promise<StartVo
       greeting: buildVoiceComposerGreeting(),
       agentUid: String(VOICE_AGENT_UID),
       llmUrl: publicApiBaseUrl() + "/api/v1/voice/sessions/" + session.id + "/llm/chat/completions",
-      llmApiKey: (process.env.VOICE_LLM_TOKEN ?? "").trim(),
+      llmApiKey: env.agora.certificate as string,
     });
     await attachVoiceAgentId(db, session.id, started.agentId);
     return {

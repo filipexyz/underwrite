@@ -8,14 +8,18 @@
  * which conversation — and therefore which buyer — a tool call belongs to. Deriving it from the URL means
  * the model's own output can never point a task at someone else's wallet.
  *
- * Auth: `Authorization: Bearer <VOICE_LLM_TOKEN>` when that variable is set. When it is not set the route
- * still refuses a non-live session, so the only thing an unauthenticated caller can reach is a session that
- * is currently in a call — but **set the variable**: an unauthenticated completions endpoint is an open
- * inference proxy, and the log says so on every request.
+ * Auth: the **Agora app certificate**, reused as the shared secret. Agora's cloud is the only caller of this
+ * route and already holds that value, so the agent presents it as a bearer and we compare it here.
+ * **No new environment variable is introduced** — the model credentials were already set for the marketplace
+ * provider (`MODEL_PROVIDER_*`) and this route uses them through `runVoiceLlmTurn`.
+ *
+ * The session id in the path is a second, independent guard: it must name a **live** session, so a leaked id
+ * from a finished call is worthless.
  */
 import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { jsonError } from "@/lib/api/http";
+import { env } from "@/lib/env";
 import { getDb } from "@/lib/db/client";
 import { voiceSessions } from "@/lib/db/schema";
 import { runVoiceLlmTurn, type VoiceLlmTurn } from "@/lib/voice/llm";
@@ -41,12 +45,14 @@ function textOf(content: unknown): string {
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const expected = (process.env.VOICE_LLM_TOKEN ?? "").trim();
+  // Reuse a secret we already hold: the Agora app certificate is shared between this deployment and
+  // Agora's cloud, and Agora is the only caller of this route. No new environment variable.
+  const expected = (env.agora.certificate ?? "").trim();
+  if (!expected) return jsonError(503, "agora is not configured");
   if (expected) {
     const presented = (request.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
     if (presented !== expected) return jsonError(401, "invalid voice llm token");
   } else {
-    console.warn("[voice-llm] VOICE_LLM_TOKEN is unset — the completions route is unauthenticated");
   }
 
   const { id } = await params;
