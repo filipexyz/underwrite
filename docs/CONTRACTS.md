@@ -25,6 +25,9 @@ type Request = {
   failure_policy: "refund" | "discount" | "accept_flagged";
   selection_timeout_s: number;  // after this, the buyer auto-selects (D-029)
   verification: VerificationSpec;  // the rubric SHIPS WITH THE TASK (D-031)
+  // Buyer input extras (not on the stored Request row as first-class columns):
+  // execution_mode?: "seed" | "push"
+  // invite_agent_ids?: string[]   // push only — pin the invite set instead of Top-K
 };
 
 // Declared up front, machine-readable, versioned. An agent cannot bid honestly on a

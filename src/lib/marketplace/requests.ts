@@ -5,6 +5,7 @@
 import { asc, desc, eq } from "drizzle-orm";
 import { type LedgerMetrics, type RequestInput, type RequestStatus } from "@/lib/contracts";
 import { resolveExecutionMode } from "./push";
+import { EMPTY_STATE } from "./types";
 import type { Db } from "@/lib/db/client";
 import {
   attributions,
@@ -49,6 +50,7 @@ export async function createRequest(
   const requestId = newId("req");
   const verification = input.verification ?? defaultRubricFor(DEFAULT_CATEGORY);
   const executionMode = resolveExecutionMode(input.execution_mode, meta.executionMode);
+  const requestedInviteIds = [...new Set((input.invite_agent_ids ?? []).map((id) => id.trim()).filter(Boolean))];
   const [row] = await db
     .insert(requests)
     .values({
@@ -65,6 +67,7 @@ export async function createRequest(
       verification,
       buyerWalletId: meta.buyerWalletId,
       executionMode,
+      state: requestedInviteIds.length > 0 ? { ...EMPTY_STATE, requested_invite_agent_ids: requestedInviteIds } : undefined,
     })
     .returning();
 
@@ -86,6 +89,7 @@ export async function createRequest(
       rubric_version: verification.rubric_version,
       buyer_wallet_id: meta.buyerWalletId ?? null,
       execution_mode: executionMode,
+      invite_agent_ids: requestedInviteIds,
     },
   });
   return row;
@@ -175,6 +179,7 @@ export function toApiRequest(detail: RequestDetail) {
     execution_mode: r.executionMode,
     plan_deadline_at: r.planDeadlineAt?.toISOString() ?? r.state?.plan_deadline_at ?? null,
     invited_agent_ids: r.state?.invited_agent_ids ?? [],
+    requested_invite_agent_ids: r.state?.requested_invite_agent_ids ?? [],
     task: { requirement: r.requirement, files: r.files.map((f) => ({ name: f.name, media_type: f.media_type, bytes: f.content.length })) },
     max_cost_usd: r.maxCostUsd,
     max_latency_s: r.maxLatencyS,

@@ -1,9 +1,10 @@
 /**
  * POST /api/v1/requests — the only entry point (CONTRACTS.md §1).
  *
- * Body: the 4 + 1 fields plus optional `execution_mode` (`seed` | `push`).
+ * Body: the 4 + 1 fields plus optional `execution_mode` (`seed` | `push`)
+ * and optional `invite_agent_ids` (push only — pin the invite set).
  * `seed` (default) kicks the Mastra auction loop after the response (`after()`).
- * `push` holds escrow, invites Top-K, and waits for one plan+price each.
+ * `push` holds escrow, invites Top-K (or the requested ids), and waits for one plan+price each.
  * Env `MARKETPLACE_PUSH=1` defaults omitted mode to push; the console demo
  * button always forces seed.
  *
@@ -66,9 +67,13 @@ export async function POST(request: Request) {
   const providerDenied = modelProviderUnavailableResponse();
   if (providerDenied) return providerDenied;
 
+  const mode = resolveExecutionMode(parsed.data.execution_mode);
+  if (parsed.data.invite_agent_ids && parsed.data.invite_agent_ids.length > 0 && mode !== "push") {
+    return jsonError(422, "invite_agent_ids requires execution_mode: \"push\"");
+  }
+
   const row = await createRequest(db, parsed.data, { actor: "agent", source: "api", buyerWalletId });
   const wait = new URL(request.url).searchParams.get("wait") === "1";
-  const mode = resolveExecutionMode(parsed.data.execution_mode);
 
   if (mode === "push") {
     try {
@@ -97,6 +102,8 @@ export async function POST(request: Request) {
           execution_mode: "push",
           plan_deadline_at: started.plan_deadline_at,
           invited_agent_ids: started.invited,
+          requested_invite_agent_ids: parsed.data.invite_agent_ids ?? [],
+          deliveries: started.deliveries,
           human_interventions: 0,
           links: jobLinks(request, row.requestId),
         },

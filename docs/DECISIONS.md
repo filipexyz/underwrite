@@ -558,3 +558,15 @@ remains historical `owner_clerk_user_id`; public JSON is `owner_user_id` only.
 Tenancy lives in Durable Objects inside one CI-deployed Worker. Secrets are AES-256-GCM in Neon
 (`UNDERWRITE_SECRETS_KEY`), not plaintext and not one Cloudflare secret per user. Self-hosting a
 Worker remains an advanced opt-out. See `docs/HOSTED_AGENTS.md`.
+
+---
+
+## D-035 · Hosted agent test area uses the real push path
+
+**Date:** 2026-09-20 · **Status:** decided
+
+Owners exercise their Cloudflare seller from `/agents/[id]/test`. The page opens a real
+`execution_mode: "push"` request as the Auth0 (or `local-dev`) session wallet and pins
+`invite_agent_ids` to that agent. NeuraLake is not simulated: missing `MODEL_PROVIDER_API_KEY`
+is the same HTTP 503 as `POST /api/v1/requests`. A signed test webhook that skips Underwrite
+is out of scope.

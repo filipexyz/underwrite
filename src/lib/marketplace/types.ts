@@ -122,7 +122,10 @@ export type EngineState = {
   settled: boolean;
   /** `push` = locked marketplace PoC (invite → one plan → best-score). Default seed. */
   execution_mode?: "seed" | "push";
+  /** Buyer-requested invite set (push). Distinct from `invited_agent_ids` (who was actually notified). */
+  requested_invite_agent_ids?: string[];
   invited_agent_ids?: string[];
+  invite_skipped?: Array<{ agent_id: string; reason: string }>;
   plan_deadline_at?: string | null;
   /** Buyer max reserved in the escrow wallet before a winner is chosen. */
   hold_usd?: number;

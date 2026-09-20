@@ -97,6 +97,11 @@ export const RequestInput = z.object({
    * `MARKETPLACE_PUSH=1` on the API, otherwise seed.
    */
   execution_mode: z.enum(["seed", "push"]).optional(),
+  /**
+   * Push only. When set, invite these hireable agent ids instead of Top-K.
+   * Unknown, disabled, judge, or wrong-specialty ids are skipped.
+   */
+  invite_agent_ids: z.array(z.string().trim().min(1).max(80)).max(16).optional(),
 });
 export type RequestInput = z.infer<typeof RequestInput>;
 

@@ -50,6 +50,7 @@ export default async function AgentsPage() {
                 <Th>specialties</Th>
                 <Th>runtime</Th>
                 <Th right>wallet</Th>
+                <Th></Th>
               </tr>
             </thead>
             <tbody>
@@ -77,6 +78,11 @@ export default async function AgentsPage() {
                   </Td>
                   <Td right>
                     <Money value={agent.wallet_usd} digits={2} />
+                  </Td>
+                  <Td>
+                    <Link href={`/agents/${agent.agent_id}/test`} className="mono text-[10px] tracking-wider uppercase text-teal hover:underline">
+                      Test on Cloudflare
+                    </Link>
                   </Td>
                 </tr>
               ))}
