@@ -10,7 +10,7 @@
  */
 import { RtcRole, RtcTokenBuilder } from "agora-token";
 import type { AgentSession } from "agora-agents";
-import type { LlmTool } from "agora-agents";
+import type { McpServersItem } from "agora-agents";
 import { env } from "@/lib/env";
 
 const TOKEN_TTL_SECONDS = 3600;
@@ -96,11 +96,14 @@ export type StartGptLiveAgentArgs = {
   /** Distinct uid per surface, so two agents never collide if channels ever overlap. */
   agentUid: string;
   /**
-   * Inline REST tools exposed to the model for function calling. When set, `withTools(true)` is enabled:
-   * the SDK documents the pair as required together, and Agora executes the tool's HTTP request
-   * synchronously, feeding the raw result back into the model's context.
+   * MCP servers the agent may call tools from. When set, `withTools(true)` is enabled — the SDK documents
+   * the pair as required together — and Agora's engine acts as the MCP client against our server
+   * (`initialize` -> `tools/list` -> `tools/call`), feeding the result back into the model's context.
+   *
+   * `McpServersItem` is `Record<string, unknown>` in the SDK, so the entry shape comes from Agora's own
+   * sample: `{ name, endpoint, transport: "streamable_http", headers, allowed_tools }`.
    */
-  tools?: LlmTool[];
+  mcpServers?: McpServersItem[];
 };
 
 /**
@@ -153,10 +156,10 @@ export async function startGptLiveAgent(args: StartGptLiveAgentArgs): Promise<{ 
       voice: env.agora.voice,
       prompt: args.prompt,
       greeting: args.greeting,
-      ...(args.tools?.length ? { tools: args.tools } : {}),
+      ...(args.mcpServers?.length ? { mcpServers: args.mcpServers } : {}),
     }),
   );
-  if (args.tools?.length) agent = agent.withTools(true);
+  if (args.mcpServers?.length) agent = agent.withTools(true);
 
   const session = agent.createSession({
     name: `agent-${args.channel}`.slice(0, 64),
