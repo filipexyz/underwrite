@@ -24,6 +24,8 @@ export type SourceDocument = {
   links: string[];
   /** ~3,000 characters per A4 page at body size with 2cm margins. */
   expected_pages: number;
+  /** True when `expected_pages` came from the brief rather than from source length. */
+  pages_stated: boolean;
   page_size: "A4";
   margins_cm: number;
   requirement?: string;
@@ -109,6 +111,32 @@ function impliedMinWords(requirement: string): number | undefined {
   return m ? Number(m[1]) : undefined;
 }
 
+
+const NUMBER_WORDS: Record<string, number> = {
+  one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8,
+  nine: 9, ten: 10, um: 1, uma: 1, dois: 2, duas: 2, tres: 3, "três": 3,
+  quatro: 4, cinco: 5, seis: 6, sete: 7, oito: 8, nove: 9, dez: 10,
+};
+
+/**
+ * A page count the buyer actually stated, e.g. "four-page PDF" or "4 páginas".
+ *
+ * This is the difference between a requirement and an estimate, and it is the whole point: `expected_pages`
+ * below is a *heuristic* from the source length (chars / 3000), which is why the check compares it with a
+ * +/-1 tolerance. When the brief states a number, that number is a requirement and the comparison is exact.
+ *
+ * A live run made this concrete: the brief asked for a four-page translation, the artifact was one page, and
+ * the check passed because an estimate was being compared with a tolerance.
+ */
+export function impliedPageCount(requirement: string): number | undefined {
+  const word = Object.keys(NUMBER_WORDS).join("|");
+  const m = new RegExp(`\\b(\\d{1,3}|${word})\\s*[- ]?p(?:ages?|áginas?|aginas?)\\b`, "i").exec(requirement);
+  if (!m) return undefined;
+  const raw = m[1].toLowerCase();
+  const n = /^\d+$/.test(raw) ? Number(raw) : NUMBER_WORDS[raw];
+  return n && n > 0 ? n : undefined;
+}
+
 export function parseSource(html: string, requirement: string): SourceDocument {
   const text = stripHtml(html);
   const margins = /(\d+(?:\.\d+)?)\s*cm\s*margins?/i.exec(requirement);
@@ -116,7 +144,10 @@ export function parseSource(html: string, requirement: string): SourceDocument {
     html,
     text,
     links: extractLinks(html),
-    expected_pages: Math.max(1, Math.ceil(text.length / CHARS_PER_PAGE)),
+    // Stated in the brief -> a requirement. Absent -> an estimate from the source length, which is why the
+    // check tolerates +/-1 only in that case.
+    expected_pages: impliedPageCount(requirement) ?? Math.max(1, Math.ceil(text.length / CHARS_PER_PAGE)),
+    pages_stated: impliedPageCount(requirement) !== undefined,
     page_size: "A4",
     margins_cm: margins ? Number(margins[1]) : 2,
     requirement,
