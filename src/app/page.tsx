@@ -1,3 +1,4 @@
+import { headers } from "next/headers";
 import Link from "next/link";
 import { Orbit } from "@/components/orbit";
 import { SiteChrome } from "@/components/site-chrome";
@@ -7,18 +8,47 @@ import { observabilityStatus } from "@/lib/observability/mastra";
 
 export const dynamic = "force-dynamic";
 
-const CURL = `curl -s -X POST http://localhost:3000/api/v1/requests \\
-  -H 'content-type: application/json' \\
-  -d '{
-    "task": {
-      "requirement": "Compile input.html to a PDF: A4, 2cm margins, fonts embedded, links preserved.",
-      "files": [{ "name": "input.html", "media_type": "text/html", "content": "<h1>Hello</h1>" }]
-    },
-    "max_cost_usd": 0.05,
-    "max_latency_s": 30,
-    "min_confidence": 0.95,
-    "failure_policy": "refund"
-  }'`;
+const JSON_LINES = [
+  "  {",
+  '    "task": {',
+  '      "requirement": "Compile input.html to a PDF: A4, 2cm margins, fonts embedded, links preserved.",',
+  '      "files": [{ "name": "input.html", "media_type": "text/html", "content": "<h1>Hello</h1>" }]',
+  "    },",
+  '    "max_cost_usd": 10,',
+  '    "max_latency_s": 30,',
+  '    "min_confidence": 0.95,',
+  '    "failure_policy": "refund"',
+  "  }",
+];
+
+/** The first two lines of the request the buyer's agent makes. */
+function curlHead(origin: string): string {
+  return [
+    `curl -s -X POST ${origin}/api/v1/requests \\`,
+    "  -H 'content-type: application/json' \\",
+    "  -d '",
+  ].join("\n");
+}
+
+/**
+ * Colours one line of the body: keys, strings, numbers and punctuation each get their own weight, so the
+ * shape of the mandate is readable at a glance instead of being a wall of one colour.
+ */
+function JsonLine({ line }: { line: string }) {
+  const m = line.match(/^(\s*)("[^"]+")(: )(.*?)(,?)$/);
+  if (!m) return <>{line}</>;
+  const [, indent, key, colon, value, comma] = m;
+  const isString = value.startsWith('"');
+  return (
+    <>
+      {indent}
+      <span className="text-[#0d5c4f] font-semibold">{key}</span>
+      <span className="text-[#7c8a83]">{colon}</span>
+      <span className={isString ? "text-[#9a5a10]" : "text-[#21618c] font-medium"}>{value}</span>
+      <span className="text-[#7c8a83]">{comma}</span>
+    </>
+  );
+}
 
 function Flag({ label, on, detail }: { label: string; on: boolean; detail: string }) {
   return (
@@ -33,7 +63,11 @@ function Flag({ label, on, detail }: { label: string; on: boolean; detail: strin
   );
 }
 
-export default function Home() {
+export default async function Home() {
+  const h = await headers();
+  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "underwrite-gamma.vercel.app";
+  const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") || host.startsWith("127.") ? "http" : "https");
+  const origin = `${proto}://${host}`;
   const obs = observabilityStatus();
   const driver = describeDriver(env.databaseUrl);
   return (
@@ -86,7 +120,15 @@ export default function Home() {
               not author the mandate.
             </p>
             <pre className="mt-5 overflow-x-auto bg-[#d8dfd8] p-3.5 font-mono text-[11px] leading-[1.65] whitespace-pre-wrap">
-              {CURL}
+              <span className="text-[#5c6862]">{curlHead(origin)}</span>
+              {"\n"}
+              {JSON_LINES.map((line, i) => (
+                <span key={i}>
+                  <JsonLine line={line} />
+                  {"\n"}
+                </span>
+              ))}
+              <span className="text-[#5c6862]">{"'"}</span>
             </pre>
             {/*
              * Points at `/start`, the signed-in landing: talk to the agent and it files the task.
