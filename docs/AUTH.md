@@ -1,6 +1,6 @@
 # Auth — Auth0 humans + auth.md agents
 
-Canonical runbook is in [`README.md`](../README.md) (Auth0 dashboard checklist, env names, Clerk cutover). This file is the short map.
+Canonical runbook is in [`README.md`](../README.md) (env names, protected routes, auth.md flow). Env comments: [`.env.example`](../.env.example). This file is the short map.
 
 ## Humans
 
