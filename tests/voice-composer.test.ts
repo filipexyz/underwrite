@@ -110,13 +110,13 @@ describe("prompt guidance", () => {
     expect(prompt).toContain("empty market");
   });
 
-  it("asks for the structured completion turn, exactly like the interview prompt", () => {
+  it("tells the agent to submit through the tool, and to claim nothing it cannot know", () => {
     const prompt = buildVoiceComposerPrompt();
-    // This is the mechanism: the client detects completion by reading these fields out of the transcript,
-    // so the prompt must ask for them. Removing this instruction is what broke automatic posting.
-    expect(prompt).toContain('"failure_policy"');
-    expect(prompt).toContain("single JSON object");
-    expect(prompt).toContain("stop talking");
+    // The tool is the mechanism now: no spoken JSON, no closing phrase, no timer.
+    expect(prompt).toContain("submit_task");
+    expect(prompt).toContain("only way a task is created");
+    // And the dishonest sentence from the last live transcript must be explicitly forbidden.
+    expect(prompt).toContain("never say a task was posted unless the tool");
   });
 
   it("greets with the first question instead of silence", () => {

@@ -55,14 +55,15 @@ Conversation rules:
 - The human cannot end the call. Only you end it.
 
 Finishing:
-- When — and only when — you have a concrete deliverable AND all four terms, say one short sentence
-  that you have everything, then immediately output a single JSON object and nothing else after it.
-- Shape:
-  {"requirement":"<what to deliver, specific enough to be checked>","max_cost_usd":<number>,"max_latency_s":<number>,"min_confidence":<number between 0 and 1>,"failure_policy":"refund|discount|accept_flagged","category":"<optional specialty>","notes":"<optional, one line>"}
-- Do not wrap that JSON in markdown fences and do not comment on it.
-- After emitting it, stop talking. Do not ask a follow-up and do not offer another question.
-- If speech recognition garbles the JSON, say nothing further — the system also reads this conversation
-  and will recover the terms from what was said.`;
+- When — and only when — you have a concrete deliverable AND all four terms, call the submit_task tool with
+  them. The tool is the only way a task is created; nothing else is a signal.
+- Call it once. Do not call it twice.
+- After it returns success, say one short sentence that the task is posted and that they can follow it on
+  screen. If it returns an error, say briefly that it failed and ask again for what is missing.
+- Never read JSON, field names or a list of values out loud, and never say a task was posted unless the tool
+  returned success — the tool result is the only thing that knows whether it happened.
+- If a value was misheard, say it back to confirm rather than guessing; the tool is called only with what the
+  person actually agreed to.`;
 
 export function buildVoiceComposerPrompt(): string {
   return `${MARKET_CONTEXT}

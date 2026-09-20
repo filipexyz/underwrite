@@ -10,6 +10,7 @@
  */
 import { RtcRole, RtcTokenBuilder } from "agora-token";
 import type { AgentSession } from "agora-agents";
+import type { LlmTool } from "agora-agents";
 import { env } from "@/lib/env";
 
 const TOKEN_TTL_SECONDS = 3600;
@@ -94,6 +95,12 @@ export type StartGptLiveAgentArgs = {
   greeting: string;
   /** Distinct uid per surface, so two agents never collide if channels ever overlap. */
   agentUid: string;
+  /**
+   * Inline REST tools exposed to the model for function calling. When set, `withTools(true)` is enabled:
+   * the SDK documents the pair as required together, and Agora executes the tool's HTTP request
+   * synchronously, feeding the raw result back into the model's context.
+   */
+  tools?: LlmTool[];
 };
 
 /**
@@ -120,7 +127,8 @@ export async function startGptLiveAgent(args: StartGptLiveAgentArgs): Promise<{ 
   });
 
   const agentUid = args.agentUid;
-  const agent = new Agent({
+  // `withTools` returns a new agent, so the builder result has to be reassigned.
+  let agent = new Agent({
     client,
     advancedFeatures: { enable_rtm: true, enable_tools: false },
     parameters: {
@@ -145,8 +153,10 @@ export async function startGptLiveAgent(args: StartGptLiveAgentArgs): Promise<{ 
       voice: env.agora.voice,
       prompt: args.prompt,
       greeting: args.greeting,
+      ...(args.tools?.length ? { tools: args.tools } : {}),
     }),
   );
+  if (args.tools?.length) agent = agent.withTools(true);
 
   const session = agent.createSession({
     name: `agent-${args.channel}`.slice(0, 64),
