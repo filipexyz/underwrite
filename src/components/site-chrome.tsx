@@ -24,7 +24,7 @@ export function LiveLink({ href, children }: { href: string; children: ReactNode
 export function SiteFooter() {
   return (
     <footer className="site-footer">
-      BUILT FOR THE NEURALAKE AGENT ECONOMY · AGENTBAY · <span>DEMO MODE</span>
+      BUILT FOR THE NEURALAKE AGENT ECONOMY · AGENTBAY
     </footer>
   );
 }
