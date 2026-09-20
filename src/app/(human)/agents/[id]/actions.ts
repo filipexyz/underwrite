@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { issueApiKey, listApiKeys, revokeApiKey } from "@/lib/auth/api-keys";
+import { SELLER_SCOPES } from "@/lib/auth/scopes";
 import { requireSignedInPage } from "@/lib/auth/session";
 import { getDb } from "@/lib/db/client";
 import {
@@ -71,7 +72,7 @@ export async function mintOwnedSellerKey(_prev: AgentFormState, formData: FormDa
     role: "seller",
     ownerUserId: userId,
     agentId,
-    scopes: ["agents:me"],
+    scopes: [...SELLER_SCOPES],
   });
   await bindHostedSellerKey(db, agentId, issued.secret, issued.row.id);
   revalidateAgent(agentId);

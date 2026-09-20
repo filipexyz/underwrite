@@ -16,7 +16,14 @@ import {
   type AgentRegistrationType,
 } from "@/lib/db/schema";
 import { hashApiKey } from "@/lib/auth/api-keys";
-import { BUYER_SCOPE, SELLER_SCOPES, normalizeRequestedScopes, type ApiScope } from "@/lib/auth/scopes";
+import {
+  BUYER_SCOPE,
+  OWNERSHIP_BOUND_SELLER_SCOPES,
+  SELLER_REGISTER_SCOPE,
+  SELLER_SCOPES,
+  normalizeRequestedScopes,
+  type ApiScope,
+} from "@/lib/auth/scopes";
 import { apiAudience, publicOrigin, resourceUrl, tokenIssuer } from "@/lib/auth/origin";
 import {
   ACCESS_TOKEN_TTL_S,
@@ -28,7 +35,7 @@ import {
 } from "@/lib/auth/tokens";
 import { env } from "@/lib/env";
 import { newId } from "@/lib/ids";
-import { getOwnedAgent, listOwnedAgents } from "@/lib/marketplace/sellers";
+import { adoptAgentForClaim, getAgentRow, getOwnedAgent, listOwnedAgents } from "@/lib/marketplace/sellers";
 
 export const JWT_BEARER_GRANT = "urn:ietf:params:oauth:grant-type:jwt-bearer";
 export const CLAIM_GRANT = "urn:workos:agent-auth:grant-type:claim";
@@ -74,7 +81,7 @@ export function protectedResourceMetadata(request: Request) {
     resource: resourceUrl(request),
     resource_name: "Underwrite",
     authorization_servers: [`${origin}/`],
-    scopes_supported: [BUYER_SCOPE, ...SELLER_SCOPES, "admin:*"],
+    scopes_supported: [BUYER_SCOPE, SELLER_REGISTER_SCOPE, ...SELLER_SCOPES, "admin:*"],
     bearer_methods_supported: ["header"],
   };
 }
@@ -207,7 +214,16 @@ export async function registerIdentity(
   const requested = normalizeRequestedScopes(body.requested_scopes);
   const agentId = typeof body.agent_id === "string" && body.agent_id.trim() ? body.agent_id.trim() : null;
   const loginHint = typeof body.login_hint === "string" && body.login_hint.trim() ? body.login_hint.trim().toLowerCase() : null;
-  const preClaimScopes: ApiScope[] = type === "anonymous" ? requested.filter((scope) => scope === BUYER_SCOPE) : [];
+  /*
+   * `anonymous` gets buyer access immediately, plus the one scope that authorizes creating its
+   * own provider record. That is what makes provider self-onboarding possible: `seller:register`
+   * is not ownership-bound, so it is granted before any agent exists and survives the claim.
+   * Seller work (`seller:agents|plans|deliver`) still requires an owned agent.
+   */
+  const preClaimScopes: ApiScope[] =
+    type === "anonymous"
+      ? requested.filter((scope) => scope === BUYER_SCOPE || scope === SELLER_REGISTER_SCOPE)
+      : [];
   const postClaimScopes = requested;
   const claimToken = mintClaimSecret();
   const claimExpires = new Date(Date.now() + CLAIM_WINDOW_S * 1000);
@@ -336,10 +352,13 @@ export async function loadClaimAttemptByToken(db: Db, claimAttemptToken: string)
   return { attempt, registration };
 }
 
+const isOwnershipBoundSellerScope = (scope: string): boolean =>
+  (OWNERSHIP_BOUND_SELLER_SCOPES as readonly string[]).includes(scope);
+
 export async function completeUserClaim(
   db: Db,
   args: { userCode: string; claimAttemptToken: string; userId: string; email?: string },
-): Promise<{ ok: true; registrationId: string } | { ok: false; error: string }> {
+): Promise<{ ok: true; registrationId: string; droppedScopes: ApiScope[] } | { ok: false; error: string }> {
   const loaded = await loadClaimAttemptByToken(db, args.claimAttemptToken);
   if (!loaded) return { ok: false, error: "unknown claim attempt" };
   const { attempt, registration } = loaded;
@@ -357,20 +376,38 @@ export async function completeUserClaim(
   }
 
   let agentId = registration.agentId;
-  const wantsSeller = registration.postClaimScopes.some((scope) => scope.startsWith("seller:"));
-  if (wantsSeller) {
+  /*
+   * Only the ownership-bound seller scopes require an agent at claim time. `seller:register` is
+   * not one of them — it is what let the agent create its own record before any human was
+   * involved, so requiring ownership here would deadlock the exact flow it exists to enable.
+   */
+  const wantsSeller = registration.postClaimScopes.some((scope) =>
+    (OWNERSHIP_BOUND_SELLER_SCOPES as readonly string[]).includes(scope),
+  );  if (wantsSeller) {
     if (agentId) {
-      const owned = await getOwnedAgent(db, agentId, args.userId);
-      if (!owned) return { ok: false, error: "you do not own the agent this registration asked to bind" };
+      const bound = await getAgentRow(db, agentId);
+      // Security property preserved: you cannot bind an agent that already belongs to someone else.
+      if (bound?.ownerUserId && bound.ownerUserId !== args.userId) {
+        return { ok: false, error: "you do not own the agent this registration asked to bind" };
+      }
+      // An unowned agent means this registration created it — adopted after the update below.
     } else {
       const owned = await listOwnedAgents(db, args.userId);
       agentId = owned[0]?.agentId ?? null;
     }
   }
 
-  const postClaimScopes = wantsSeller && !agentId
-    ? registration.postClaimScopes.filter((scope) => !scope.startsWith("seller:"))
-    : registration.postClaimScopes;
+  // Scopes that need an agent are dropped when there is none to bind. Computed explicitly so the
+  // caller can tell the human what did *not* get granted instead of the agent discovering it later
+  // as a confusing 403.
+  const droppedScopes: ApiScope[] =
+    wantsSeller && !agentId
+      ? (registration.postClaimScopes.filter(isOwnershipBoundSellerScope) as ApiScope[])
+      : [];
+  const postClaimScopes =
+    droppedScopes.length > 0
+      ? registration.postClaimScopes.filter((scope) => !isOwnershipBoundSellerScope(scope))
+      : registration.postClaimScopes;
 
   await db
     .update(agentRegistrations)
@@ -386,7 +423,10 @@ export async function completeUserClaim(
     })
     .where(eq(agentRegistrations.registrationId, registration.registrationId));
 
-  return { ok: true, registrationId: registration.registrationId };
+  // Adopt the agent this registration created while it had no owner, and make it hireable.
+  if (agentId) await adoptAgentForClaim(db, agentId, args.userId);
+
+  return { ok: true, registrationId: registration.registrationId, droppedScopes };
 }
 
 export async function exchangeToken(

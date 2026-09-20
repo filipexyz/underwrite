@@ -29,9 +29,15 @@ const TRUST_WEIGHTS: Array<[keyof AxisVector, number]> = [
   ["judgment", 0.4],
 ];
 
-/** Disabled agents are not invited to auctions and cannot be hired as subs. */
+/**
+ * Disabled agents are not invited to auctions and cannot be hired as subs.
+ *
+ * `pending_claim` is also not hireable: it is an agent that registered itself through auth.md and
+ * whose human has not completed the claim ceremony yet. It must not consume an invite slot in
+ * someone else's run — Top-K is finite, so an unclaimed provider would crowd out a real one.
+ */
 export function isHireableAgent(row: { status: AgentStatus | string }): boolean {
-  return row.status !== "disabled";
+  return row.status === "seed" || row.status === "registered";
 }
 
 /** Weighted mean of the axes an agent actually has. Becomes the bid's `trust_global_snapshot`. */

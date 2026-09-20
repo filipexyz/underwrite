@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { jsonError } from "@/lib/api/http";
 import { issueApiKey, toPublicApiKey } from "@/lib/auth/api-keys";
+import { SELLER_SCOPES } from "@/lib/auth/scopes";
 import { requireSignedInApi } from "@/lib/auth/session";
 import { getDb } from "@/lib/db/client";
 import { bindHostedSellerKey } from "@/lib/marketplace/agent-runtime";
@@ -43,7 +44,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     role: "seller",
     ownerUserId: auth.identity.userId,
     agentId: agent.agentId,
-    scopes: ["agents:me"],
+    scopes: [...SELLER_SCOPES],
   });
   await bindHostedSellerKey(db, agent.agentId, issued.secret, issued.row.id);
   return NextResponse.json(

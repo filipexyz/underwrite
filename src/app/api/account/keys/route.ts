@@ -7,6 +7,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { jsonError } from "@/lib/api/http";
 import { issueApiKey, listApiKeys, toPublicApiKey } from "@/lib/auth/api-keys";
+import { BUYER_SCOPE, SELLER_SCOPES } from "@/lib/auth/scopes";
 import { requireSignedInApi } from "@/lib/auth/session";
 import { getDb } from "@/lib/db/client";
 import { bindHostedSellerKey } from "@/lib/marketplace/agent-runtime";
@@ -56,7 +57,7 @@ export async function POST(request: Request) {
     role: parsed.data.role,
     ownerUserId: auth.identity.userId,
     agentId: parsed.data.role === "seller" ? parsed.data.agent_id : null,
-    scopes: parsed.data.role === "seller" ? ["agents:me"] : ["requests"],
+    scopes: parsed.data.role === "seller" ? [...SELLER_SCOPES] : [BUYER_SCOPE],
   });
   if (parsed.data.role === "seller" && parsed.data.agent_id) {
     await bindHostedSellerKey(db, parsed.data.agent_id, issued.secret, issued.row.id);

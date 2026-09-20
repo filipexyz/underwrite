@@ -5,6 +5,7 @@
  */
 export const API_SCOPES = [
   "buyer:requests",
+  "seller:register",
   "seller:agents",
   "seller:plans",
   "seller:deliver",
@@ -14,12 +15,24 @@ export const API_SCOPES = [
 export type ApiScope = (typeof API_SCOPES)[number];
 
 export const BUYER_SCOPE: ApiScope = "buyer:requests";
+export const SELLER_REGISTER_SCOPE: ApiScope = "seller:register";
 export const SELLER_AGENT_SCOPE: ApiScope = "seller:agents";
 export const SELLER_PLAN_SCOPE: ApiScope = "seller:plans";
 export const SELLER_DELIVER_SCOPE: ApiScope = "seller:deliver";
 export const ADMIN_SCOPE: ApiScope = "admin:*";
 
+/**
+ * The default bundle a seller key implies ("seller keys imply the seller:* set").
+ *
+ * `seller:register` is deliberately **excluded**: it authorizes creating a new provider
+ * agent, and bundling it would let every seller key mint unlimited agents. It is granted
+ * only when explicitly requested on `/agent/identity`, and it survives the claim ceremony
+ * even when the ownership-bound scopes are dropped.
+ */
 export const SELLER_SCOPES: ApiScope[] = [SELLER_AGENT_SCOPE, SELLER_PLAN_SCOPE, SELLER_DELIVER_SCOPE];
+
+/** Scopes that require the identity to own a registered provider agent. */
+export const OWNERSHIP_BOUND_SELLER_SCOPES: ApiScope[] = SELLER_SCOPES;
 
 export const ROLES_CLAIM = "https://underwrite/roles";
 export const ROLE_CLAIM = "https://underwrite/role";
@@ -43,6 +56,10 @@ export function hasScope(scopes: readonly string[], required: string): boolean {
 export function inferSellerScope(pathname: string): ApiScope {
   if (pathname.includes("/deliverables")) return SELLER_DELIVER_SCOPE;
   if (pathname.includes("/plans")) return SELLER_PLAN_SCOPE;
+  // `POST /api/v1/agents` (creating your own provider record) is the one seller action that
+  // does not require already owning an agent — so it gets its own scope. `/agents/me` still
+  // resolves to `seller:agents` below.
+  if (/\/api\/v1\/agents\/?$/.test(pathname)) return SELLER_REGISTER_SCOPE;
   return SELLER_AGENT_SCOPE;
 }
 

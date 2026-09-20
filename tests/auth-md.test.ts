@@ -151,7 +151,9 @@ describe("service_auth claim ceremony", () => {
       userId: LOCAL_DEV_USER_ID,
       email: "owner@example.com",
     });
-    expect(claimed).toEqual({ ok: true, registrationId: body.registration_id });
+    // `droppedScopes` is empty here: this registration asked only for `buyer:requests`, which is
+    // not ownership-bound, so nothing was withheld.
+    expect(claimed).toEqual({ ok: true, registrationId: body.registration_id, droppedScopes: [] });
 
     const done = await postToken(
       new Request("http://localhost:3000/oauth2/token", {

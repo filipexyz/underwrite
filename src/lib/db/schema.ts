@@ -36,7 +36,7 @@ import type { AgentPolicy, EngineState } from "../marketplace/types";
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
 const updatedAt = () => timestamp("updated_at", { withTimezone: true }).notNull().defaultNow();
 
-export const AGENT_STATUSES = ["seed", "registered", "disabled"] as const;
+export const AGENT_STATUSES = ["seed", "pending_claim", "registered", "disabled"] as const;
 export type AgentStatus = (typeof AGENT_STATUSES)[number];
 
 export const API_KEY_ROLES = ["buyer", "seller", "admin_service"] as const;
