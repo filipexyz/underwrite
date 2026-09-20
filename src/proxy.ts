@@ -3,8 +3,7 @@
  * and is gated by hashed API keys (or the legacy `UNDERWRITE_API_KEY`).
  * `/interviews` is the creator pool (Clerk). `/i/[token]` and
  * `/api/v1/interviews/i/*` are public — possession of the invite token is auth.
- * Interviewees are not Underwrite users. `/developers` is public: agent identity
- * is the pasted API key, not Clerk.
+ * Interviewees are not Underwrite users. `/docs` is public (agent API docs).
  *
  * Without Clerk keys the proxy is a pass-through, so the loop runs locally
  * with an empty `.env`.
