@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Timestamp } from "@/components/timestamp";
 import { Badge, Empty, PageIntro, Panel, Td, Th } from "@/app/console/ui";
 import { getDb } from "@/lib/db/client";
 import { getNeedDetail } from "@/lib/interviews/store";
@@ -117,7 +118,7 @@ export default async function InterviewNeedPage({ params }: { params: Promise<{ 
                   <Td className="mono text-xs text-muted">{session.agoraChannel}</Td>
                   <Td className="mono text-xs text-muted">{session.agoraAgentId ?? "—"}</Td>
                   <Td right>
-                    <span className="mono text-xs text-muted">{new Date(session.startedAt).toLocaleString()}</span>
+                    <Timestamp value={session.startedAt} className="mono text-xs text-muted" />
                   </Td>
                 </tr>
               ))}

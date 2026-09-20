@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Timestamp } from "@/components/timestamp";
 import { Badge, Empty, PageIntro, Panel, Td, Th } from "@/app/console/ui";
 import { getDb } from "@/lib/db/client";
 import { listNeeds } from "@/lib/interviews/store";
@@ -66,7 +67,7 @@ export default async function InterviewsPage() {
                   </Td>
                   <Td className="max-w-md truncate text-muted">{row.brief.goal}</Td>
                   <Td right>
-                    <span className="mono text-xs text-muted">{new Date(row.createdAt).toLocaleString()}</span>
+                    <Timestamp value={row.createdAt} className="mono text-xs text-muted" />
                   </Td>
                 </tr>
               ))}
