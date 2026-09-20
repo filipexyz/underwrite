@@ -125,8 +125,19 @@ export const CHECK_RUNNERS: Record<string, { name: string; run: CheckRunner }> =
   page_count: {
     name: "Page count",
     run: (f, s) => {
-      const ok = Math.abs(f.pages - s.expected_pages) <= 1;
-      return { passed: ok, detail: `${f.pages} page(s), expected ~${s.expected_pages} at A4 / ${s.margins_cm}cm margins` };
+      const delta = f.pages - s.expected_pages;
+      const ok = Math.abs(delta) <= 1;
+      /*
+       * The verdict keeps its tolerance, because `expected_pages` is an estimate rather than a requirement
+       * — but a pass that prints a mismatch reads as a contradiction in the ledger, and the ledger is where
+       * this product is pitched from. A live run printed "PASS page_count — 1 page(s), expected ~2" next to
+       * a brief asking for four pages. Say the gap out loud.
+       */
+      const gap = delta === 0 ? "as expected" : delta > 0 ? `${delta} over` : `${Math.abs(delta)} short of`;
+      return {
+        passed: ok,
+        detail: `${f.pages} page(s), ${gap} ~${s.expected_pages} at A4 / ${s.margins_cm}cm margins`,
+      };
     },
   },
   text_matches_source: {
