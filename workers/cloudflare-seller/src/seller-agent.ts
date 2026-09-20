@@ -14,6 +14,7 @@ import { DIRECTORY_INSTANCE } from "./routes";
 import { credentialsFromProvision, mergeSellerConfig, pullHostedCredentials, type TenantCredentials } from "./tenant";
 import { createUnderwriteClient, isAlreadyDone, type UnderwriteClient } from "./underwrite";
 import { fiberIdempotencyKey, verifyWebhookSignature, webhookHeaders } from "./webhook";
+import { eventNeedsCredentials, missingCredentials } from "./provisioning";
 
 export type JobMemory = {
   brief?: PlanRequestEvent["brief"];
@@ -81,12 +82,18 @@ export class SellerAgent extends Agent<Env, SellerState> {
     }
     if (request.method === "GET" && (url.pathname === "/" || url.pathname === "/health")) {
       const cfg = this.cfg();
+      const missing = missingCredentials(cfg);
       return Response.json({
         ok: true,
         agent: "cloudflare-seller",
         instance: this.name,
         provisioned: Boolean(this.state.credentials?.sellerApiKey),
+        has_seller_key: Boolean(cfg.sellerApiKey),
+        has_webhook_secret: Boolean(cfg.webhookSecret),
         has_byok: Boolean(cfg.neuralakeApiKey),
+        underwrite_base_url: cfg.underwriteBaseUrl,
+        hosted_runtime_secret_configured: Boolean((this.env.UNDERWRITE_HOSTED_RUNTIME_SECRET ?? "").trim()),
+        missing_credentials: missing,
         last_error: this.state.lastError ?? null,
         last_error_at: this.state.lastErrorAt ?? null,
       });
@@ -143,6 +150,13 @@ export class SellerAgent extends Agent<Env, SellerState> {
    * Durable accept: 202 as soon as the fiber row is stored (Underwrite timeout is 2.5s).
    * agents.startFiber() does **not** waitUntil the callback — after 202 the isolate can
    * freeze with the fiber still `pending`. Always attach processEvent to `ctx.waitUntil`.
+   *
+   * Exception: when the event needs credentials we do not have, we answer 503 instead of
+   * 202. A 202 would tell Underwrite the webhook was delivered, and the invite would sit
+   * unactionable forever with the rejection swallowed by `work.catch`. A non-2xx makes
+   * Underwrite record `webhook_ok: false`, enqueue the payload in our inbox with the
+   * error attached, and retry on the next inbox drain — so the job self-heals as soon as
+   * the Durable Object is provisioned.
    */
   async acceptEvent(raw: unknown): Promise<Response> {
     const event = parseUnderwriteEvent(raw);
@@ -158,6 +172,27 @@ export class SellerAgent extends Agent<Env, SellerState> {
         constraints: event.type === "plan_request" ? event.constraints : this.state.jobs[event.job_id]?.constraints,
       }),
     );
+
+    // Skip the pre-flight for events the state machine would skip anyway, so a duplicate
+    // delivery of finished work is never answered with a 503.
+    const job = this.state.jobs[event.job_id];
+    const alreadyDone =
+      (event.type === "plan_request" && Boolean(job?.planPosted)) ||
+      (event.type === "accepted" && Boolean(job?.delivered));
+
+    if (!alreadyDone && eventNeedsCredentials(event)) {
+      const cfg = await this.ensureCredentials();
+      const missing = missingCredentials(cfg);
+      if (missing.length > 0) {
+        const error = `not provisioned: ${missing.join(", ")} missing — provision this agent Durable Object (or set the deprecated global env fallback)`;
+        await this.reportLastError(error, { type: event.type, job_id: event.job_id });
+        sellerError({ instance: this.name, msg: "accept_rejected_unprovisioned", type: event.type, job_id: event.job_id, missing });
+        return Response.json(
+          { ok: false, error, missing, instance: this.name, type: event.type, job_id: event.job_id },
+          { status: 503 },
+        );
+      }
+    }
 
     const work = this.processEventOnce(event);
     this.ctx.waitUntil(work.catch(() => {}));
@@ -393,7 +428,17 @@ export class SellerAgent extends Agent<Env, SellerState> {
 
     const secret = (this.env.UNDERWRITE_HOSTED_RUNTIME_SECRET ?? "").trim();
     const base = resolveUnderwriteBaseUrl(this.env.UNDERWRITE_BASE_URL);
-    if (!secret) return;
+    if (!secret) {
+      // The diagnostics channel depends on the same secret whose absence usually
+      // causes the failure, so say out loud that the report was skipped.
+      sellerError({
+        instance: this.name,
+        msg: "last_error_report_skipped",
+        reason: "UNDERWRITE_HOSTED_RUNTIME_SECRET is unset on this Worker",
+        underwrite_base_url: base,
+      });
+      return;
+    }
     try {
       const res = await fetch(`${base}/api/internal/hosted-agents/${encodeURIComponent(this.name)}`, {
         method: "POST",

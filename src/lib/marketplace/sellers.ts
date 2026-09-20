@@ -8,6 +8,7 @@ import { AgentRole, LatencyClass, RiskTolerance } from "@/lib/contracts";
 import type { Db } from "@/lib/db/client";
 import { agents, trustAxes, wallets, type AgentRow, type AgentStatus } from "@/lib/db/schema";
 import { issueApiKey, type PublicApiKey, toPublicApiKey } from "@/lib/auth/api-keys";
+import { SELLER_SCOPES } from "@/lib/auth/scopes";
 import { newId } from "@/lib/ids";
 import {
   createAgentRuntime,
@@ -287,7 +288,10 @@ export async function registerSellerAgent(
     role: "seller",
     ownerUserId,
     agentId,
-    scopes: ["agents:me"],
+    // `SELLER_SCOPES`, not the stale `"agents:me"` this used to store: that string is not
+    // in `API_SCOPES`, so it is inert for hashed keys today (scope checks only run on JWTs)
+    // but would 403 every plan/deliverable call the moment seller auth moves to a JWT.
+    scopes: [...SELLER_SCOPES],
   });
 
   const runtimeCreated = await createAgentRuntime(db, {

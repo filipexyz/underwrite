@@ -1,6 +1,9 @@
 import { readSellerConfig, resolveUnderwriteBaseUrl, type SellerConfig } from "./config";
 import { sellerError, sellerLog } from "./log";
 
+/** Kept well under the 2.5s webhook delivery budget on the Underwrite side. */
+const PULL_TIMEOUT_MS = 2_000;
+
 export type TenantCredentials = {
   sellerApiKey?: string;
   webhookSecret?: string;
@@ -65,32 +68,63 @@ export function mergeSellerConfig(env: Env, tenant: TenantCredentials | undefine
 export async function pullHostedCredentials(env: Env, agentId: string): Promise<TenantCredentials | null> {
   const secret = (env.UNDERWRITE_HOSTED_RUNTIME_SECRET ?? "").trim();
   const base = resolveUnderwriteBaseUrl(env.UNDERWRITE_BASE_URL);
-  if (!secret) return null;
-  const res = await fetch(`${base}/api/internal/hosted-agents/${encodeURIComponent(agentId)}`, {
-    headers: {
-      authorization: `Bearer ${secret}`,
-      "x-underwrite-runtime-secret": secret,
-    },
-  });
-  if (!res.ok) {
+  if (!secret) {
+    /*
+     * Loud, not silent. Without this secret the DO can never receive credentials:
+     * the pull path is dead here, and push provisioning is rejected with 401 by
+     * `authorizeRuntime`. The previous silent `return null` is why an unprovisioned
+     * DO looked like "the fiber woke up and did nothing".
+     */
     sellerError({
       instance: agentId,
-      msg: "credential_pull_failed",
-      status: res.status,
+      msg: "credential_pull_skipped",
+      reason: "UNDERWRITE_HOSTED_RUNTIME_SECRET is unset on this Worker",
       underwrite_base_url: base,
     });
     return null;
   }
-  const json = (await res.json()) as { agent?: ProvisionBody };
-  if (!json.agent) return null;
-  const pulled = credentialsFromProvision(json.agent);
-  sellerLog({
-    instance: agentId,
-    msg: "credential_pull_ok",
-    status: res.status,
-    has_seller: Boolean(pulled.sellerApiKey),
-    has_webhook: Boolean(pulled.webhookSecret),
-    has_byok: Boolean(pulled.neuralakeApiKey),
-  });
-  return pulled;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), PULL_TIMEOUT_MS);
+  try {
+    const res = await fetch(`${base}/api/internal/hosted-agents/${encodeURIComponent(agentId)}`, {
+      headers: {
+        authorization: `Bearer ${secret}`,
+        "x-underwrite-runtime-secret": secret,
+      },
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      sellerError({
+        instance: agentId,
+        msg: "credential_pull_failed",
+        status: res.status,
+        underwrite_base_url: base,
+      });
+      return null;
+    }
+    const json = (await res.json()) as { agent?: ProvisionBody };
+    if (!json.agent) return null;
+    const pulled = credentialsFromProvision(json.agent);
+    sellerLog({
+      instance: agentId,
+      msg: "credential_pull_ok",
+      status: res.status,
+      underwrite_base_url: base,
+      has_seller: Boolean(pulled.sellerApiKey),
+      has_webhook: Boolean(pulled.webhookSecret),
+      has_byok: Boolean(pulled.neuralakeApiKey),
+    });
+    return pulled;
+  } catch (error) {
+    // A hanging pull must not blow the 2.5s webhook budget upstream.
+    sellerError({
+      instance: agentId,
+      msg: "credential_pull_error",
+      error: error instanceof Error ? error.message : String(error),
+      underwrite_base_url: base,
+    });
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
 }
