@@ -15,7 +15,7 @@ import {
   startGptLiveAgent,
   stopGptLiveAgent,
 } from "@/lib/agora/gpt-live";
-import { publicApiBaseUrl } from "@/lib/docs/api-base";
+import { publicOrigin } from "@/lib/auth/origin";
 import { createTaskFromVoiceBrief } from "./handoff";
 import { extractBriefFromTranscript } from "./extract";
 import { buildVoiceComposerGreeting, buildVoiceComposerPrompt, summarizeBrief } from "./prompt";
@@ -89,6 +89,8 @@ export async function startVoiceSession(db: Db, userId: string): Promise<StartVo
       agentUid: String(VOICE_AGENT_UID),
       mcpServers: [buildVoiceMcpServer(session.id)],
     });
+    // The declared endpoint is logged because a wrong one is otherwise silent: Agora simply never calls it.
+    console.log("[voice] mcp endpoint declared", buildVoiceMcpServer(session.id).endpoint);
     await attachVoiceAgentId(db, session.id, started.agentId);
     return {
       ok: true,
@@ -146,7 +148,7 @@ export const submitTaskToolName = "submit_task";
 function buildVoiceMcpServer(sessionId: string): McpServersItem {
   return {
     name: "underwrite",
-    endpoint: publicApiBaseUrl() + "/api/mcp/voice/" + sessionId,
+    endpoint: publicOrigin() + "/api/mcp/voice/" + sessionId,
     transport: "streamable_http",
     headers: { Authorization: "Bearer " + String(env.agora.certificate ?? "") },
     allowed_tools: ["*"],

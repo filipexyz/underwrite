@@ -6,6 +6,7 @@ import { getDb } from "@/lib/db/client";
 import { env } from "@/lib/env";
 import { listVoiceSessions } from "@/lib/voice/store";
 import { VoiceComposer } from "./voice-composer";
+import { VoiceDiagnostics } from "./voice-diagnostics";
 
 export const dynamic = "force-dynamic";
 
@@ -47,6 +48,8 @@ export default async function StartPage() {
               for the Agora environment variables.
             </section>
           )}
+
+          <VoiceDiagnostics />
         </div>
 
         <aside className="flex flex-col gap-4">
